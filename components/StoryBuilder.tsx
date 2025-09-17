@@ -4,8 +4,8 @@
 */
 
 import React, { useState, useMemo, useEffect } from 'react';
+// FIX: Added missing imports from geminiService
 import { generateStoryFromPrompt, runFinalVideoGenerationPipeline, generateAllDocumentation, generateCritique, regenerateStoryPlanWithCritique, generateOptimizedReferenceAssets, cancelCurrentGeneration, generateHybridNeuralSceneFrame, downloadProjectLocally } from '@/services/geminiService';
-// FIX: Moved type imports from geminiService to the correct types file.
 import type { StoryData, CharacterData, ProgressUpdate, StoryMasterplan, FinalAssets, Documentation, Critique, GeneratedReferenceAssets, ReferenceAsset, ExportedProject, ExportedReferenceAsset, ExportedGeneratedReferenceAssets, Scene } from '@/components/story-builder/types';
 import { outputFormats, narrativeStyles, visualStyles, narrativeStructures, hookTypes, conflictTypes, endingTypes } from '@/components/story-builder/constants';
 import Spinner from '@/components/Spinner';
@@ -17,6 +17,7 @@ import ReferenceAssetView from '@/components/story-builder/ReferenceAssetView';
 import { imageBlobCache } from '@/services/imageBlobCache';
 import { projectPersistenceService } from '@/services/projectPersistenceService';
 import { assetDBService } from '@/services/assetDBService';
+import APIStatusPanel from '@/components/story-builder/APIStatusPanel';
 
 
 interface StoryBuilderProps {
@@ -155,6 +156,7 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ onExit, importedProject }) 
   // Phase 6.4 state
   const [assetGenerationProgress, setAssetGenerationProgress] = useState<Record<string, ProgressUpdate>>({});
   const [finalAssets, setFinalAssets] = useState<FinalAssets | null>(null);
+  const [showDevTools, setShowDevTools] = useState(false);
   
   const updateData = (key: keyof StoryData, value: any) => {
     setStoryData(prev => ({ ...prev, [key]: value }));
@@ -618,7 +620,7 @@ const handleGenerateFrameForScene = async (scene: Scene, frameType: 'start' | 'c
             generatedStoryPlan,
             documentation,
             referenceAssets,
-            referenceAssets.sceneFrames
+            critique
         );
     } catch (err) {
         const msg = err instanceof Error ? err.message : "Error al exportar el proyecto.";
@@ -950,8 +952,18 @@ const handleGenerateFrameForScene = async (scene: Scene, frameType: 'start' | 'c
             </div>
             <ProgressTracker phase={phase} data={storyData} plan={generatedStoryPlan} />
         </div>
-         <div className="mt-6 flex justify-center gap-4">
+         <div className="mt-6 flex justify-center gap-4 flex-col items-center">
             <button onClick={onExit} className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg">Salir del Story Builder</button>
+             <div className="w-full max-w-2xl mt-4">
+                <button onClick={() => setShowDevTools(prev => !prev)} className="text-sm text-gray-400 hover:text-white w-full py-2 bg-gray-900/50 rounded-t-lg border-x border-t border-gray-700">
+                    {showDevTools ? '▼ Ocultar Herramientas de Desarrollador' : '▶ Mostrar Herramientas de Desarrollador'}
+                </button>
+                {showDevTools && (
+                    <div className="animate-fade-in">
+                         <APIStatusPanel />
+                    </div>
+                )}
+            </div>
         </div>
     </div>
   );
