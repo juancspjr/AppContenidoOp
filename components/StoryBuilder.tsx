@@ -498,6 +498,7 @@ const handleGenerateFrameForScene = async (scene: Scene, frameType: 'start' | 'c
             referenceAssets, 
             referenceAssetAspectRatio,
             frameType,
+            storyData,
             onProgress
         );
         
