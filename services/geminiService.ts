@@ -10,6 +10,7 @@ import { imageBlobCache } from './imageBlobCache';
 import JSZip from 'jszip';
 import { PersistentAPIKeyManager } from './apiKeyBlacklist';
 import { geminiWebService } from './geminiWebService';
+import { assetRegistry, CanonicalAsset } from './assetRegistry';
 
 export type { AIRecommendation };
 
@@ -810,10 +811,11 @@ export async function generateImageWithFallback(
         storyPlan?: StoryMasterplan;
         userData?: StoryData;
         referenceImage?: File; // Nueva opción para imagen de referencia
+        sceneReferences?: {name:string, type:string, blobId:string}[]; // Para escenas con múltiples referencias
     }
 ): Promise<Blob> {
     
-    const { referenceImage } = options || {};
+    const { referenceImage, sceneReferences } = options || {};
     
     const aspectPrompt = aspectRatio === '9:16' 
         ? 'vertical 9:16 aspect ratio, mobile composition, portrait orientation' 
@@ -822,6 +824,33 @@ export async function generateImageWithFallback(
     const enhancedPrompt = `${prompt}, ${aspectPrompt}, high quality, professional rendering, sharp focus, detailed`;
     
     try {
+        // Prioritize multi-reference generation for scenes
+        if (sceneReferences && sceneReferences.length > 0) {
+            console.log(`🎬 Generando escena con ${sceneReferences.length} referencias...`);
+            const parts: any[] = [];
+            for (const ref of sceneReferences) {
+                const blob = imageBlobCache.get(ref.blobId);
+                if (!blob) continue;
+                const base64 = btoa(String.fromCharCode(...new Uint8Array(await blob.arrayBuffer())));
+                parts.push({ inlineData: { mimeType: 'image/png', data: base64 }});
+                parts.push({ text: `Reference: ${ref.type} "${ref.name}". Keep identity/style exactly.`});
+            }
+            parts.push({ text: `${enhancedPrompt}, Keep identity/style exactly as the referenced images. Do not change face geometry, moustache, or wardrobe. Use the referenced environment as visual base. One clear main subject, no extra people, no identity drift.` });
+
+            const response = await backendProxy.generateContent({
+                model: 'gemini-2.5-flash-image-preview',
+                contents: { parts },
+                config: { responseModalities: [Modality.IMAGE] }
+            });
+
+            const img = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+            if (!img?.inlineData) throw new Error('La generación de escena con referencias no devolvió una imagen');
+            const bytes = atob(img.inlineData.data);
+            const arr = Uint8Array.from(bytes, c => c.charCodeAt(0));
+            return new Blob([arr], { type: img.inlineData.mimeType });
+        }
+
+        // Standard generation (API, then Web, then Imagen)
         console.log("%c🟢 PRIMARIO: Gemini API Oficial", "color: lightgreen; font-weight: bold;");
         return await generateWithGeminiAPI(enhancedPrompt, aspectRatio, options);
         
@@ -872,7 +901,7 @@ export async function generateCharacterWithReference(
         }
     }
     
-    const image = await generateImageWithFallback(basePrompt, aspectRatio);
+    const image = await generateImageWithFallback(basePrompt, aspectRatio, { referenceImage: userImage || undefined });
     return { image };
 }
 
@@ -941,7 +970,7 @@ export function resetSpecificAPI(projectName: string): void {
 (window as any).resetSpecificAPI = resetSpecificAPI;
 
 // ============================================================================
-// ➕ FUNCIONES RESTAURADAS
+// ➕ FUNCIONES RESTAURADAS Y DE CONSISTENCIA
 // ============================================================================
 
 export function cancelCurrentGeneration() {
@@ -1052,13 +1081,22 @@ export async function generateHybridNeuralSceneFrame(
     onProgress: (message: string) => void
 ): Promise<ReferenceAsset> {
     onProgress(`Generando frame para escena ${scene.scene_number}...`);
+    
+    const sceneReferences = buildSceneReferencePack(scene, plan);
+    
     const prompt = `Generate a cinematic keyframe for scene ${scene.scene_number} (${scene.title}) at its '${frameType}' moment. Visuals: ${scene.visual_description}. Style: ${plan.metadata.style_and_energy.visual_styles.join(', ')}`;
-    const blob = await generateImageWithFallback(prompt, aspectRatio);
+    
+    const blob = await generateImageWithFallback(prompt, aspectRatio, { sceneReferences });
+    
     const newFrame: ReferenceAsset = {
         id: crypto.randomUUID(), name: `Scene ${scene.scene_number} - ${frameType}`, type: 'scene_frame',
         prompt, aspectRatio, source: 'generated_hybrid_neural', sceneNumber: scene.scene_number, frameType
     };
     imageBlobCache.set(newFrame.id, blob);
+    assetRegistry.add({
+        id: newFrame.id, name: newFrame.name, type: 'scene_frame', tags: ['keyframe'],
+        aspectRatio, prompt, blobId: newFrame.id, sourcePhase: 'scene'
+    });
     return newFrame;
 }
 
@@ -1128,4 +1166,186 @@ export async function downloadProjectLocally(
     link.download = `${title}_Project.zip`;
     link.click();
     URL.revokeObjectURL(link.href);
+}
+
+// --- Consistencia y Generación Automática ---
+
+async function hashFile(file: File): Promise<string> {
+    const buf = await file.arrayBuffer();
+    const hash = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function buildCharacterPromptConsistent(char: any, plan: StoryMasterplan, userData: StoryData): string {
+    const styles = plan.metadata.style_and_energy?.visual_styles?.join(', ') || userData.visualStyles?.join(', ') || 'cinematic 3D';
+    return [
+        `Identity-locked character portrait of ${char.name}`,
+        `${char.description}`,
+        'Replicate the exact identity of the uploaded reference image if provided',
+        'Do not alter face geometry, moustache shape/density, or body proportions',
+        'Preserve wardrobe details and decorations consistently',
+        `Style: ${styles}, professional 3D rendering, studio cinematic lighting`,
+        'Neutral, unobtrusive background for compositing',
+        'Vertical 9:16 aspect ratio, mobile-optimized framing',
+        'Ultra-high resolution, sharp focus, clean edges',
+        'Single subject only, no extra people, no cropped face',
+        'Negative: extra fingers, deformation, blur, artifacts, low quality'
+    ].join(', ');
+}
+
+function buildEnvironmentPrompt(envName: string, plan: StoryMasterplan, userData: StoryData): string {
+    const styles = plan.metadata.style_and_energy?.visual_styles?.join(', ') || userData.visualStyles?.join(', ') || 'cinematic 3D';
+    return [
+        `Environment style sheet: ${envName}`,
+        'Architectural cues and layout readable in a single shot',
+        `Style: ${styles}, consistent color palette with project`,
+        'Professional 3D rendering, studio lighting, clean detail',
+        'Vertical 9:16 layout, negative space for overlay',
+        'Ultra-high resolution, sharp textures, no people inside',
+        'Negative: cluttered signage, random objects, text artifacts'
+    ].join(', ');
+}
+
+function buildPropPrompt(propName: string, plan: StoryMasterplan, userData: StoryData): string {
+    const styles = plan.metadata.style_and_energy?.visual_styles?.join(', ') || userData.visualStyles?.join(', ');
+    return [
+        `Prop reference sheet: ${propName}`,
+        'Orthographic 3/4 reference, readable materials and controls',
+        `Style: ${styles}, consistent design language with story`,
+        'Vertical 9:16 layout, neutral background, studio lighting',
+        'Ultra-high resolution, crisp lines, no hands, no people'
+    ].join(', ');
+}
+
+function extractUniqueEnvironments(plan: StoryMasterplan): string[] {
+    const set = new Set<string>();
+    for (const act of plan.story_structure.narrative_arc) {
+        for (const scene of act.scenes) {
+            const env = guessEnvironment(scene);
+            if (env) set.add(env);
+        }
+    }
+    return Array.from(set);
+}
+
+function guessEnvironment(scene: Scene): string | null {
+    const t = `${scene.title} ${scene.summary} ${scene.visual_description}`.toLowerCase();
+    const map = [
+        { k: ['pasillo', 'hallway', 'palacio'], v: 'Pasillo del Palacio' },
+        { k: ['sala de control', 'control room'], v: 'Sala de Control' },
+        { k: ['oficina', 'office'], v: 'Oficina Central' },
+        { k: ['plaza', 'square'], v: 'Plaza Principal' },
+    ];
+    for (const m of map) if (m.k.some(k => t.includes(k))) return m.v;
+    return null;
+}
+
+function extractUniqueProps(plan: StoryMasterplan): string[] {
+    const set = new Set<string>();
+    for (const act of plan.story_structure.narrative_arc) {
+        for (const scene of act.scenes) {
+            const t = `${scene.title} ${scene.summary} ${scene.visual_description} ${scene.dialogue_or_narration}`.toLowerCase();
+            if (t.includes('suppressor') || t.includes('supresor')) set.add('Audience Perception Suppressor');
+            if (t.includes('dispositivo inteligente') || t.includes('smart')) set.add('Smart Device');
+        }
+    }
+    return Array.from(set);
+}
+
+export async function generateReferenceAssetsPhase63(
+    plan: StoryMasterplan,
+    userData: StoryData,
+    aspectRatio: '9:16' | '1:1' | '16:9' | '4:5',
+    onProgress: (current: number, total: number, message: string) => void
+): Promise<GeneratedReferenceAssets> {
+    isGenerationCancelled = false;
+    const countUnique = (extractor: (p: StoryMasterplan) => string[]) => new Set(extractor(plan)).size;
+    const totalPlanned = plan.characters.length + countUnique(extractUniqueEnvironments) + countUnique(extractUniqueProps);
+    let current = 0; 
+    const step = (msg: string) => {
+        current++;
+        onProgress?.(current, totalPlanned, msg);
+    };
+
+    const assets: GeneratedReferenceAssets = { characters: [], environments: [], elements: [], sceneFrames: [] };
+
+    // 1) Characters
+    for (const character of plan.characters) {
+        if (isGenerationCancelled) throw new Error("Generación cancelada por el usuario.");
+        if (assetRegistry.findByName(character.name, 'character')) continue;
+        const userChar = userData.characters.find(c => c.name.toLowerCase() === character.name.toLowerCase());
+        step(`Generando personaje: ${character.name}`);
+
+        const prompt = buildCharacterPromptConsistent(character, plan, userData);
+        const blob = await generateImageWithFallback(prompt, aspectRatio, {
+            referenceImage: userChar?.image || undefined
+        });
+        const id = crypto.randomUUID();
+        imageBlobCache.set(id, blob);
+
+        const originHash = userChar?.image ? await hashFile(userChar.image) : undefined;
+        const newAsset: ReferenceAsset = { id, name: character.name, type: 'character', prompt, aspectRatio, source: userChar?.image ? 'hybrid' : 'generated' };
+        assets.characters.push(newAsset);
+        assetRegistry.add({ ...newAsset, tags: ['reference', 'identity-lock'], blobId: id, sourcePhase: 'phase6.3', originHash });
+    }
+
+    // 2) Environments
+    for (const envName of new Set(extractUniqueEnvironments(plan))) {
+        if (isGenerationCancelled) throw new Error("Generación cancelada por el usuario.");
+        if (assetRegistry.findByName(envName, 'environment')) continue;
+        step(`Generando ambiente: ${envName}`);
+        const envPrompt = buildEnvironmentPrompt(envName, plan, userData);
+        const blob = await generateImageWithFallback(envPrompt, aspectRatio);
+        const id = crypto.randomUUID();
+        imageBlobCache.set(id, blob);
+        const newAsset: ReferenceAsset = { id, name: envName, type: 'environment', prompt: envPrompt, aspectRatio, source: 'generated' };
+        assets.environments.push(newAsset);
+        assetRegistry.add({ ...newAsset, tags: ['location', 'reference', 'style-sheet'], blobId: id, sourcePhase: 'phase6.3' });
+    }
+
+    // 3) Props
+    for (const propName of new Set(extractUniqueProps(plan))) {
+        if (isGenerationCancelled) throw new Error("Generación cancelada por el usuario.");
+        if (assetRegistry.findByName(propName, 'element')) continue;
+        step(`Generando elemento clave: ${propName}`);
+        const propPrompt = buildPropPrompt(propName, plan, userData);
+        const blob = await generateImageWithFallback(propPrompt, aspectRatio);
+        const id = crypto.randomUUID();
+        imageBlobCache.set(id, blob);
+        const newAsset: ReferenceAsset = { id, name: propName, type: 'element', prompt: propPrompt, aspectRatio, source: 'generated' };
+        assets.elements.push(newAsset);
+        assetRegistry.add({ ...newAsset, tags: ['prop', 'reference', 'sheet'], blobId: id, sourcePhase: 'phase6.3' });
+    }
+
+    return assets;
+}
+
+function buildSceneReferencePack(scene: Scene, plan: StoryMasterplan): { name: string; type: 'character' | 'environment'; blobId: string }[] {
+    const text = `${scene.title} ${scene.summary} ${scene.visual_description}`.toLowerCase();
+    const presentChars = plan.characters
+        .filter(c => text.includes(c.name.toLowerCase()))
+        .map(c => c.name);
+
+    const refs: { name: string; type: 'character' | 'environment'; blobId: string }[] = [];
+    
+    // Add characters
+    if (presentChars.length > 0) {
+        for (const charName of presentChars) {
+            const charAsset = assetRegistry.findByName(charName, 'character');
+            if (charAsset) {
+                refs.push({ name: charAsset.name, type: 'character', blobId: charAsset.blobId });
+            }
+        }
+    }
+
+    // Add environment
+    const envName = guessEnvironment(scene);
+    if (envName) {
+        const envAsset = assetRegistry.findByName(envName, 'environment');
+        if (envAsset) {
+            refs.push({ name: envAsset.name, type: 'environment', blobId: envAsset.blobId });
+        }
+    }
+    
+    return refs.slice(0, 3); // Limit to 3 references
 }

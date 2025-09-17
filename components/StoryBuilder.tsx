@@ -5,7 +5,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 // FIX: Added missing import for `generateAdvancedStoryPlan` from geminiService.
-import { generateStoryFromPrompt, runFinalVideoGenerationPipeline, generateAllDocumentation, generateCritique, regenerateStoryPlanWithCritique, generateOptimizedReferenceAssets, cancelCurrentGeneration, generateHybridNeuralSceneFrame, downloadProjectLocally, generateCharacterWithReference, generateAdvancedStoryPlan } from '@/services/geminiService';
+import { generateStoryFromPrompt, runFinalVideoGenerationPipeline, generateAllDocumentation, generateCritique, regenerateStoryPlanWithCritique, generateOptimizedReferenceAssets, cancelCurrentGeneration, generateHybridNeuralSceneFrame, downloadProjectLocally, generateCharacterWithReference, generateAdvancedStoryPlan, generateReferenceAssetsPhase63 } from '@/services/geminiService';
 import type { StoryData, CharacterData, ProgressUpdate, StoryMasterplan, FinalAssets, Documentation, Critique, GeneratedReferenceAssets, ReferenceAsset, ExportedProject, ExportedReferenceAsset, ExportedGeneratedReferenceAssets, Scene } from '@/components/story-builder/types';
 import { outputFormats, narrativeStyles, visualStyles, narrativeStructures, hookTypes, conflictTypes, endingTypes } from '@/components/story-builder/constants';
 import Spinner from '@/components/Spinner';
@@ -271,6 +271,46 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ onExit, importedProject }) 
     };
   }, []);
 
+  const handleAutoGeneratePhase63 = async () => {
+    if (!generatedStoryPlan) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+        const newAssets = await generateReferenceAssetsPhase63(
+            generatedStoryPlan,
+            storyData,
+            referenceAssetAspectRatio,
+            (current, total, message) => {
+                setAssetGenerationUIProgress({ current, total, message });
+            }
+        );
+        // Merge new assets with any existing ones (e.g., user-uploaded)
+        setReferenceAssets(prev => ({
+            characters: [...(prev?.characters || []), ...newAssets.characters],
+            environments: [...(prev?.environments || []), ...newAssets.environments],
+            elements: [...(prev?.elements || []), ...newAssets.elements],
+            sceneFrames: prev?.sceneFrames || [],
+        }));
+    } catch (err) {
+        setError(err instanceof Error ? err.message : "Error desconocido durante la auto-generación.");
+    } finally {
+        setIsLoading(false);
+        setAssetGenerationUIProgress(null);
+    }
+  };
+  
+  useEffect(() => {
+    const shouldAutoGenerate = phase === '6.3' && 
+                               !isLoading && 
+                               generatedStoryPlan &&
+                               (!referenceAssets || referenceAssets.characters.length === 0);
+    if (shouldAutoGenerate) {
+        handleAutoGeneratePhase63();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, isLoading, generatedStoryPlan, referenceAssets]);
+
+
   const createMultiSelectToggle = (field: keyof StoryData, max: number) => (item: string) => {
     const currentItems = storyData[field] as string[];
     if (currentItems.includes(item)) {
@@ -383,64 +423,7 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ onExit, importedProject }) 
   };
   
   const handleGenerateReferenceAssets = async (aspectRatio: ReferenceAsset['aspectRatio']) => {
-    if (!generatedStoryPlan || !documentation) return;
-    setPhase('6.3');
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-        console.log('🚀 Iniciando generación con Gemini Web como fallback...');
-        
-        const characters: ReferenceAsset[] = [];
-        
-        // GENERAR CADA PERSONAJE CON ANÁLISIS SI HAY IMAGEN DE REFERENCIA
-        for (const character of generatedStoryPlan.characters.slice(0, 3)) {
-            const userCharacter = storyData.characters.find(c => c.name === character.name);
-            
-            console.log(`🎭 Generando ${character.name}...`);
-            setAssetGenerationUIProgress({ current: characters.length + 1, total: generatedStoryPlan.characters.length, message: `Generando ${character.name}...` });
-            
-            const result = await generateCharacterWithReference(
-                character,
-                userCharacter?.image || null,
-                aspectRatio
-            );
-            
-            const assetId = crypto.randomUUID();
-            imageBlobCache.set(assetId, result.image);
-            
-            characters.push({
-                id: assetId,
-                name: character.name,
-                type: 'character',
-                prompt: character.visual_prompt || character.description,
-                aspectRatio,
-                source: userCharacter?.image ? 'hybrid' : 'generated',
-                metadata: {
-                    generation_method: result.analysis ? 'gemini_web_with_analysis' : 'api_fallback',
-                    // @ts-ignore
-                    analysis: result.analysis,
-                    // @ts-ignore
-                    has_reference: !!userCharacter?.image
-                }
-            });
-        }
-        
-        setReferenceAssets({ 
-            characters, 
-            environments: [], 
-            elements: [], 
-            sceneFrames: [] 
-        });
-        
-        console.log('✅ Generación completada con análisis IA');
-        
-    } catch (err: any) {
-        setError(`Error: ${err.message}`);
-    } finally {
-        setIsLoading(false);
-        setAssetGenerationUIProgress(null);
-    }
+      handleAutoGeneratePhase63();
   };
 
 
