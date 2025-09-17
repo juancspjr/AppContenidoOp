@@ -3,52 +3,75 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-// ============================================================================
-// ⚠️ IMPLEMENTACIÓN REVERTIDA A SIMULACIÓN DE BACKEND
-// ============================================================================
-// La librería 'gemini-ai-api' es exclusivamente para Node.js y no puede
-// funcionar en el navegador. La implementación directa causaba un error fatal
-// al cargar la aplicación.
-//
-// Esta versión corregida simula la interfaz del servicio y lanza un error
-// claro y manejable, explicando por qué la función no está disponible en el
-// frontend. Esto soluciona el error de carga y sigue las mejores prácticas
-// de arquitectura.
-// ============================================================================
+// This file simulates a service that interacts with the Gemini web UI
+// using extracted cookies as a fallback when API keys are exhausted.
+// This is an advanced technique and should be used responsibly.
+// In a real application, this logic would live on a backend server.
 
-interface GeminiWebConfig {
-    initialized: boolean;
+import { stealthFetch } from './stealthFetcher';
+
+interface GeminiWebCookies {
+    __Secure_1PSID: string;
+    __Secure_1PSIDTS: string;
+    NID: string;
+    APISID: string;
+    SAPISID: string;
+    HSID: string;
+    SSID: string;
+    SID: string;
 }
 
 class GeminiWebService {
-    private config: GeminiWebConfig = { initialized: false };
-    
-    private throwBrowserError(): never {
-        throw new Error("La librería 'gemini-ai-api' es solo para servidor (Node.js) y no puede ejecutarse en el navegador. Se requiere un backend para la funcionalidad de Gemini Web Unlimited.");
+    private cookies: Partial<GeminiWebCookies> | null = null;
+    private initialized = false;
+
+    public isInitialized(): boolean {
+        return this.initialized;
+    }
+
+    public async initialize(cookieString: string): Promise<boolean> {
+        // Parse cookie string and validate required cookies
+        const parsedCookies = this.parseCookieString(cookieString);
+        if (parsedCookies.__Secure_1PSID && parsedCookies.__Secure_1PSIDTS) {
+            this.cookies = parsedCookies;
+            this.initialized = true;
+            console.log('✅ Gemini Web Service Initialized with cookies.');
+            return true;
+        }
+        console.error('❌ Failed to initialize Gemini Web Service: Missing required cookies.');
+        this.initialized = false;
+        return false;
+    }
+
+    private parseCookieString(cookieString: string): Partial<GeminiWebCookies> {
+        const cookies: any = {};
+        cookieString.split(';').forEach(cookie => {
+            const parts = cookie.match(/(.*?)=(.*)/)
+            if (parts) {
+                const name = parts[1].trim();
+                const value = parts[2].trim();
+                cookies[name] = value;
+            }
+        });
+        return cookies;
     }
     
-    async initialize(cookies: string): Promise<boolean> {
-        this.throwBrowserError();
+    // In a real application, methods for generating images/text via the web UI
+    // would be implemented here, using stealthFetch and the stored cookies.
+    // For example:
+    /*
+    public async generateImage(prompt: string): Promise<Blob> {
+        if (!this.initialized || !this.cookies) {
+            throw new Error("Gemini Web Service not initialized.");
+        }
+        // This is a placeholder for the actual web request logic.
+        const response = await stealthFetch('https://gemini.google.com/_/BardImageProxy/generate', {
+            method: 'POST',
+            // ... body, headers with cookies, etc.
+        });
+        return response.blob();
     }
-    
-    async generateImage(prompt: string, referenceImageBase64?: string): Promise<Blob> {
-        this.throwBrowserError();
-    }
-    
-    async analyzeImage(imageBase64: string, analysisPrompt?: string): Promise<string> {
-        this.throwBrowserError();
-    }
-    
-    async generateWithAnalyzedReference(prompt: string, referenceImage: File): Promise<{ generatedImage: Blob; analysis: string }> {
-        this.throwBrowserError();
-    }
-    
-    isInitialized(): boolean {
-        return this.config.initialized;
-    }
+    */
 }
 
-// INSTANCIA GLOBAL
-const geminiWebService = new GeminiWebService();
-
-export { geminiWebService };
+export const geminiWebService = new GeminiWebService();
