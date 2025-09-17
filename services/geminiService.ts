@@ -9,6 +9,7 @@ import { outputFormats } from '@/components/story-builder/constants';
 import { imageBlobCache } from './imageBlobCache';
 import JSZip from 'jszip';
 import { PersistentAPIKeyManager } from './apiKeyBlacklist';
+import { geminiWebService } from './geminiWebService';
 
 export type { AIRecommendation };
 
@@ -609,6 +610,7 @@ Devuelve el StoryMasterplan JSON completo y perfecto.`);
 export async function generateStoryFromPrompt(storyData: StoryData): Promise<StoryMasterplan> {
     try {
         const result = await generateAdvancedStoryPlan(storyData);
+        // @ts-ignore
         console.log(`🎨 Proceso creativo completado: Nivel de consciencia: ${result.creativeProcess.consciousness_level || 'N/A'}/10`);
         return result.plan;
     } catch (error) {
@@ -759,360 +761,119 @@ Respuesta en español, ultra-específica y profesional.`;
     }
 }
 
-// FIX: Implement and export missing functions
-export function cancelCurrentGeneration() {
-    isGenerationCancelled = true;
-    console.log("🔴 La generación ha sido marcada para cancelación.");
-}
-
-export async function generateCritique(plan: StoryMasterplan, userData: StoryData): Promise<Critique> {
-    if (!UltraConservationMode.canMakeCall()) {
-        return generateLocalCritique(plan, userData);
-    }
-
-    console.log('🧐 Generando crítica ultra-eficiente...');
-    const prompt = addAntiLoopInstructions(`You are a viral content strategist AI. Analyze this StoryMasterplan and the original user data to provide a strategic critique.
-    
-    StoryMasterplan: ${JSON.stringify(plan)}
-    User Data: ${JSON.stringify(userData)}
-
-    Your task is to generate a JSON object following the Critique schema. The critique should be constructive, actionable, and focused on maximizing engagement for the target format: ${plan.metadata.format}.
-    Provide deep insights into strengths, weaknesses, and a clear improvement strategy.
-    
-    Return ONLY the valid JSON object adhering to the Critique schema.`);
-
-    try {
-        UltraConservationMode.recordCall();
-        const response = await backendProxy.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                responseMimeType: 'application/json',
-                responseSchema: critiqueSchema
-            }
-        });
-        return safeParseJsonResponse<Critique>(response.text);
-    } catch (error) {
-        console.warn('⚠️ Crítica API falló, usando template local');
-        return generateLocalCritique(plan, userData);
-    }
-}
-
-export async function regenerateStoryPlanWithCritique(plan: StoryMasterplan, critique: Critique, onProgress: (phase: string, message: string) => void): Promise<StoryMasterplan> {
-    if (!UltraConservationMode.canMakeCall()) {
-        onProgress('local_fallback', 'Aplicando mejoras localmente debido a límites de quota.');
-        return applyLocalImprovements(plan, critique);
-    }
-
-    onProgress('start', 'Iniciando regeneración con arquitectura neuronal...');
-    console.log('🧠 Regenerando plan con crítica...');
-
-    const prompt = addAntiLoopInstructions(`You are a master storyteller AI. Your task is to regenerate and improve a StoryMasterplan based on a strategic critique.
-
-    Original StoryMasterplan:
-    ${JSON.stringify(plan)}
-
-    Strategic Critique to apply:
-    ${JSON.stringify(critique.improvementStrategy)}
-    ${JSON.stringify(critique.specificImprovements)}
-    ${JSON.stringify(critique.proposedSolution)}
-
-    Apply all the suggestions from the critique to create a new, superior StoryMasterplan.
-    The output must be a valid JSON object adhering to the StoryMasterplan schema.
-    Ensure the new plan is more engaging, viral, and optimized for the target format.
-
-    Return ONLY the new, improved StoryMasterplan JSON object.`);
-
-    try {
-        UltraConservationMode.recordCall();
-        onProgress('api_call', 'Enviando petición a la IA...');
-        const response = await backendProxy.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                responseMimeType: 'application/json',
-                responseSchema: storyMasterplanSchema,
-            }
-        });
-        onProgress('parsing', 'Procesando respuesta de la IA...');
-        const newPlan = safeParseJsonResponse<StoryMasterplan>(response.text);
-        onProgress('complete', 'Regeneración completada.');
-        return newPlan;
-    } catch (error) {
-        console.warn('⚠️ Regeneración API falló, aplicando mejoras locales');
-        onProgress('local_fallback', 'Fallo de API, aplicando mejoras locales como fallback.');
-        return applyLocalImprovements(plan, critique);
-    }
-}
-
-
-export async function generateOptimizedReferenceAssets(
-    plan: StoryMasterplan,
-    userData: StoryData,
+async function generateWithGeminiAPI(
+    prompt: string,
     aspectRatio: ReferenceAsset['aspectRatio'],
-    onProgress: (current: number, total: number, message: string) => void
-): Promise<GeneratedReferenceAssets> {
-    isGenerationCancelled = false; // Reset cancellation flag
-    
-    const assetsToGenerate: { type: 'character' | 'environment' | 'element', name: string, prompt: string }[] = [];
-    
-    plan.characters.forEach(char => {
-        assetsToGenerate.push({ type: 'character', name: char.name, prompt: char.visual_prompt });
+    options?: any
+): Promise<Blob> {
+    const response = await backendProxy.generateContent({
+        model: 'gemini-2.5-flash-image-preview',
+        contents: { parts: [{ text: prompt }] },
+        config: { responseModalities: [Modality.IMAGE] }
     });
-    
-    const environments = new Set<string>();
-    const elements = new Set<string>();
-    plan.story_structure.narrative_arc.flatMap(act => act.scenes).forEach(scene => {
-        // Simplified logic for asset extraction
-        const visualDesc = scene.visual_description.toLowerCase();
-        if (visualDesc.includes("forest") || visualDesc.includes("woods")) environments.add("Forest");
-        if (visualDesc.includes("city") || visualDesc.includes("urban")) environments.add("City");
-        if (visualDesc.includes("room") || visualDesc.includes("interior")) environments.add("Interior Room");
-        if (visualDesc.includes("sword")) elements.add("Magic Sword");
-        if (visualDesc.includes("book")) elements.add("Ancient Book");
-        if (visualDesc.includes("car")) elements.add("Futuristic Car");
-    });
-
-    environments.forEach(env => assetsToGenerate.push({ type: 'environment', name: env, prompt: `A cinematic shot of a ${env} in the style of ${plan.metadata.style_and_energy.visual_styles.join(', ')}` }));
-    elements.forEach(el => assetsToGenerate.push({ type: 'element', name: el, prompt: `A detailed product shot of a ${el}, key item.` }));
-
-    const totalAssets = assetsToGenerate.length;
-    const generatedAssets: GeneratedReferenceAssets = { characters: [], environments: [], elements: [], sceneFrames: [] };
-
-    for (let i = 0; i < totalAssets; i++) {
-        if (isGenerationCancelled) {
-            console.log("🚫 Generación cancelada por el usuario.");
-            throw new Error("Generation cancelled by user");
-        }
-        
-        const assetInfo = assetsToGenerate[i];
-        onProgress(i + 1, totalAssets, `Generando ${assetInfo.type}: ${assetInfo.name}...`);
-        
-        try {
-            const response = await backendProxy.generateImages({
-                model: 'imagen-4.0-generate-001',
-                prompt: `${assetInfo.prompt}, aspect ratio ${aspectRatio}`,
-                config: {
-                    numberOfImages: 1,
-                    outputMimeType: 'image/jpeg',
-                    aspectRatio: aspectRatio,
-                },
-            });
-
-            if (response.generatedImages && response.generatedImages.length > 0) {
-                const imageData = response.generatedImages[0].image.imageBytes;
-                const byteCharacters = atob(imageData);
-                const byteNumbers = new Array(byteCharacters.length);
-                for (let i = 0; i < byteCharacters.length; i++) {
-                    byteNumbers[i] = byteCharacters.charCodeAt(i);
-                }
-                const byteArray = new Uint8Array(byteNumbers);
-                const blob = new Blob([byteArray], { type: 'image/jpeg' });
-
-                const newAsset: ReferenceAsset = {
-                    id: crypto.randomUUID(),
-                    name: assetInfo.name,
-                    type: assetInfo.type,
-                    prompt: assetInfo.prompt,
-                    aspectRatio: aspectRatio,
-                    source: 'generated',
-                };
-
-                imageBlobCache.set(newAsset.id, blob);
-
-                if (assetInfo.type === 'character') generatedAssets.characters.push(newAsset);
-                else if (assetInfo.type === 'environment') generatedAssets.environments.push(newAsset);
-                else if (assetInfo.type === 'element') generatedAssets.elements.push(newAsset);
-            }
-        } catch (error) {
-            console.error(`Error generating asset ${assetInfo.name}:`, error);
-        }
-    }
-    
-    onProgress(totalAssets, totalAssets, 'Generación de activos de referencia completada.');
-    return generatedAssets;
+    const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+    if (!imagePart?.inlineData) throw new Error("No se encontró data de imagen en la respuesta de Gemini API");
+    const byteCharacters = atob(imagePart.inlineData.data);
+    const byteArray = new Uint8Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) byteArray[i] = byteCharacters.charCodeAt(i);
+    return new Blob([byteArray], { type: imagePart.inlineData.mimeType });
 }
 
-export async function generateHybridNeuralSceneFrame(
-    plan: StoryMasterplan,
-    scene: Scene,
-    assets: GeneratedReferenceAssets,
-    aspectRatio: ReferenceAsset['aspectRatio'],
-    frameType: 'start' | 'climax' | 'end',
-    userData: StoryData,
-    onProgress: (message: string) => void
-): Promise<ReferenceAsset> {
-    isGenerationCancelled = false;
-    onProgress(`Analizando escena ${scene.scene_number} para frame '${frameType}'...`);
-
-    const prompt = `Generate a cinematic keyframe for scene ${scene.scene_number} (${scene.title}) at its '${frameType}' moment.
-    Summary: ${scene.summary}
-    Visuals: ${scene.visual_description}
-    Style: ${plan.metadata.style_and_energy.visual_styles.join(', ')}
-    Characters present: ${plan.characters.map(c => c.name).join(', ')}
-    Use the following visual prompts for consistency:
-    ${assets.characters.map(c => `- ${c.name}: ${c.prompt}`).join('\n')}
-    ${assets.environments.map(e => `- Environment (${e.name}): ${e.prompt}`).join('\n')}
-    The image must be dramatic and visually stunning. Aspect ratio: ${aspectRatio}.`;
-
-    if (isGenerationCancelled) throw new Error("Generation cancelled by user");
-    onProgress('Generando imagen...');
-    
-    const response = await backendProxy.generateImages({
+async function generateWithImagen(
+    prompt: string,
+    aspectRatio: ReferenceAsset['aspectRatio']
+): Promise<Blob> {
+    const response: GenerateImagesResponse = await backendProxy.generateImages({
         model: 'imagen-4.0-generate-001',
-        prompt: prompt,
-        config: {
-            numberOfImages: 1,
-            outputMimeType: 'image/jpeg',
-            aspectRatio: aspectRatio,
+        prompt,
+        config: { 
+            numberOfImages: 1, 
+            outputMimeType: 'image/png', 
+            aspectRatio: aspectRatio === '4:5' ? '3:4' : aspectRatio 
         },
     });
-
-    if (isGenerationCancelled) throw new Error("Generation cancelled by user");
-
-    if (!response.generatedImages || response.generatedImages.length === 0) {
-        throw new Error("AI failed to generate an image for the scene frame.");
-    }
-    
-    const imageData = response.generatedImages[0].image.imageBytes;
-    const byteCharacters = atob(imageData);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-    }
-    const byteArray = new Uint8Array(byteNumbers);
-    const blob = new Blob([byteArray], { type: 'image/jpeg' });
-    
-    const newFrame: ReferenceAsset = {
-        id: crypto.randomUUID(),
-        name: `Scene ${scene.scene_number} - ${frameType}`,
-        type: 'scene_frame',
-        prompt: prompt,
-        aspectRatio: aspectRatio,
-        source: 'generated_hybrid_neural',
-        sceneNumber: scene.scene_number,
-        frameType: frameType
-    };
-
-    imageBlobCache.set(newFrame.id, blob);
-    onProgress('Frame generado y guardado.');
-
-    return newFrame;
+    if (!response.generatedImages?.[0]?.image?.imageBytes) throw new Error(`Fallback a Imagen-4.0 falló`);
+    const byteString = atob(response.generatedImages[0].image.imageBytes);
+    const arrayBuffer = new ArrayBuffer(byteString.length);
+    const uint8Array = new Uint8Array(arrayBuffer);
+    for (let i = 0; i < byteString.length; i++) uint8Array[i] = byteString.charCodeAt(i);
+    return new Blob([arrayBuffer], { type: 'image/png' });
 }
 
-export async function runFinalVideoGenerationPipeline(
-    plan: StoryMasterplan,
-    assets: GeneratedReferenceAssets,
-    productionGuide: string,
-    onProgress: (update: ProgressUpdate) => void
-): Promise<FinalAssets> {
-    isGenerationCancelled = false;
-    const finalAssets: FinalAssets = { imageAssets: [], videoAssets: [], audioAssets: [] };
-    const allScenes = plan.story_structure.narrative_arc.flatMap(act => act.scenes);
 
-    for (const scene of allScenes) {
-        if (isGenerationCancelled) throw new Error("Generation cancelled by user");
-
-        const sceneId = `scene_${scene.scene_number}`;
-        onProgress({ stage: 'sub_prompts', status: 'in_progress', message: `Planning shots for scene ${scene.scene_number}...`, sceneId });
-
-        const videoPrompt = `${scene.visual_description}. Style: ${plan.metadata.style_and_energy.visual_styles.join(', ')}`;
-        onProgress({ stage: 'sub_prompts', status: 'complete', message: `Shot planning complete for scene ${scene.scene_number}.`, sceneId });
-        onProgress({ stage: 'videos', status: 'in_progress', message: `Generating video for scene ${scene.scene_number}...`, sceneId, segment: 1, totalSegments: 1 });
+export async function generateImageWithFallback(
+    prompt: string, 
+    aspectRatio: ReferenceAsset['aspectRatio'],
+    options?: {
+        referenceAssets?: GeneratedReferenceAssets;
+        scene?: Scene;
+        storyPlan?: StoryMasterplan;
+        userData?: StoryData;
+        referenceImage?: File; // Nueva opción para imagen de referencia
+    }
+): Promise<Blob> {
+    
+    const { referenceImage } = options || {};
+    
+    const aspectPrompt = aspectRatio === '9:16' 
+        ? 'vertical 9:16 aspect ratio, mobile composition, portrait orientation' 
+        : `${aspectRatio} aspect ratio`;
         
-        try {
-            let operation: GenerateVideosOperation = await backendProxy.generateVideos({
-                model: 'veo-2.0-generate-001',
-                prompt: videoPrompt,
-                config: { numberOfVideos: 1 }
-            });
-
-            while (!operation.done) {
-                if (isGenerationCancelled) throw new Error("Generation cancelled by user");
-                await new Promise(resolve => setTimeout(resolve, 10000));
-                operation = await backendProxy.getVideosOperation({ operation: operation });
+    const enhancedPrompt = `${prompt}, ${aspectPrompt}, high quality, professional rendering, sharp focus, detailed`;
+    
+    try {
+        console.log("%c🟢 PRIMARIO: Gemini API Oficial", "color: lightgreen; font-weight: bold;");
+        return await generateWithGeminiAPI(enhancedPrompt, aspectRatio, options);
+        
+    } catch (apiError: any) {
+        console.warn(`%c🟡 API FALLÓ: ${apiError.message}`, "color: orange; font-weight: bold;");
+        
+        if (geminiWebService.isInitialized()) {
+            try {
+                console.log("%c🌐 FALLBACK GEMINI WEB: Generación ilimitada", "color: cyan; font-weight: bold;");
+                if (referenceImage) {
+                    const result = await geminiWebService.generateWithAnalyzedReference(enhancedPrompt, referenceImage);
+                    console.log(`🔍 Análisis: ${result.analysis.substring(0, 100)}...`);
+                    console.log("%c✅ ÉXITO: Imagen generada con Gemini Web + análisis", "color: cyan; font-weight: bold;");
+                    return result.generatedImage;
+                } else {
+                    const image = await geminiWebService.generateImage(enhancedPrompt);
+                    console.log("%c✅ ÉXITO: Imagen generada con Gemini Web", "color: cyan; font-weight: bold;");
+                    return image;
+                }
+            } catch (webError: any) {
+                console.warn(`%c🟡 GEMINI WEB FALLÓ: ${webError.message}`, "color: orange; font-weight: bold;");
             }
-
-            if (operation.response?.generatedVideos?.[0]?.video?.uri) {
-                const downloadLink = operation.response.generatedVideos[0].video.uri;
-                const videoBlob = await backendProxy.fetchVideo(downloadLink);
-                const assetId = crypto.randomUUID();
-                imageBlobCache.set(assetId, videoBlob);
-                
-                finalAssets.videoAssets.push({ sceneId, segment: 1, assetId, prompt: videoPrompt });
-                onProgress({ stage: 'videos', status: 'complete', message: `Video generated for scene ${scene.scene_number}.`, sceneId, segment: 1, totalSegments: 1 });
-            } else {
-                 throw new Error(`Video generation failed for scene ${scene.scene_number}`);
-            }
-        } catch(e) {
-            const message = e instanceof Error ? e.message : String(e);
-            onProgress({ stage: 'videos', status: 'error', message: `Failed to generate video for scene ${scene.scene_number}: ${message}`, sceneId, segment: 1, totalSegments: 1 });
+        } else {
+            console.warn("%c⚠️ GEMINI WEB NO INICIALIZADO", "color: orange; font-weight: bold;");
         }
+        
+        console.log("%c🔶 FALLBACK FINAL: Imagen-4.0", "color: orange; font-weight: bold;");
+        return await generateWithImagen(enhancedPrompt, aspectRatio);
     }
-
-    onProgress({ stage: 'complete', status: 'complete', message: 'All assets generated.' });
-    return finalAssets;
 }
 
-export async function downloadProjectLocally(
-    plan: StoryMasterplan,
-    documentation: Documentation,
-    assets: GeneratedReferenceAssets,
-    critique: Critique | null
-): Promise<void> {
-    const zip = new JSZip();
-    const title = plan.metadata.title.replace(/\s+/g, '_');
 
-    const convertAssetsForExport = async (assets: ReferenceAsset[]): Promise<ExportedReferenceAsset[]> => {
-        return Promise.all(assets.map(async (asset) => {
-            const { ...rest } = asset;
-            const blob = imageBlobCache.get(asset.id);
-            const imageData = blob ? await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result as string);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-            }) : undefined;
-            return { ...rest, imageData };
-        }));
-    };
-
-    const exportAssets: ExportedGeneratedReferenceAssets = {
-        characters: await convertAssetsForExport(assets.characters),
-        environments: await convertAssetsForExport(assets.environments),
-        elements: await convertAssetsForExport(assets.elements),
-        sceneFrames: await convertAssetsForExport(assets.sceneFrames),
-    };
-
-    const projectToExport: ExportedProject = {
-        plan,
-        documentation,
-        critique: critique || {} as Critique,
-        assets: exportAssets,
-    };
+export async function generateCharacterWithReference(
+    character: any,
+    userImage: File | null,
+    aspectRatio: ReferenceAsset['aspectRatio']
+): Promise<{ image: Blob; analysis?: string }> {
     
-    zip.file(`${title}_ProjectExport.json`, JSON.stringify(projectToExport, null, 2));
-
-    const allAssets = [ ...assets.characters, ...assets.environments, ...assets.elements, ...assets.sceneFrames ];
-    const assetsFolder = zip.folder('assets');
-    if (assetsFolder) {
-        for (const asset of allAssets) {
-            const blob = imageBlobCache.get(asset.id);
-            if (blob) {
-                const filename = `${asset.type}/${asset.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${asset.id.substring(0, 4)}.png`;
-                assetsFolder.file(filename, blob);
-            }
+    const basePrompt = `Professional character portrait: ${character.description}, ${character.visual_prompt || ''}, high quality 3D rendering, ${aspectRatio} aspect ratio, professional lighting`;
+    
+    if (userImage && geminiWebService.isInitialized()) {
+        try {
+            console.log(`🎭 Generando ${character.name} CON imagen de referencia usando análisis IA`);
+            const result = await geminiWebService.generateWithAnalyzedReference(basePrompt, userImage);
+            return { image: result.generatedImage, analysis: result.analysis };
+        } catch (error) {
+            console.warn(`⚠️ Error con análisis, usando método estándar:`, error);
         }
     }
-
-    const content = await zip.generateAsync({ type: 'blob' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(content);
-    link.download = `${title}_Project.zip`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(link.href);
+    
+    const image = await generateImageWithFallback(basePrompt, aspectRatio);
+    return { image };
 }
 
 // ============================================================================
@@ -1178,4 +939,193 @@ export function resetSpecificAPI(projectName: string): void {
 (window as any).showAPIStatus = showAPIStatus;
 (window as any).resetAllAPIs = resetAllAPIs;
 (window as any).resetSpecificAPI = resetSpecificAPI;
-// CRÍTICA SIMPLIFICADA - 1 LLAMADA O ANÁLIS
+
+// ============================================================================
+// ➕ FUNCIONES RESTAURADAS
+// ============================================================================
+
+export function cancelCurrentGeneration() {
+  isGenerationCancelled = true;
+  console.log("🔴 La generación ha sido marcada para cancelación.");
+}
+
+export async function generateCritique(plan: StoryMasterplan, userData: StoryData): Promise<Critique> {
+    if (!UltraConservationMode.canMakeCall()) {
+        return generateLocalCritique(plan, userData);
+    }
+
+    console.log('🧐 Generando crítica ultra-eficiente...');
+    const prompt = addAntiLoopInstructions(`You are a viral content strategist AI. Analyze this StoryMasterplan and the original user data to provide a strategic critique.
+    
+    StoryMasterplan: ${JSON.stringify(plan)}
+    User Data: ${JSON.stringify(userData)}
+
+    Your task is to generate a JSON object following the Critique schema. The critique should be constructive, actionable, and focused on maximizing engagement for the target format: ${plan.metadata.format}.
+    Provide deep insights into strengths, weaknesses, and a clear improvement strategy.
+    
+    Return ONLY the valid JSON object adhering to the Critique schema.`);
+
+    try {
+        UltraConservationMode.recordCall();
+        const response = await backendProxy.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: critiqueSchema
+            }
+        });
+        return safeParseJsonResponse<Critique>(response.text);
+    } catch (error) {
+        console.warn('⚠️ Crítica API falló, usando template local');
+        return generateLocalCritique(plan, userData);
+    }
+}
+
+export async function regenerateStoryPlanWithCritique(plan: StoryMasterplan, critique: Critique, onProgress: (phase: string, message: string) => void): Promise<StoryMasterplan> {
+    if (!UltraConservationMode.canMakeCall()) {
+        onProgress('local_fallback', 'Aplicando mejoras localmente debido a límites de quota.');
+        return applyLocalImprovements(plan, critique);
+    }
+
+    onProgress('start', 'Iniciando regeneración...');
+    const prompt = addAntiLoopInstructions(`You are a master storyteller AI. Regenerate and improve a StoryMasterplan based on a strategic critique.
+
+    Original StoryMasterplan: ${JSON.stringify(plan)}
+    Critique to apply: ${JSON.stringify(critique.improvementStrategy)}
+
+    Apply all suggestions to create a new, superior StoryMasterplan.
+    Return ONLY the new, improved StoryMasterplan JSON object.`);
+
+    try {
+        UltraConservationMode.recordCall();
+        onProgress('api_call', 'Enviando petición a la IA...');
+        const response = await backendProxy.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: storyMasterplanSchema,
+            }
+        });
+        onProgress('complete', 'Regeneración completada.');
+        return safeParseJsonResponse<StoryMasterplan>(response.text);
+    } catch (error) {
+        console.warn('⚠️ Regeneración API falló, aplicando mejoras locales');
+        return applyLocalImprovements(plan, critique);
+    }
+}
+
+export async function generateOptimizedReferenceAssets(
+    plan: StoryMasterplan,
+    userData: StoryData,
+    aspectRatio: ReferenceAsset['aspectRatio'],
+    onProgress: (current: number, total: number, message: string) => void
+): Promise<GeneratedReferenceAssets> {
+    isGenerationCancelled = false;
+    const assets: GeneratedReferenceAssets = { characters: [], environments: [], elements: [], sceneFrames: [] };
+    const charactersToGen = plan.characters.slice(0, 3); // Limit to max 3
+    let current = 0;
+    for (const char of charactersToGen) {
+        if (isGenerationCancelled) throw new Error("Generación cancelada.");
+        current++;
+        onProgress(current, charactersToGen.length, `Generando personaje: ${char.name}...`);
+        const userChar = userData.characters.find(c => c.name === char.name);
+        const { image } = await generateCharacterWithReference(char, userChar?.image || null, aspectRatio);
+        const assetId = crypto.randomUUID();
+        imageBlobCache.set(assetId, image);
+        assets.characters.push({
+            id: assetId, name: char.name, type: 'character', prompt: char.visual_prompt,
+            aspectRatio, source: 'generated'
+        });
+    }
+    return assets;
+}
+
+export async function generateHybridNeuralSceneFrame(
+    plan: StoryMasterplan,
+    scene: Scene,
+    assets: GeneratedReferenceAssets,
+    aspectRatio: ReferenceAsset['aspectRatio'],
+    frameType: 'start' | 'climax' | 'end',
+    userData: StoryData,
+    onProgress: (message: string) => void
+): Promise<ReferenceAsset> {
+    onProgress(`Generando frame para escena ${scene.scene_number}...`);
+    const prompt = `Generate a cinematic keyframe for scene ${scene.scene_number} (${scene.title}) at its '${frameType}' moment. Visuals: ${scene.visual_description}. Style: ${plan.metadata.style_and_energy.visual_styles.join(', ')}`;
+    const blob = await generateImageWithFallback(prompt, aspectRatio);
+    const newFrame: ReferenceAsset = {
+        id: crypto.randomUUID(), name: `Scene ${scene.scene_number} - ${frameType}`, type: 'scene_frame',
+        prompt, aspectRatio, source: 'generated_hybrid_neural', sceneNumber: scene.scene_number, frameType
+    };
+    imageBlobCache.set(newFrame.id, blob);
+    return newFrame;
+}
+
+export async function runFinalVideoGenerationPipeline(
+    plan: StoryMasterplan,
+    assets: GeneratedReferenceAssets,
+    productionGuide: string,
+    onProgress: (update: ProgressUpdate) => void
+): Promise<FinalAssets> {
+    isGenerationCancelled = false;
+    const finalAssets: FinalAssets = { imageAssets: [], videoAssets: [], audioAssets: [] };
+    const allScenes = plan.story_structure.narrative_arc.flatMap(act => act.scenes);
+    onProgress({ stage: 'videos', status: 'in_progress', message: `Iniciando generación de video...` });
+
+    for (const scene of allScenes) {
+        if (isGenerationCancelled) throw new Error("Generación cancelada.");
+        const sceneId = `scene_${scene.scene_number}`;
+        onProgress({ stage: 'videos', status: 'in_progress', message: `Generando video para escena ${scene.scene_number}...`, sceneId });
+        try {
+            const videoPrompt = `${scene.visual_description}. Style: ${plan.metadata.style_and_energy.visual_styles.join(', ')}`;
+            let operation: GenerateVideosOperation = await backendProxy.generateVideos({ model: 'veo-2.0-generate-001', prompt: videoPrompt, config: { numberOfVideos: 1 } });
+            while (!operation.done) {
+                if (isGenerationCancelled) throw new Error("Generación cancelada.");
+                await new Promise(resolve => setTimeout(resolve, 10000));
+                operation = await backendProxy.getVideosOperation({ operation });
+            }
+            if (operation.response?.generatedVideos?.[0]?.video?.uri) {
+                const downloadLink = operation.response.generatedVideos[0].video.uri;
+                const videoBlob = await backendProxy.fetchVideo(downloadLink);
+                const assetId = crypto.randomUUID();
+                imageBlobCache.set(assetId, videoBlob);
+                finalAssets.videoAssets.push({ sceneId, segment: 1, assetId, prompt: videoPrompt });
+                onProgress({ stage: 'videos', status: 'complete', message: `Video generado para escena ${scene.scene_number}.`, sceneId });
+            } else { throw new Error('La operación de video no devolvió URI.'); }
+        } catch(e) {
+            onProgress({ stage: 'videos', status: 'error', message: `Fallo en video para escena ${scene.scene_number}: ${e instanceof Error ? e.message : 'Error'}`});
+        }
+    }
+    onProgress({ stage: 'complete', status: 'complete', message: 'Todos los videos generados.' });
+    return finalAssets;
+}
+
+export async function downloadProjectLocally(
+    plan: StoryMasterplan,
+    documentation: Documentation,
+    assets: GeneratedReferenceAssets,
+    critique: Critique | null
+): Promise<void> {
+    const zip = new JSZip();
+    const title = plan.metadata.title.replace(/\s+/g, '_');
+    const convert = async (a: ReferenceAsset[]): Promise<ExportedReferenceAsset[]> => Promise.all(a.map(async (asset) => {
+        const blob = imageBlobCache.get(asset.id);
+        const imageData = blob ? await new Promise<string>(r => { const reader = new FileReader(); reader.onload = () => r(reader.result as string); reader.readAsDataURL(blob); }) : undefined;
+        return { ...asset, imageData };
+    }));
+    const exportAssets: ExportedGeneratedReferenceAssets = { characters: await convert(assets.characters), environments: await convert(assets.environments), elements: await convert(assets.elements), sceneFrames: await convert(assets.sceneFrames) };
+    const project: ExportedProject = { plan, documentation, critique: critique || {} as Critique, assets: exportAssets };
+    zip.file(`${title}_Project.json`, JSON.stringify(project, null, 2));
+    const allAssets = Object.values(assets).flat();
+    for(const asset of allAssets) {
+        const blob = imageBlobCache.get(asset.id);
+        if (blob) zip.file(`assets/${asset.type}/${asset.name.replace(/[^a-z0-9]/gi, '_')}.png`, blob);
+    }
+    const content = await zip.generateAsync({ type: 'blob' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(content);
+    link.download = `${title}_Project.zip`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+}

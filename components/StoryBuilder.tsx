@@ -4,8 +4,8 @@
 */
 
 import React, { useState, useMemo, useEffect } from 'react';
-// FIX: Added missing imports from geminiService
-import { generateStoryFromPrompt, runFinalVideoGenerationPipeline, generateAllDocumentation, generateCritique, regenerateStoryPlanWithCritique, generateOptimizedReferenceAssets, cancelCurrentGeneration, generateHybridNeuralSceneFrame, downloadProjectLocally } from '@/services/geminiService';
+// FIX: Added missing import for `generateAdvancedStoryPlan` from geminiService.
+import { generateStoryFromPrompt, runFinalVideoGenerationPipeline, generateAllDocumentation, generateCritique, regenerateStoryPlanWithCritique, generateOptimizedReferenceAssets, cancelCurrentGeneration, generateHybridNeuralSceneFrame, downloadProjectLocally, generateCharacterWithReference, generateAdvancedStoryPlan } from '@/services/geminiService';
 import type { StoryData, CharacterData, ProgressUpdate, StoryMasterplan, FinalAssets, Documentation, Critique, GeneratedReferenceAssets, ReferenceAsset, ExportedProject, ExportedReferenceAsset, ExportedGeneratedReferenceAssets, Scene } from '@/components/story-builder/types';
 import { outputFormats, narrativeStyles, visualStyles, narrativeStructures, hookTypes, conflictTypes, endingTypes } from '@/components/story-builder/constants';
 import Spinner from '@/components/Spinner';
@@ -18,6 +18,7 @@ import { imageBlobCache } from '@/services/imageBlobCache';
 import { projectPersistenceService } from '@/services/projectPersistenceService';
 import { assetDBService } from '@/services/assetDBService';
 import APIStatusPanel from '@/components/story-builder/APIStatusPanel';
+import GeminiWebLogin from './story-builder/GeminiWebLogin';
 
 
 interface StoryBuilderProps {
@@ -157,6 +158,7 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ onExit, importedProject }) 
   const [assetGenerationProgress, setAssetGenerationProgress] = useState<Record<string, ProgressUpdate>>({});
   const [finalAssets, setFinalAssets] = useState<FinalAssets | null>(null);
   const [showDevTools, setShowDevTools] = useState(false);
+
   
   const updateData = (key: keyof StoryData, value: any) => {
     setStoryData(prev => ({ ...prev, [key]: value }));
@@ -293,7 +295,11 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ onExit, importedProject }) 
         if (field === 'image' && value instanceof File) {
             if (char.imagePreviewUrl) URL.revokeObjectURL(char.imagePreviewUrl);
             const imagePreviewUrl = URL.createObjectURL(value);
-            return { ...char, image: value, imagePreviewUrl };
+            return { ...char, [field]: value, imagePreviewUrl };
+        }
+        if (field === 'image' && value === null) {
+            if (char.imagePreviewUrl) URL.revokeObjectURL(char.imagePreviewUrl);
+            return { ...char, image: null, imagePreviewUrl: undefined };
         }
         return { ...char, [field]: value };
       }
@@ -303,143 +309,77 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ onExit, importedProject }) 
   };
 
   const addCharacter = () => {
-    if (storyData.characters.length < 5) {
-        const newCharacter: CharacterData = { id: crypto.randomUUID(), name: '', description: '', image: null };
-        updateData('characters', [...storyData.characters, newCharacter]);
+    if(storyData.characters.length < 5){
+       updateData('characters', [...storyData.characters, {id: crypto.randomUUID(), name: '', description: '', image: null }]);
     }
   };
-  
+
   const removeCharacter = (id: string) => {
     const charToRemove = storyData.characters.find(c => c.id === id);
-    if(charToRemove?.imagePreviewUrl) URL.revokeObjectURL(charToRemove.imagePreviewUrl);
+    if (charToRemove?.imagePreviewUrl) URL.revokeObjectURL(charToRemove.imagePreviewUrl);
     updateData('characters', storyData.characters.filter(char => char.id !== id));
   };
   
-  const handlePDFUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-        updateData('storyPDF', e.target.files[0]);
-    }
-  };
+  const handleNextPhase = async () => {
+    const currentPhaseNum = parseFloat(phase);
+    
+    if (currentPhaseNum === 4) {
+        setIsLoading(true);
+        setError(null);
+        setGenerationProgress({ plan: 'in_progress', critique: 'pending', docs: 'pending' });
+        try {
+            const { plan: newPlan } = await generateAdvancedStoryPlan(storyData);
+            setGeneratedStoryPlan(newPlan);
+            setGenerationProgress(prev => ({ ...prev, plan: 'complete', docs: 'in_progress', critique: 'in_progress' }));
 
-  const handleContextImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const filesArray = Array.from(e.target.files);
-      const newContextImages: ContextImage[] = filesArray.map(file => ({
-        id: crypto.randomUUID(),
-        file,
-        previewUrl: URL.createObjectURL(file)
-      }));
-      setContextImages(prev => [...prev, ...newContextImages]);
-      updateData('contextImages', [...storyData.contextImages, ...filesArray]);
-    }
-  };
+            const [docs, crit] = await Promise.all([
+                generateAllDocumentation(newPlan),
+                generateCritique(newPlan, storyData),
+            ]);
+            
+            setDocumentation(docs);
+            setCritique(crit);
+            setGenerationProgress(prev => ({ ...prev, docs: 'complete', critique: 'complete' }));
 
-  const removeContextImage = (idToRemove: string) => {
-    const imageToRemove = contextImages.find(img => img.id === idToRemove);
-    if (imageToRemove) {
-      URL.revokeObjectURL(imageToRemove.previewUrl);
-      setContextImages(prev => prev.filter(img => img.id !== idToRemove));
-      updateData('contextImages', storyData.contextImages.filter(file => file !== imageToRemove.file));
-    }
-  };
-
-  const canGoToPhase2 = useMemo(() => (storyData.concept.trim().length > 5 || storyData.storyPDF) && storyData.format, [storyData.concept, storyData.format, storyData.storyPDF]);
-  const canGoToPhase3 = useMemo(() => storyData.narrativeStyles.length > 0 && storyData.visualStyles.length > 0, [storyData.narrativeStyles, storyData.visualStyles]);
-  const canGoToPhase4 = useMemo(() => storyData.characters.every(c => c.name.trim().length > 0 && c.description.trim().length > 0), [storyData.characters]);
-  const canGoToPhase5 = useMemo(() => storyData.narrativeStructure.length > 0 && storyData.hook.length > 0 && storyData.conflict.length > 0 && storyData.ending.length > 0, [storyData]);
-
-  const handleGenerateStoryPlan = async () => {
-    setIsLoading(true);
-    setError(null);
-    setPhase('5');
-    setGenerationProgress({ plan: 'in_progress', critique: 'pending', docs: 'pending' });
-
-    try {
-        console.log('%c🚀 MODO QUOTA-SAFE: Generando plan sin análisis de imágenes', 'color: lightblue; font-weight: bold;');
-        console.log('%c💡 Las imágenes se analizarán en Fase 6.3 para generar activos visuales', 'color: cyan;');
-
-        const plan = await generateStoryFromPrompt(storyData);
-        setGeneratedStoryPlan(plan);
-        setGenerationProgress(prev => ({ ...prev, plan: 'complete', critique: 'in_progress' }));
-
-        const crit = await generateCritique(plan, storyData);
-        setCritique(crit);
-        setGenerationProgress(prev => ({ ...prev, critique: 'complete', docs: 'in_progress' }));
-
-        const docs = await generateAllDocumentation(plan);
-        setDocumentation(docs);
-        setGenerationProgress(prev => ({ ...prev, docs: 'complete' }));
-        
-        console.log('%c✅ Plan maestro generado con quota preservada para Fase 6.3', 'color: lightgreen; font-weight: bold;');
-        
-        setTimeout(() => {
             setPhase('6.1');
-        }, 1000);
-
-    } catch(err) {
-        const msg = err instanceof Error ? err.message : "Ocurrió un error desconocido.";
-        console.error('%c❌ Error en Fase 5:', 'color: red; font-weight: bold;', err);
-        
-        // 🔥 MANEJO ESPECÍFICO DE QUOTA EXCEEDED
-        if (msg.includes('daily limit') || msg.includes('quota exceeded') || msg.includes('RESOURCE_EXHAUSTED')) {
-            setError(`🚨 LÍMITE DIARIO DE API ALCANZADO
-
-La Fase 5 consume muchas llamadas API para la arquitectura neuronal. Opciones:
-
-1. ⏰ ESPERAR: Las quotas se resetean a medianoche PST (en ${Math.abs(new Date().getHours() - 24)} horas)
-
-2. 🔑 USAR OTRA API KEY: Si tienes más cuentas de Google AI Studio
-
-3. 📤 CONTINUAR MANUALMENTE: Salta la Fase 5 y sube tus propios assets en Fase 6.3
-
-4. 💰 UPGRADE: Considera Gemini Pro para límites más altos
-
-El sistema está diseñado para preservar quota, pero la arquitectura neuronal requiere múltiples análisis.`);
-        } else {
+        } catch(err) {
+            const msg = err instanceof Error ? err.message : "Error desconocido";
             setError(msg);
+            setGenerationProgress({ plan: 'error', critique: 'error', docs: 'error' });
+        } finally {
+            setIsLoading(false);
         }
-
-        setGenerationProgress({ plan: 'error', critique: 'error', docs: 'error' });
-        setPhase('4');
-    } finally {
-        setIsLoading(false);
+        return;
     }
+    
+    setPhase(String(currentPhaseNum + 1));
   };
-  
+
   const handleApplyImprovements = async () => {
     if (!generatedStoryPlan || !critique) return;
     setIsLoading(true);
     setError(null);
-    
-    const onProgress = (phase: string, message: string) => {
-        console.log(`🔄 Regeneración Fase ${phase}: ${message}`);
-        // Optional: Update UI with visual progress
-    };
-    
     try {
-        console.log('🚀 Aplicando mejoras con Arquitectura Neuronal...');
-        
-        const newPlan = await regenerateStoryPlanWithCritique(generatedStoryPlan, critique, onProgress);
-        setGeneratedStoryPlan(newPlan);
-        
-        const newDocs = await generateAllDocumentation(newPlan);
+        const regeneratedPlan = await regenerateStoryPlanWithCritique(generatedStoryPlan, critique, (phase, message) => {
+            console.log(`Regen Progress: ${phase} - ${message}`);
+        });
+        setGeneratedStoryPlan(regeneratedPlan);
+
+        // Regenerate docs and critique with the new plan
+        const [newDocs, newCritique] = await Promise.all([
+            generateAllDocumentation(regeneratedPlan),
+            generateCritique(regeneratedPlan, storyData),
+        ]);
         setDocumentation(newDocs);
-        
+        setCritique(newCritique);
+
         setPhase('6.2');
-        console.log('✅ Mejoras aplicadas con éxito');
-        
-    } catch (err) {
-        const msg = err instanceof Error ? err.message : "Error al regenerar el plan.";
+    } catch(err) {
+        const msg = err instanceof Error ? err.message : "Error desconocido";
         setError(msg);
-        console.error('❌ Error aplicando mejoras:', err);
     } finally {
         setIsLoading(false);
     }
-  };
-
-  const handleCancelGeneration = () => {
-    console.log("Solicitando cancelación de la generación de activos...");
-    cancelCurrentGeneration();
   };
   
   const handleGenerateReferenceAssets = async (aspectRatio: ReferenceAsset['aspectRatio']) => {
@@ -447,141 +387,100 @@ El sistema está diseñado para preservar quota, pero la arquitectura neuronal r
     setPhase('6.3');
     setIsLoading(true);
     setError(null);
-    setAssetGenerationUIProgress(null);
     
     try {
-        console.log('🚀 Iniciando generación optimizada de activos...');
+        console.log('🚀 Iniciando generación con Gemini Web como fallback...');
         
-        const onProgress = (current: number, total: number, message: string) => {
-            setAssetGenerationUIProgress({ current, total, message });
-        };
+        const characters: ReferenceAsset[] = [];
         
-        const assets = await generateOptimizedReferenceAssets(
-            generatedStoryPlan,
-            storyData,
-            aspectRatio,
-            onProgress
-        );
-        
-        setReferenceAssets({ ...assets, sceneFrames: [] });
-        setAssetGenerationUIProgress(null);
-        console.log('✅ Generación de activos completada');
-        
-    } catch (err: any) {
-        if (err.message?.includes("cancelled by user")) {
-            setError("La generación de activos fue cancelada por el usuario.");
-            console.log("🚫 Proceso de generación cancelado.");
-        } else {
-            const errorMessage = err instanceof Error ? err.message : 'Error desconocido en generación';
-            setError(errorMessage);
-            console.error('❌ Error en generación de activos:', err);
+        // GENERAR CADA PERSONAJE CON ANÁLISIS SI HAY IMAGEN DE REFERENCIA
+        for (const character of generatedStoryPlan.characters.slice(0, 3)) {
+            const userCharacter = storyData.characters.find(c => c.name === character.name);
+            
+            console.log(`🎭 Generando ${character.name}...`);
+            setAssetGenerationUIProgress({ current: characters.length + 1, total: generatedStoryPlan.characters.length, message: `Generando ${character.name}...` });
+            
+            const result = await generateCharacterWithReference(
+                character,
+                userCharacter?.image || null,
+                aspectRatio
+            );
+            
+            const assetId = crypto.randomUUID();
+            imageBlobCache.set(assetId, result.image);
+            
+            characters.push({
+                id: assetId,
+                name: character.name,
+                type: 'character',
+                prompt: character.visual_prompt || character.description,
+                aspectRatio,
+                source: userCharacter?.image ? 'hybrid' : 'generated',
+                metadata: {
+                    generation_method: result.analysis ? 'gemini_web_with_analysis' : 'api_fallback',
+                    // @ts-ignore
+                    analysis: result.analysis,
+                    // @ts-ignore
+                    has_reference: !!userCharacter?.image
+                }
+            });
         }
-        setAssetGenerationUIProgress(null);
-    } finally {
-        setIsLoading(false);
-    }
-};
-
-const handleGenerateFrameForScene = async (scene: Scene, frameType: 'start' | 'climax' | 'end') => {
-    if (!generatedStoryPlan || !documentation || !referenceAssets) return;
-    
-    const loadingKey = `${scene.scene_number}-${frameType}`;
-    setLoadingScenes(prev => ({ ...prev, [loadingKey]: true }));
-    setError(null);
-    
-    try {
-        const onProgress = (message: string) => {
-            console.log(`🎬 Progreso Escena ${scene.scene_number} (${frameType}): ${message}`);
-        };
         
-        const newFrame = await generateHybridNeuralSceneFrame(
-            generatedStoryPlan, 
-            scene, 
-            referenceAssets, 
-            referenceAssetAspectRatio,
-            frameType,
-            storyData,
-            onProgress
-        );
-        
-        setReferenceAssets(prev => {
-            if (!prev) return null;
-            return {
-                ...prev,
-                sceneFrames: [...prev.sceneFrames, newFrame],
-            };
+        setReferenceAssets({ 
+            characters, 
+            environments: [], 
+            elements: [], 
+            sceneFrames: [] 
         });
         
-        console.log(`✅ Fotograma '${frameType}' generado para Escena ${scene.scene_number}`);
+        console.log('✅ Generación completada con análisis IA');
         
-    } catch (err) {
-        const msg = err instanceof Error ? err.message : `Error al generar fotograma para la escena ${scene.scene_number}.`;
-        setError(msg);
-        console.error(`❌ Error en Escena ${scene.scene_number} (${frameType}):`, err);
+    } catch (err: any) {
+        setError(`Error: ${err.message}`);
     } finally {
-        setLoadingScenes(prev => ({ ...prev, [loadingKey]: false }));
+        setIsLoading(false);
+        setAssetGenerationUIProgress(null);
     }
-};
+  };
 
 
-  const handleStartFinalVideoGeneration = async () => {
-      if (!generatedStoryPlan || !referenceAssets || !documentation) {
-          setError("No hay un plan, guía de IA o activos de referencia para generar los videos.");
-          return;
-      }
-      setPhase('6.4');
-      setIsLoading(true);
-      setError(null);
-      setAssetGenerationProgress({});
-      setFinalAssets(null);
-      
-      const onProgress = (update: ProgressUpdate) => {
-          const key = update.stage === 'videos' && update.sceneId ? `video_${update.sceneId}` : update.stage;
-          setAssetGenerationProgress(prev => ({...prev, [key]: update}));
-      };
-
+  const handleGenerateFrameForScene = async (scene: Scene, frameType: 'start' | 'climax' | 'end') => {
+      if (!generatedStoryPlan || !referenceAssets) return;
+      const loadingKey = `${scene.scene_number}-${frameType}`;
+      setLoadingScenes(prev => ({ ...prev, [loadingKey]: true }));
       try {
-          const assets = await runFinalVideoGenerationPipeline(generatedStoryPlan, referenceAssets, documentation.aiProductionGuide, onProgress);
-          setFinalAssets(assets);
+          const newFrame = await generateHybridNeuralSceneFrame(generatedStoryPlan, scene, referenceAssets, referenceAssetAspectRatio, frameType, storyData, (message) => console.log(message));
+          setReferenceAssets(prev => prev ? { ...prev, sceneFrames: [...prev.sceneFrames, newFrame] } : null);
       } catch (err) {
-          const msg = err instanceof Error ? err.message : "Ocurrió un error desconocido.";
+          const msg = err instanceof Error ? err.message : "Error al generar el fotograma.";
           setError(msg);
       } finally {
-          setIsLoading(false);
+          setLoadingScenes(prev => ({ ...prev, [loadingKey]: false }));
       }
   };
 
-  const handleRegenerateAssets = (aspectRatio: ReferenceAsset['aspectRatio']) => {
-      if (generatedStoryPlan && documentation) {
-          handleGenerateReferenceAssets(aspectRatio);
-      }
-  };
-
-  const handleUpdateAsset = (assetId: string, instruction: string) => {
-    if (!referenceAssets) return;
-    
-    const update = (assets: ReferenceAsset[]) => assets.map(a => a.id === assetId ? { ...a, instruction } : a);
-
-    setReferenceAssets({
-        characters: update(referenceAssets.characters),
-        environments: update(referenceAssets.environments),
-        elements: update(referenceAssets.elements),
-        sceneFrames: update(referenceAssets.sceneFrames),
+  const handleUpdateAsset = (id: string, instruction: string) => {
+    setReferenceAssets(prev => {
+        if (!prev) return null;
+        const update = (assets: ReferenceAsset[]) => assets.map(a => a.id === id ? { ...a, instruction } : a);
+        return {
+            characters: update(prev.characters),
+            environments: update(prev.environments),
+            elements: update(prev.elements),
+            sceneFrames: update(prev.sceneFrames),
+        };
     });
   };
-
-  const handleDeleteAsset = (assetId: string) => {
-      if (!referenceAssets) return;
-      
-      imageBlobCache.remove(assetId);
-
+  
+  const handleDeleteAsset = (id: string) => {
+      imageBlobCache.remove(id); // Important: remove blob from memory
       setReferenceAssets(prev => {
           if (!prev) return null;
           return {
-              characters: prev.characters.filter(a => a.id !== assetId),
-              environments: prev.environments.filter(a => a.id !== assetId),
-              elements: prev.elements.filter(a => a.id !== assetId),
-              sceneFrames: prev.sceneFrames.filter(a => a.id !== assetId),
+              characters: prev.characters.filter(a => a.id !== id),
+              environments: prev.environments.filter(a => a.id !== id),
+              elements: prev.elements.filter(a => a.id !== id),
+              sceneFrames: prev.sceneFrames.filter(a => a.id !== id),
           };
       });
   };
@@ -589,381 +488,362 @@ const handleGenerateFrameForScene = async (scene: Scene, frameType: 'start' | 'c
   const handleUploadAsset = (type: 'character' | 'environment' | 'element', file: File) => {
       const newAsset: ReferenceAsset = {
           id: crypto.randomUUID(),
-          name: file.name.split('.').slice(0, -1).join('.'),
-          type,
-          prompt: `User uploaded file: ${file.name}`,
+          name: file.name.split('.')[0],
+          type: type,
+          prompt: 'Subido por el usuario',
+          aspectRatio: referenceAssetAspectRatio, // Assume current aspect ratio
           source: 'user',
-          instruction: '',
-          aspectRatio: '9:16' // default
       };
-      
-      imageBlobCache.set(newAsset.id, file);
-
+      const blob = new Blob([file], { type: file.type });
+      imageBlobCache.set(newAsset.id, blob);
       setReferenceAssets(prev => {
-          const newAssets = prev ? { ...prev } : { characters: [], environments: [], elements: [], sceneFrames: [] };
-          if (type === 'character') newAssets.characters.push(newAsset);
-          else if (type === 'environment') newAssets.environments.push(newAsset);
-          else if (type === 'element') newAssets.elements.push(newAsset);
-          return newAssets;
+          if (!prev) return { characters: [], environments: [], elements: [], sceneFrames: [] };
+          const key = `${type}s` as keyof GeneratedReferenceAssets;
+          return { ...prev, [key]: [...(prev[key] as ReferenceAsset[]), newAsset] };
       });
   };
 
-  const handleExportProject = async () => {
-    if (!generatedStoryPlan || !documentation || !referenceAssets) {
-        setError("Faltan datos para exportar el proyecto. Asegúrate de haber generado el plan y los activos.");
-        return;
-    }
+  const handleFinalGeneration = async () => {
+    if (!generatedStoryPlan || !referenceAssets || !documentation) return;
+    setPhase('6.4');
     setIsLoading(true);
     setError(null);
+    setAssetGenerationProgress({});
     try {
-        await downloadProjectLocally(
+        const finalAssetsResult = await runFinalVideoGenerationPipeline(
             generatedStoryPlan,
-            documentation,
             referenceAssets,
-            critique
-        );
-    } catch (err) {
-        const msg = err instanceof Error ? err.message : "Error al exportar el proyecto.";
-        setError(msg);
-    } finally {
-        setIsLoading(false);
-    }
-  };
-
-  const handleSaveProjectLocally = async () => {
-    if (!generatedStoryPlan || !documentation || !critique || !referenceAssets) {
-        setError("Faltan datos para guardar el proyecto. Asegúrate de haber generado el plan y los activos.");
-        return;
-    }
-    setIsLoading(true);
-    setError(null);
-    try {
-        // 1. Prepare asset metadata for localStorage (without binary data)
-        const convertAssetsForMetadata = (assets: ReferenceAsset[]): ExportedReferenceAsset[] => {
-            return assets.map(asset => {
-                const { url, ...rest } = (asset as any); // url is temporary, don't save
-                return { ...rest }; // No imageData property
-            });
-        };
-
-        const metadataAssets: ExportedGeneratedReferenceAssets = {
-            characters: convertAssetsForMetadata(referenceAssets.characters),
-            environments: convertAssetsForMetadata(referenceAssets.environments),
-            elements: convertAssetsForMetadata(referenceAssets.elements),
-            sceneFrames: convertAssetsForMetadata(referenceAssets.sceneFrames),
-        };
-
-        const projectToSave: ExportedProject = {
-            plan: generatedStoryPlan,
-            documentation,
-            critique,
-            assets: metadataAssets,
-        };
-        
-        // 2. Save metadata to localStorage
-        projectPersistenceService.saveProject(projectToSave);
-
-        // 3. Save binary blobs to IndexedDB
-        const allAssets = [
-            ...referenceAssets.characters, 
-            ...referenceAssets.environments,
-            ...referenceAssets.elements,
-            ...referenceAssets.sceneFrames
-        ];
-        
-        await Promise.all(allAssets.map(asset => {
-            const blob = imageBlobCache.get(asset.id);
-            if (blob) {
-                return assetDBService.saveAsset(asset.id, blob);
+            documentation.aiProductionGuide,
+            (update) => {
+                setAssetGenerationProgress(prev => ({ ...prev, [update.sceneId || 'global']: update }));
             }
-            return Promise.resolve();
-        }));
-
-        alert('¡Proyecto guardado localmente en tu navegador!');
-
+        );
+        setFinalAssets(finalAssetsResult);
     } catch (err) {
-        const msg = err instanceof Error ? err.message : "Error al guardar el proyecto localmente.";
+        const msg = err instanceof Error ? err.message : "Error en la generación final.";
         setError(msg);
-        alert(`Error al guardar: ${msg}`);
     } finally {
         setIsLoading(false);
     }
   };
   
-  const GenerationProgressItem: React.FC<{ status: GenerationStatus; label: string }> = ({ status, label }) => {
-    const statusMap = {
-        pending: { icon: '⏳', color: 'text-gray-400' },
-        in_progress: { icon: <div className="w-5 h-5"><Spinner /></div>, color: 'text-blue-300' },
-        complete: { icon: '✅', color: 'text-green-400' },
-        error: { icon: '❌', color: 'text-red-400' },
-    };
-    const current = statusMap[status];
+  const handleExportProject = async () => {
+    if (!generatedStoryPlan || !documentation || !referenceAssets) {
+        alert("Se necesita un plan, documentación y activos para exportar.");
+        return;
+    }
+    await downloadProjectLocally(generatedStoryPlan, documentation, referenceAssets, critique);
+  };
 
-    return (
-        <li className={`flex items-center gap-4 p-3 rounded-lg transition-colors duration-300 ${status === 'in_progress' ? 'bg-blue-500/10' : 'bg-gray-900/20'}`}>
-            <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center">{current.icon}</div>
-            <span className={`font-semibold ${current.color}`}>{label}</span>
-        </li>
-    );
-};
+  const handleSaveLocally = async () => {
+    if (!generatedStoryPlan || !documentation || !referenceAssets) {
+        alert("Se necesita un plan, documentación y activos para guardar localmente.");
+        return;
+    }
+
+    try {
+        const convertAssetsForStorage = async (assets: ReferenceAsset[]): Promise<ExportedReferenceAsset[]> => {
+            const exportedAssets: ExportedReferenceAsset[] = [];
+            for (const asset of assets) {
+                const blob = imageBlobCache.get(asset.id);
+                if (blob) {
+                    await assetDBService.saveAsset(asset.id, blob);
+                    // Don't include imageData for local storage, just the metadata
+                    const { ...rest } = asset;
+                    exportedAssets.push(rest);
+                }
+            }
+            return exportedAssets;
+        };
+        
+        const assetsToStore: ExportedGeneratedReferenceAssets = {
+            characters: await convertAssetsForStorage(referenceAssets.characters),
+            environments: await convertAssetsForStorage(referenceAssets.environments),
+            elements: await convertAssetsForStorage(referenceAssets.elements),
+            sceneFrames: await convertAssetsForStorage(referenceAssets.sceneFrames),
+        };
+
+        const projectToSave: ExportedProject = {
+            plan: generatedStoryPlan,
+            documentation,
+            critique: critique || {} as Critique,
+            assets: assetsToStore
+        };
+        
+        projectPersistenceService.saveProject(projectToSave);
+
+        alert("¡Proyecto guardado localmente! Los activos están en la base de datos de tu navegador y la metadata en el almacenamiento local.");
+
+    } catch (error) {
+        console.error("Fallo al guardar el proyecto localmente:", error);
+        alert(`Error al guardar: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+    }
+  };
+
 
   const renderPhase = () => {
-    if (error && parseFloat(phase) < 6.3) {
-        return (
-            <div className="text-center text-red-400 bg-red-500/10 p-4 rounded-lg border border-red-500/20">
-                <h3 className="font-bold text-lg mb-2">Error en la Generación</h3>
-                <p className="whitespace-pre-wrap">{error}</p>
-                <button 
-                    onClick={() => setError(null)} 
-                    className="mt-4 bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-lg"
-                >
-                    Intentar de Nuevo
-                </button>
-            </div>
-        )
+    const currentPhaseNum = parseFloat(phase);
+    
+    if (currentPhaseNum >= 6.4) {
+        return <AssetGenerationView
+            isLoading={isLoading}
+            progress={assetGenerationProgress}
+            assets={finalAssets}
+            error={error}
+            storyPlan={generatedStoryPlan}
+            onRegenerate={handleFinalGeneration}
+            onGoToPhase={(p) => setPhase(String(p))}
+        />;
+    }
+    
+    if (currentPhaseNum >= 6.3) {
+        return <ReferenceAssetView 
+            isLoading={isLoading}
+            assets={referenceAssets}
+            error={error}
+            onContinue={handleFinalGeneration}
+            onRegenerate={handleGenerateReferenceAssets}
+            onUpdateAsset={handleUpdateAsset}
+            onDeleteAsset={handleDeleteAsset}
+            onUploadAsset={handleUploadAsset}
+            aspectRatio={referenceAssetAspectRatio}
+            setAspectRatio={setReferenceAssetAspectRatio}
+            onExportProject={handleExportProject}
+            storyPlan={generatedStoryPlan}
+            onGenerateFrameForScene={handleGenerateFrameForScene}
+            loadingScenes={loadingScenes}
+            onSaveLocally={handleSaveLocally}
+            generationProgress={assetGenerationUIProgress}
+            onCancelGeneration={cancelCurrentGeneration}
+        />;
     }
 
-    if (isLoading && parseFloat(phase) < 5) {
-        return (
+    if (currentPhaseNum >= 6.2) {
+        return <RefinementPhaseView
+            storyPlan={generatedStoryPlan}
+            documentation={documentation}
+            onStartReferenceGeneration={() => setPhase('6.3')}
+        />
+    }
+
+    if (currentPhaseNum >= 6.1) {
+        return <EvaluationPhaseView
+            critique={critique}
+            isLoading={isLoading}
+            onApplyImprovements={handleApplyImprovements}
+            onContinue={() => setPhase('6.2')}
+            onGoToPhase={(p) => setPhase(String(p))}
+        />
+    }
+
+    if (isLoading && currentPhaseNum === 4) {
+         return (
             <div className="text-center py-8">
                 <Spinner />
-                <p className="text-gray-400 mt-4">Procesando...</p>
+                <p className="mt-4 text-gray-400">Generando plan de historia, documentación y crítica...</p>
+                <div className="mt-2 text-sm text-blue-400 space-y-1">
+                    <p>{generationProgress.plan === 'in_progress' ? '🔄' : '✅'} Generando Plan de Historia...</p>
+                    <p>{generationProgress.plan === 'complete' && generationProgress.docs === 'in_progress' ? '🔄' : (generationProgress.docs === 'complete' ? '✅' : '⏳')} Generando Documentación...</p>
+                    <p>{generationProgress.plan === 'complete' && generationProgress.critique === 'in_progress' ? '🔄' : (generationProgress.critique === 'complete' ? '✅' : '⏳')} Generando Crítica...</p>
+                </div>
             </div>
         );
     }
-
-    switch(phase) {
-        case '1': return (
-            <>
-                <h3 className="text-2xl font-bold mb-2">Fase 1: Concepto Básico</h3>
-                <p className="text-gray-400 mb-6">Empecemos con lo básico. Describe tu idea, sube un documento o proporciona imágenes de referencia.</p>
-                <div className="space-y-6 max-h-[65vh] overflow-y-auto pr-2">
-                    <textarea value={storyData.concept} onChange={e => updateData('concept', e.target.value)} rows={3} placeholder="Descríbeme tu idea de historia en 2-3 frases..." className="w-full bg-gray-800 border border-gray-600 rounded-lg p-3" />
-                    
-                    <div className="text-center text-gray-400 font-bold">O</div>
-
-                    <label className="w-full flex flex-col items-center justify-center p-4 bg-gray-800 border-2 border-dashed border-gray-600 rounded-lg cursor-pointer hover:bg-gray-700 hover:border-gray-500">
-                        <DocumentIcon className="w-8 h-8 text-gray-400 mb-2" />
-                        <span className="font-semibold text-gray-300">Sube un PDF con la historia</span>
-                        {storyData.storyPDF && <span className="text-sm text-blue-400 mt-1">{storyData.storyPDF.name}</span>}
-                        <input type="file" className="hidden" accept=".pdf" onChange={handlePDFUpload} />
-                    </label>
-
-                     <div>
-                        <label className="font-semibold block mb-2">Sube imágenes de contexto (opcional)</label>
-                        <label className="w-full flex flex-col items-center justify-center p-4 bg-gray-800 border-2 border-dashed border-gray-600 rounded-lg cursor-pointer hover:bg-gray-700 hover:border-gray-500">
-                            <UploadIcon className="w-8 h-8 text-gray-400 mb-2" />
-                            <span className="font-semibold text-gray-300">Arrastra o selecciona imágenes</span>
-                             <input type="file" className="hidden" multiple accept="image/*" onChange={handleContextImageUpload} />
-                        </label>
-                        {contextImages.length > 0 && (
-                            <div className="mt-4 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
-                                {contextImages.map((image) => (
-                                    <div key={image.id} className="relative group">
-                                        <img src={image.previewUrl} alt="Context preview" className="w-full h-24 object-cover rounded-lg" />
-                                        <button onClick={() => removeContextImage(image.id)} className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <XCircleIcon className="w-5 h-5" />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    <div>
-                        <p className="font-semibold mb-2">¿Qué formato final quieres?</p>
-                        <div className="max-h-60 overflow-y-auto pr-2 border border-gray-700/50 rounded-lg p-2 bg-black/20">
-                            {Object.entries(outputFormats).map(([categoryName, items]) => (
-                                <div key={categoryName} className="mb-3">
-                                    <h5 className="font-bold text-blue-300 text-sm mb-2 sticky top-0 bg-gray-900/80 backdrop-blur-sm py-1">{categoryName}</h5>
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                        {items.map(f => (
-                                            <button 
-                                                key={f.value} 
-                                                onClick={() => updateData('format', f.value)} 
-                                                title={f.description}
-                                                className={`p-3 text-sm rounded-md transition-colors text-left ${storyData.format === f.value ? 'bg-blue-600 text-white' : 'bg-white/10 hover:bg-white/20'}`}>{f.name}</button>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+    
+    return (
+      <div className="w-full max-w-3xl mx-auto space-y-6">
+        {phase === '1' && (
+            <div className="animate-fade-in">
+                 <h3 className="text-2xl font-bold text-center mb-4">FASE 1: El Concepto</h3>
+                 <p className="text-gray-400 text-center mb-6">Empieza con tu idea. ¿De qué trata tu historia? Sé breve pero específico.</p>
+                <textarea
+                    value={storyData.concept}
+                    onChange={(e) => updateData('concept', e.target.value)}
+                    placeholder="Ej: Un astronauta varado en Marte que debe cultivar patatas para sobrevivir."
+                    rows={4}
+                    className="w-full bg-gray-800 border border-gray-600 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
+                />
+                 <h4 className="font-semibold mt-4 mb-2">Opcional: Sube un guion o contexto</h4>
+                <input type="file" accept=".pdf,.txt,.md" onChange={(e) => updateData('storyPDF', e.target.files?.[0] || null)} className="w-full text-sm" />
+                 <h4 className="font-semibold mt-4 mb-2">Opcional: Sube imágenes de referencia visual</h4>
+                 <input type="file" accept="image/*" multiple onChange={(e) => updateData('contextImages', Array.from(e.target.files || []))} className="w-full text-sm" />
+            </div>
+        )}
+        {phase === '2' && (
+            <div className="animate-fade-in space-y-6">
+                <div>
+                     <h3 className="text-2xl font-bold text-center mb-4">FASE 2: Estilo y Energía</h3>
+                     <p className="text-gray-400 text-center mb-6">Elige el formato, los estilos y el nivel de energía para tu historia.</p>
+                     <label className="font-semibold mb-2 block">Formato de Salida</label>
+                    <select
+                        value={storyData.format}
+                        onChange={(e) => updateData('format', e.target.value)}
+                        className="w-full bg-gray-800 border border-gray-600 rounded-lg p-3"
+                    >
+                        {Object.entries(outputFormats).map(([groupName, formats]) => (
+                            <optgroup label={groupName} key={groupName}>
+                                {formats.map(f => <option key={f.value} value={f.value}>{f.name}</option>)}
+                            </optgroup>
+                        ))}
+                    </select>
+                     <p className="text-xs text-gray-500 mt-1">{outputFormats[Object.keys(outputFormats).find(k => outputFormats[k].some(f => f.value === storyData.format)) || 'Video (Redes Sociales)'].find(f => f.value === storyData.format)?.description}</p>
                 </div>
-                <button onClick={() => setPhase('2')} disabled={!canGoToPhase2} className="w-full mt-8 bg-blue-600 text-white font-bold py-3 rounded-lg disabled:bg-gray-600 transition-colors">Siguiente: Estilo y Energía</button>
-            </>
-        );
-        case '2': return (
-            <>
-                <h3 className="text-2xl font-bold mb-2">Fase 2: Estilo y Energía</h3>
-                <p className="text-gray-400 mb-6">Ahora, definamos la atmósfera de tu historia.</p>
-                <div className="space-y-6 max-h-[65vh] overflow-y-auto pr-2">
+                 <div>
                     <MultiSelectGrid
-                        title="¿Qué estilo narrativo prefieres?"
+                        title="Estilos Narrativos"
                         categories={narrativeStyles}
                         selectedItems={storyData.narrativeStyles}
                         onToggle={toggleNarrativeStyle}
                         maxSelection={3}
-                        helpText="Selecciona los géneros o tonos que definirán tu historia."
+                        helpText="Define el género y el tono de tu historia."
                     />
-                    <div>
-                        <p className="font-semibold mb-2">Nivel de energía (1=Calmado, 10=Caótico)</p>
-                        <div className="flex items-center gap-4">
-                            <input type="range" min="1" max="10" value={storyData.energyLevel} onChange={e => updateData('energyLevel', Number(e.target.value))} className="w-full" />
-                            <span className="font-bold text-lg text-blue-300">{storyData.energyLevel}</span>
-                        </div>
-                    </div>
+                </div>
+                 <div>
                     <MultiSelectGrid
-                        title="¿Qué estilo visual prefieres?"
+                        title="Estilos Visuales"
                         categories={visualStyles}
                         selectedItems={storyData.visualStyles}
                         onToggle={toggleVisualStyle}
                         maxSelection={5}
-                        helpText="Elige la estética visual. Puedes combinar estilos para crear un look único."
+                        helpText="Define la estética visual de tu proyecto."
                     />
                 </div>
-                <button onClick={() => setPhase('3')} disabled={!canGoToPhase3} className="w-full mt-8 bg-blue-600 text-white font-bold py-3 rounded-lg disabled:bg-gray-600 transition-colors">Siguiente: Personajes</button>
-            </>
-        );
-        case '3': return (
-             <>
-                <h3 className="text-2xl font-bold mb-2">Fase 3: Personajes Clave</h3>
-                <p className="text-gray-400 mb-6">¿Quiénes protagonizan esta historia? Sube una imagen de referencia para cada uno (recomendado).</p>
-                <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-2">
+                <div>
+                    <label className="font-semibold mb-2 block">Nivel de Energía (1-10)</label>
+                    <p className="text-sm text-gray-400 mb-3">Define el ritmo. 1 es lento y contemplativo, 10 es rápido y frenético.</p>
+                    <input
+                        type="range"
+                        min="1" max="10"
+                        value={storyData.energyLevel}
+                        onChange={(e) => updateData('energyLevel', parseInt(e.target.value))}
+                        className="w-full"
+                    />
+                </div>
+            </div>
+        )}
+        {phase === '3' && (
+            <div className="animate-fade-in">
+                <h3 className="text-2xl font-bold text-center mb-4">FASE 3: Personajes</h3>
+                <p className="text-gray-400 text-center mb-6">Define a los personajes principales. Sube imágenes de referencia para guiar a la IA y lograr consistencia visual.</p>
+                <div className="space-y-4">
                     {storyData.characters.map((char, index) => (
-                        <div key={char.id} className="bg-gray-800 border border-gray-600 rounded-lg p-4 flex gap-4 items-start relative">
-                            <div className="flex-grow space-y-3">
-                                <input type="text" value={char.name} onChange={e => updateCharacter(char.id, 'name', e.target.value)} placeholder={`Nombre del Personaje ${index + 1}`} className="w-full bg-gray-700 border border-gray-500 rounded-md p-2" />
-                                <textarea value={char.description} onChange={e => updateCharacter(char.id, 'description', e.target.value)} rows={3} placeholder="Descripción breve del personaje (apariencia, personalidad, rol en la historia)" className="w-full bg-gray-700 border border-gray-500 rounded-md p-2 text-sm" />
+                        <div key={char.id} className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 flex gap-4">
+                            <div className="flex-grow space-y-2">
+                                <input
+                                    type="text"
+                                    placeholder={`Nombre del Personaje ${index + 1}`}
+                                    value={char.name}
+                                    onChange={(e) => updateCharacter(char.id, 'name', e.target.value)}
+                                    className="w-full bg-gray-900 border border-gray-600 rounded p-2"
+                                />
+                                <textarea
+                                    placeholder={`Descripción del Personaje ${index + 1} (apariencia, personalidad)`}
+                                    value={char.description}
+                                    onChange={(e) => updateCharacter(char.id, 'description', e.target.value)}
+                                    rows={3}
+                                    className="w-full bg-gray-900 border border-gray-600 rounded p-2"
+                                />
                             </div>
-                            <label className="w-24 h-24 flex-shrink-0 bg-gray-700 rounded-lg border-2 border-dashed border-gray-500 cursor-pointer flex items-center justify-center hover:bg-gray-600 hover:border-gray-400 relative">
-                                {char.imagePreviewUrl ? (
-                                    <img src={char.imagePreviewUrl} alt="preview" className="w-full h-full object-cover rounded-lg"/>
-                                ) : (
-                                    <UploadIcon className="w-8 h-8 text-gray-400" />
-                                )}
-                                <input type="file" className="hidden" accept="image/*" onChange={e => updateCharacter(char.id, 'image', e.target.files?.[0])} />
-                            </label>
+                            <div className="w-32 flex-shrink-0">
+                                <label className="cursor-pointer">
+                                     <div className="w-full h-32 bg-gray-900 rounded border-2 border-dashed border-gray-600 flex items-center justify-center text-center text-xs text-gray-400 hover:bg-gray-800 hover:border-blue-500">
+                                        {char.imagePreviewUrl ? <img src={char.imagePreviewUrl} alt="preview" className="w-full h-full object-cover"/> : 'Subir Imagen de Referencia'}
+                                    </div>
+                                    <input type="file" accept="image/*" className="hidden" onChange={(e) => updateCharacter(char.id, 'image', e.target.files?.[0] || null)}/>
+                                </label>
+                                {char.image && <button onClick={() => updateCharacter(char.id, 'image', null)} className="w-full text-xs text-red-400 hover:underline mt-1">Quitar</button>}
+                            </div>
                             {storyData.characters.length > 1 && (
-                                <button onClick={() => removeCharacter(char.id)} className="text-gray-400 hover:text-white absolute top-2 right-2">
-                                    <XCircleIcon className="w-6 h-6" />
-                                </button>
+                                <button onClick={() => removeCharacter(char.id)} className="self-start text-red-400"><XCircleIcon/></button>
                             )}
                         </div>
                     ))}
-                    {storyData.characters.length < 5 && (
-                        <button onClick={addCharacter} className="w-full border-2 border-dashed border-gray-600 text-gray-400 py-2 rounded-lg hover:bg-gray-700 hover:border-gray-500">
-                            + Añadir Personaje
-                        </button>
-                    )}
                 </div>
-                <button onClick={() => setPhase('4')} disabled={!canGoToPhase4} className="w-full mt-8 bg-blue-600 text-white font-bold py-3 rounded-lg disabled:bg-gray-600 transition-colors">Siguiente: Estructura</button>
-            </>
-        );
-        case '4': return (
-            <>
-                <h3 className="text-2xl font-bold mb-2">Fase 4: Estructura y Ritmo</h3>
-                <p className="text-gray-400 mb-6">Define los pilares de tu narrativa para crear una experiencia cautivadora.</p>
-                <div className="space-y-6 max-h-[65vh] overflow-y-auto pr-2">
-                    <MultiSelectGrid title="Estructura Narrativa" categories={{ "Estructuras Narrativas": narrativeStructures }} selectedItems={storyData.narrativeStructure} onToggle={toggleNarrativeStructure} maxSelection={3} helpText="Elige el esqueleto de tu historia." />
-                    <MultiSelectGrid title="Gancho Inicial (Hook)" categories={hookTypes} selectedItems={storyData.hook} onToggle={toggleHook} maxSelection={5} helpText="¿Cómo capturarás la atención en los primeros 3 segundos?" />
-                    <MultiSelectGrid title="Conflicto Central" categories={conflictTypes} selectedItems={storyData.conflict} onToggle={toggleConflict} maxSelection={10} helpText="¿Cuál es el motor de la historia? Elige los tipos de conflicto que enfrentarán los personajes." />
-                    <MultiSelectGrid title="Tipo de Final" categories={endingTypes} selectedItems={storyData.ending} onToggle={toggleEnding} maxSelection={5} helpText="¿Cómo quieres que termine la historia y qué emoción dejará en la audiencia?" />
+                {storyData.characters.length < 5 && <button onClick={addCharacter} className="mt-4 w-full bg-white/10 p-2 rounded hover:bg-white/20">Añadir Personaje</button>}
+            </div>
+        )}
+        {phase === '4' && (
+            <div className="animate-fade-in space-y-4">
+                 <h3 className="text-2xl font-bold text-center mb-4">FASE 4: Estructura y Trama</h3>
+                 <p className="text-gray-400 text-center mb-6">Define los pilares de tu historia. ¿Cómo empieza, qué la impulsa y cómo termina?</p>
+                <div>
+                     <MultiSelectGrid
+                        title="Estructura Narrativa"
+                        categories={{ "Estructuras": narrativeStructures }}
+                        selectedItems={storyData.narrativeStructure}
+                        onToggle={toggleNarrativeStructure}
+                        maxSelection={3}
+                        helpText="El esqueleto de tu historia."
+                    />
                 </div>
-                <button onClick={handleGenerateStoryPlan} disabled={!canGoToPhase5 || isLoading} className="w-full mt-8 bg-green-600 text-white font-bold py-3 rounded-lg disabled:bg-gray-600 transition-colors">
-                    {isLoading ? 'Generando...' : 'Generar Plan de Historia con IA'}
+                 <div>
+                    <MultiSelectGrid
+                        title="Gancho Inicial (Hook)"
+                        categories={hookTypes}
+                        selectedItems={storyData.hook}
+                        onToggle={toggleHook}
+                        maxSelection={5}
+                        helpText="¿Cómo capturarás la atención en los primeros 3 segundos?"
+                    />
+                </div>
+                 <div>
+                    <MultiSelectGrid
+                        title="Conflicto Central"
+                        categories={conflictTypes}
+                        selectedItems={storyData.conflict}
+                        onToggle={toggleConflict}
+                        maxSelection={10}
+                        helpText="El motor de tu historia. ¿A qué se enfrentan los personajes?"
+                    />
+                </div>
+                <div>
+                    <MultiSelectGrid
+                        title="Tipo de Final"
+                        categories={endingTypes}
+                        selectedItems={storyData.ending}
+                        onToggle={toggleEnding}
+                        maxSelection={5}
+                        helpText="¿Cómo quieres que se sienta la audiencia al final?"
+                    />
+                </div>
+            </div>
+        )}
+        {error && !isLoading && <p className="text-center text-red-400 bg-red-500/10 p-3 rounded-lg border border-red-500/20">{error}</p>}
+        {parseFloat(phase) < 5 &&
+            <div className="pt-6 border-t border-gray-700">
+                <button
+                    onClick={handleNextPhase}
+                    disabled={isLoading}
+                    className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-500 transition-colors disabled:bg-blue-800 disabled:cursor-not-allowed"
+                >
+                   {isLoading ? 'Generando...' : (phase === '4' ? 'Generar Plan de Historia (JSON)' : 'Siguiente Fase')}
                 </button>
-            </>
-        );
-        case '5': return (
-            <>
-                <h3 className="text-2xl font-bold mb-2 text-blue-300">Fase 5: Generando Plan Maestro...</h3>
-                <p className="text-gray-400 mb-6">Nuestros agentes de IA están colaborando para construir tu plan de historia. Este proceso puede tardar un momento.</p>
-                <div className="space-y-3">
-                    <GenerationProgressItem status={generationProgress.plan} label="Generando el StoryMasterplan JSON..." />
-                    <GenerationProgressItem status={generationProgress.critique} label="Realizando análisis estratégico y crítica..." />
-                    <GenerationProgressItem status={generationProgress.docs} label="Escribiendo documentación de producción..." />
-                </div>
-                {error && (
-                     <div className="mt-4 text-center text-red-400 bg-red-500/10 p-4 rounded-lg border border-red-500/20">
-                        <h3 className="font-bold text-lg mb-2">Error en la Generación</h3>
-                        <p className="whitespace-pre-wrap">{error}</p>
-                     </div>
-                )}
-            </>
-        );
-        case '6.1': return (
-            <EvaluationPhaseView
-                critique={critique}
-                isLoading={isLoading}
-                onApplyImprovements={handleApplyImprovements}
-                onContinue={() => setPhase('6.2')}
-                onGoToPhase={(p) => setPhase(p.toString())}
-            />
-        );
-        case '6.2': return (
-            <RefinementPhaseView
-                storyPlan={generatedStoryPlan}
-                documentation={documentation}
-                onStartReferenceGeneration={() => handleGenerateReferenceAssets(referenceAssetAspectRatio)}
-            />
-        );
-        case '6.3': return (
-            <ReferenceAssetView
-                storyPlan={generatedStoryPlan}
-                isLoading={isLoading}
-                loadingScenes={loadingScenes}
-                assets={referenceAssets}
-                error={error}
-                generationProgress={assetGenerationUIProgress}
-                onContinue={handleStartFinalVideoGeneration}
-                onRegenerate={handleRegenerateAssets}
-                onGenerateFrameForScene={handleGenerateFrameForScene}
-                onUpdateAsset={handleUpdateAsset}
-                onDeleteAsset={handleDeleteAsset}
-                onUploadAsset={handleUploadAsset}
-                aspectRatio={referenceAssetAspectRatio}
-                setAspectRatio={setReferenceAssetAspectRatio}
-                onExportProject={handleExportProject}
-                onSaveLocally={handleSaveProjectLocally}
-                onCancelGeneration={handleCancelGeneration}
-            />
-        );
-        case '6.4': return (
-            <AssetGenerationView
-                isLoading={isLoading}
-                progress={assetGenerationProgress}
-                assets={finalAssets}
-                error={error}
-                storyPlan={generatedStoryPlan}
-                onRegenerate={handleStartFinalVideoGeneration}
-                onGoToPhase={(p) => setPhase(p.toString())}
-            />
-        );
-        default: return <div>Fase desconocida: {phase}</div>;
-    }
+            </div>
+        }
+      </div>
+    );
   };
+
+  const currentPhaseNum = parseFloat(phase);
 
   return (
     <div className="w-full max-w-7xl mx-auto animate-fade-in">
+        <GeminiWebLogin />
         <div className="flex flex-col lg:flex-row gap-8">
-            <div className="w-full lg:flex-1 bg-gray-800/80 border border-gray-700/80 rounded-lg p-6 backdrop-blur-sm">
+            <ProgressTracker phase={phase} data={storyData} plan={generatedStoryPlan} />
+            <div className="flex-grow bg-gray-800/50 border border-gray-700/80 rounded-lg p-6 min-h-[50vh] flex flex-col justify-center">
                 {renderPhase()}
             </div>
-            <ProgressTracker phase={phase} data={storyData} plan={generatedStoryPlan} />
         </div>
-         <div className="mt-6 flex justify-center gap-4 flex-col items-center">
-            <button onClick={onExit} className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg">Salir del Story Builder</button>
-             <div className="w-full max-w-2xl mt-4">
-                <button onClick={() => setShowDevTools(prev => !prev)} className="text-sm text-gray-400 hover:text-white w-full py-2 bg-gray-900/50 rounded-t-lg border-x border-t border-gray-700">
-                    {showDevTools ? '▼ Ocultar Herramientas de Desarrollador' : '▶ Mostrar Herramientas de Desarrollador'}
-                </button>
-                {showDevTools && (
-                    <div className="animate-fade-in">
-                         <APIStatusPanel />
-                    </div>
-                )}
-            </div>
+        <div className="mt-8">
+            <button onClick={() => setShowDevTools(!showDevTools)} className="text-sm text-gray-500 hover:text-white">
+                {showDevTools ? 'Ocultar' : 'Mostrar'} Herramientas de Desarrollador
+            </button>
+            {showDevTools && (
+                <div className="mt-2 grid grid-cols-1 gap-4 animate-fade-in">
+                   <APIStatusPanel />
+                </div>
+            )}
         </div>
     </div>
   );
