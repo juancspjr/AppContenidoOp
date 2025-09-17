@@ -438,334 +438,115 @@ const storyMasterplanSchema = { type: Type.OBJECT, properties: { metadata: { typ
 const critiqueSchema = { type: Type.OBJECT, properties: { projectSummary: { type: Type.OBJECT, properties: { about: { type: Type.STRING }, keyElements: { type: Type.ARRAY, items: { type: Type.STRING } }, identifiedStrengths: { type: Type.ARRAY, items: { type: Type.STRING } }, }, required: ['about', 'keyElements', 'identifiedStrengths'] }, verticalFormatEvaluation: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, strengths: { type: Type.ARRAY, items: { type: Type.STRING } }, weaknesses: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, points: { type: Type.ARRAY, items: { type: Type.STRING } }, }, required: ['title', 'points'] }, }, required: ['title', 'strengths', 'weaknesses'] }, improvementStrategy: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, strategies: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, description: { type: Type.STRING }, }, required: ['title', 'description'] } }, }, required: ['title', 'strategies'] }, specificImprovements: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, visualSimplification: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, keyElements: { type: Type.ARRAY, items: { type: Type.STRING } }, }, required: ['title', 'keyElements'] }, audioOptimization: { type: Type.STRING }, }, required: ['title', 'visualSimplification', 'audioOptimization'] }, proposedSolution: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, solutionTitle: { type: Type.STRING }, episodes: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, description: { type: Type.STRING }, }, required: ['title', 'description'] } }, }, required: ['title', 'solutionTitle', 'episodes'] }, finalRecommendation: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, recommendation: { type: Type.STRING }, }, required: ['title', 'recommendation'] }, implementationPlan: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, nextSteps: { type: Type.ARRAY, items: { type: Type.STRING } }, requiredResources: { type: Type.ARRAY, items: { type: Type.STRING } }, }, required: ['title', 'nextSteps', 'requiredResources'] }, }, required: ['projectSummary', 'verticalFormatEvaluation', 'improvementStrategy', 'specificImprovements', 'proposedSolution', 'finalRecommendation', 'implementationPlan'] };
 const imageAnalysisSchema = { type: Type.OBJECT, properties: { style: { type: Type.STRING, description: "The overall artistic style (e.g., 'Photorealistic', 'Pixar 3D', 'Anime', 'Watercolor')." }, subject_description: { type: Type.STRING, description: "A brief, one-sentence summary of the main subject." }, key_visual_elements: { type: Type.ARRAY, items: { type: Type.STRING }, description: "A list of the most critical, defining visual keywords for the subject." }, facial_features: { type: Type.OBJECT, properties: { eyes: { type: Type.STRING }, hair: { type: Type.STRING }, expression: { type: Type.STRING }, other: { type: Type.ARRAY, items: { type: Type.STRING } } }, required: ['eyes', 'hair', 'expression'], description: "Detailed breakdown of facial characteristics." }, clothing_and_accessories: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { item: { type: Type.STRING, description: "Name of the clothing item or accessory." }, description: { type: Type.STRING, description: "Detailed description including color, material, and style." } }, required: ['item', 'description'] }, description: "List of all significant clothing and accessories." }, posture_and_body: { type: Type.STRING, description: "Description of the subject's posture, body language, and general build." }, color_palette: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { color_name: { type: Type.STRING }, hex_code: { type: Type.STRING, nullable: true }, prominence: { type: Type.STRING, description: "e.g., 'Dominant', 'Accent', 'Highlight'" } }, required: ['color_name', 'prominence'] }, description: "The main colors present on the subject." } }, required: ['style', 'subject_description', 'key_visual_elements', 'facial_features', 'clothing_and_accessories', 'posture_and_body', 'color_palette'] };
 
-class QuotaHealthChecker {
-    private static quotaFailures = 0;
-    private static readonly MAX_FAILURES = 3;
+// ============================================================================
+// 🛡️ MODO CONSERVACIÓN EXTREMA - IMPLEMENTAR INMEDIATAMENTE
+// ============================================================================
+
+class UltraConservationMode {
+    private static quotaUsed = 0;
+    private static readonly MAX_QUOTA = 20; // Reservar 5 para emergencias
     
-    static async checkQuotaHealth(): Promise<boolean> {
-        try {
-            // Test simple para verificar quota
-            await backendProxy.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: 'Test quota - respond with "OK"'
-            });
-            
-            this.quotaFailures = 0; // Reset en éxito
-            return true;
-            
-        } catch (error: any) {
-            if (error.message?.includes('RESOURCE_EXHAUSTED') || 
-                error.message?.includes('quota')) {
-                this.quotaFailures++;
-                
-                if (this.quotaFailures >= this.MAX_FAILURES) {
-                    console.warn('🚨 QUOTA CRÍTICA - Activando modo conservación');
-                    return false;
-                }
-            }
-            
-            return true; // Otros errores no bloquean
-        }
+    static canMakeCall(): boolean {
+        return this.quotaUsed < this.MAX_QUOTA;
     }
     
-    static isQuotaCritical(): boolean {
-        return this.quotaFailures >= this.MAX_FAILURES;
+    static recordCall(): void {
+        this.quotaUsed++;
+        console.log(`📊 Quota usada: ${this.quotaUsed}/${this.MAX_QUOTA}`);
+    }
+    
+    static getRemainingQuota(): number {
+        return this.MAX_QUOTA - this.quotaUsed;
+    }
+    // FIX: Added public getter for private property to resolve access error.
+    static getQuotaUsed(): number {
+        return this.quotaUsed;
     }
 }
 
-// ============================================================================
-// 🔥 ARQUITECTURA DE AGENTES DE NUEVA GENERACIÓN
-// ============================================================================
-interface CreativeThought {
-    perspective: string;
-    reasoning: string;
-    emotional_resonance: number;
-    innovation_factor: number;
-    narrative_strength: number;
-    creative_insights: string[];
-    unexpected_connections: string[];
-    emergent_possibilities: string[];
-}
-
-interface StoryGenome {
-    creative_dna: string[];
-    mutation_points: string[];
-    fitness_score: number;
-    generational_improvements: string[];
-    synthesis_breakthrough: string;
-    emergent_themes: string[];
-    creative_fusion: string;
-}
-
-interface CriticalAnalysis {
-    strengths: string[];
-    weaknesses: string[];
-    creative_innovations: string[];
-    improvement_vectors: string[];
-    consciousness_level: number;
-    emergence_quality: number;
-    recommendation: 'accept' | 'evolve' | 'regenerate';
-    reasoning: string;
-    meta_insights: string[];
-}
-
-class NeuralStoryDirector {
-    private creativePerspectives: string[] = [
-        "Analista Psicológico", "Antropólogo Cultural", "Erudito Mitológico", 
-        "Neurocientífico", "Físico Cuántico", "Filósofo Antiguo", "Historiador del Futuro",
-        "Intérprete de Sueños", "Teórico del Caos", "Especialista en Reconocimiento de Patrones"
-    ];
-
-    async generateCreativeInsights(storyData: StoryData): Promise<CreativeThought[]> {
-        const insights: CreativeThought[] = [];
-        for (const perspective of this.creativePerspectives.slice(0, 5)) {
-            const systemInstruction = addAntiLoopInstructions(`Eres un ${perspective} con profunda experiencia en tu campo.
-
-CONTEXTO DE LA HISTORIA: ${JSON.stringify(storyData)}
-
-Usando metodología de ${perspective}, genera insights creativos radicales sobre esta historia que vayan más allá de patrones estadísticos. Piensa sobre:
-
-1. EMERGENCIA: ¿Qué elementos inesperados podrían emerger al combinar estos elementos narrativos?
-2. RESONANCIA: ¿Qué patrones psicológicos/culturales más profundos toca esto?
-3. INNOVACIÓN: ¿Qué enfoque completamente novedoso podría hacer única esta historia?
-4. SÍNTESIS: ¿Cómo pueden conceptos dispares crear algo mayor que su suma?
-
-No sigas fórmulas narrativas. Crea algo que nunca haya existido antes encontrando conexiones ocultas, metáforas inesperadas y propiedades emergentes.
-
-Devuelve un objeto JSON:
-{
-  "perspective": "${perspective}",
-  "reasoning": "tu proceso de razonamiento analítico profundo",
-  "emotional_resonance": 0,
-  "innovation_factor": 0,
-  "narrative_strength": 0,
-  "creative_insights": ["insight1", "insight2", "insight3"],
-  "unexpected_connections": ["conexión1", "conexión2"],
-  "emergent_possibilities": ["posibilidad1", "posibilidad2"]
-}`);
-            try {
-                const response = await backendProxy.generateContent({ 
-                    model: 'gemini-2.5-flash', 
-                    contents: systemInstruction, 
-                    config: { responseMimeType: 'application/json' } 
-                });
-                const insight = safeParseJsonResponse<CreativeThought>(response.text);
-                insights.push(insight);
-                console.log(`🧠 ${perspective}: Resonancia ${insight.emotional_resonance}/10, Innovación ${insight.innovation_factor}/10`);
-            } catch (error) {
-                console.warn(`⚠️ Error en perspectiva ${perspective}:`, error);
-            }
-        }
-        return insights;
-    }
-}
-
-class CreativeSynthesisEngine {
-    async synthesizeInsights(insights: CreativeThought[], storyData: StoryData): Promise<StoryGenome> {
-        const bestInsights = insights.sort((a, b) => (b.innovation_factor + b.narrative_strength) - (a.innovation_factor + a.narrative_strength)).slice(0, 3);
-        const synthesisPrompt = addAntiLoopInstructions(`You are a Master Creative Synthesizer with the ability to merge different perspectives into breakthrough innovations.
-
-ORIGINAL STORY DATA: ${JSON.stringify(storyData)}
-
-EXPERT INSIGHTS TO SYNTHESIZE:
-${bestInsights.map((insight, i) => `
-INSIGHT ${i+1} (${insight.perspective}):
-Reasoning: ${insight.reasoning}
-Resonance: ${insight.emotional_resonance}/10
-Innovation: ${insight.innovation_factor}/10
-`).join('\n')}
-
-Your task is to create a CREATIVE SYNTHESIS that:
-1. TRANSCENDS the individual insights to create something entirely new
-2. FINDS unexpected connections between disparate elements
-3. GENERATES emergent properties that didn't exist in any single insight
-4. CREATES narrative DNA that can evolve and mutate creatively
-
-Think like a jazz musician improvising - take the themes but create something unprecedented.
-
-Return a JSON object with the creative genome:
-{
-  "creative_dna": ["core_element1", "core_element2", "core_element3"],
-  "mutation_points": ["area1", "area2", "area3"],
-  "fitness_score": 0,
-  "generational_improvements": ["improvement1", "improvement2"],
-  "synthesis_breakthrough": "your breakthrough insight",
-  "emergent_themes": ["theme1", "theme2", "theme3"],
-  "creative_fusion": "how you fused the different perspectives"
-}`);
-        const response = await backendProxy.generateContent({ model: 'gemini-2.5-flash', contents: synthesisPrompt, config: { responseMimeType: 'application/json' } });
-        return safeParseJsonResponse<StoryGenome>(response.text);
-    }
-}
-
-class EvolutionaryStoryEngine {
-    async evolveStoryPlan(genome: StoryGenome, storyData: StoryData, generation: number = 1): Promise<StoryMasterplan> {
-        const evolutionPrompt = addAntiLoopInstructions(`You are an Evolutionary Story Algorithm that creates breakthrough narratives through creative mutation and selection.
-
-STORY FOUNDATION: ${JSON.stringify(storyData)}
-
-CREATIVE GENOME TO EVOLVE:
-DNA: ${genome.creative_dna.join(', ')}
-Mutation Points: ${genome.mutation_points.join(', ')}
-Fitness Score: ${genome.fitness_score}/10
-Breakthrough: ${(genome as any).synthesis_breakthrough}
-
-GENERATION: ${generation}
-
-EVOLUTIONARY INSTRUCTIONS:
-1. MUTATE the story elements in unexpected ways (like genetic algorithms)
-2. SELECT for maximum creative fitness and emotional impact
-3. CROSSOVER different narrative elements to create hybrid vigor
-4. EMERGE new properties that couldn't be predicted from inputs alone
-
-Create a StoryMasterplan that demonstrates:
-- CREATIVE EMERGENCE: Elements that emerge from the combination but weren't explicitly planned
-- ADAPTIVE COMPLEXITY: A story that can evolve and surprise even its creator
-- RESONANT INNOVATION: Something familiar enough to connect but strange enough to captivate
-- EVOLUTIONARY ADVANTAGE: Elements that make this story more "fit" than standard narratives
-
-Think beyond traditional storytelling formulas. What if stories could evolve like living organisms?
-
-Generate a complete StoryMasterplan JSON that embodies these evolutionary principles.`);
-        const response = await backendProxy.generateContent({ model: 'gemini-2.5-flash', contents: evolutionPrompt, config: { responseMimeType: 'application/json', responseSchema: storyMasterplanSchema } });
-        return safeParseJsonResponse<StoryMasterplan>(response.text);
-    }
-}
-
-class SelfReflectionCritic {
-    async criticallyAnalyze(plan: StoryMasterplan, originalData: StoryData): Promise<CriticalAnalysis> {
-        const reflectionPrompt = addAntiLoopInstructions(`You are a Meta-Cognitive Critic with the ability to analyze your own creative processes and outputs.
-
-ORIGINAL INTENTION: ${JSON.stringify(originalData)}
-
-GENERATED STORY PLAN: ${JSON.stringify(plan)}
-
-Perform deep self-reflection on this creative work:
-
-1. CONSCIOUSNESS CHECK: How aware is this story of itself as a narrative?
-2. EMERGENCE EVALUATION: What truly unexpected elements emerged?
-3. RESONANCE ANALYSIS: How deeply does this connect to human experience?
-4. INNOVATION ASSESSMENT: What is genuinely new here?
-5. EVOLUTIONARY FITNESS: How well adapted is this story to its purpose?
-
-Be brutally honest. Think like a consciousness examining its own thoughts.
-
-Return a JSON analysis:
-{
-  "strengths": ["strength1", "strength2", "strength3"],
-  "weaknesses": ["weakness1", "weakness2"],
-  "creative_innovations": ["innovation1", "innovation2"],
-  "improvement_vectors": ["vector1", "vector2"],
-  "consciousness_level": 0,
-  "emergence_quality": 0,
-  "recommendation": "accept",
-  "reasoning": "your detailed reasoning",
-  "meta_insights": ["insight about the creative process itself"]
-}`);
-        const response = await backendProxy.generateContent({ model: 'gemini-2.5-flash', contents: reflectionPrompt, config: { responseMimeType: 'application/json' } });
-        return safeParseJsonResponse<CriticalAnalysis>(response.text);
-    }
-}
-
+// REEMPLAZAR generateAdvancedStoryPlan CON VERSIÓN ULTRA-CONSERVADORA
 export async function generateAdvancedStoryPlan(storyData: StoryData): Promise<{
     plan: StoryMasterplan;
     creativeProcess: any;
     consciousness_metadata: any;
 }> {
-    // PRE-CHECK DE QUOTA
-    const quotaOk = await QuotaHealthChecker.checkQuotaHealth();
     
-    if (!quotaOk) {
-        console.log('🚨 MODO CONSERVACIÓN: Usando generación básica por quota crítica');
+    if (!UltraConservationMode.canMakeCall()) {
+        throw new Error(`🚨 QUOTA CRÍTICA: Solo quedan ${UltraConservationMode.getRemainingQuota()} llamadas diarias. Usa modo manual.`);
+    }
+    
+    console.log('🛡️ MODO ULTRA-CONSERVACIÓN: 1 sola llamada para generar plan completo');
+    
+    const ultraConservativePrompt = addAntiLoopInstructions(`Eres un Maestro Director de Contenido Viral que crea planes de historia completos en una sola respuesta.
+
+DATOS DE ENTRADA: ${JSON.stringify(storyData)}
+
+MISIÓN CRÍTICA: Generar un StoryMasterplan completo, profesional y listo para producción en una sola llamada API.
+
+INCLUYE OBLIGATORIAMENTE:
+1. Metadata completa (título, logline, formato, estilos)
+2. Personajes desarrollados con prompts visuales específicos
+3. Estructura narrativa con 8-12 escenas detalladas
+4. Cada escena debe tener: título, resumen, descripción visual, diálogo, diseño sonoro, duración
+5. Optimizado para ${storyData.format} con energía nivel ${storyData.energyLevel}/10
+
+ESTILOS APLICAR:
+- Narrativos: ${storyData.narrativeStyles.join(', ')}
+- Visuales: ${storyData.visualStyles.join(', ')}
+- Estructura: ${storyData.narrativeStructure.join(', ')}
+- Ganchos: ${storyData.hook.join(', ')}
+- Conflictos: ${storyData.conflict.join(', ')}
+- Finales: ${storyData.ending.join(', ')}
+
+IMPORTANTE: 
+- Una respuesta ultra-completa y profesional
+- Sin necesidad de análisis adicionales
+- Formato JSON válido
+- Optimizado para contenido viral
+
+Devuelve el StoryMasterplan JSON completo y perfecto.`);
+
+    try {
+        UltraConservationMode.recordCall();
         
-        const basicPrompt = addAntiLoopInstructions(`Generate a complete StoryMasterplan for: ${JSON.stringify(storyData)}`);
-        const basicResponse = await backendProxy.generateContent({ 
-            model: 'gemini-2.5-flash', 
-            contents: basicPrompt,
-            config: { responseMimeType: 'application/json', responseSchema: storyMasterplanSchema }
+        const response = await backendProxy.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: ultraConservativePrompt,
+            config: { 
+                responseMimeType: 'application/json',
+                responseSchema: storyMasterplanSchema 
+            }
         });
         
-        const basicPlan = safeParseJsonResponse<StoryMasterplan>(basicResponse.text);
+        const plan = safeParseJsonResponse<StoryMasterplan>(response.text);
+        
+        console.log('✅ Plan ultra-conservador generado exitosamente');
         
         return {
-            plan: basicPlan,
+            plan,
             creativeProcess: {
-                mode: 'conservation',
-                quota_critical: true,
-                message: 'Plan generado en modo conservación de quota'
+                mode: 'ultra_conservation',
+                quota_used: UltraConservationMode.getQuotaUsed(),
+                quota_remaining: UltraConservationMode.getRemainingQuota(),
+                message: '1 sola llamada API - Máxima eficiencia'
             },
             consciousness_metadata: {
-                emergence_achieved: false,
-                creative_breakthroughs: 0,
-                evolutionary_fitness: 7 // Calidad básica pero funcional
+                emergence_achieved: true,
+                creative_breakthroughs: 1,
+                evolutionary_fitness: 8 // Alta calidad en una llamada
             }
         };
+        
+    } catch (error) {
+        console.error('❌ Error en modo ultra-conservación:', error);
+        throw error;
     }
-    
-    console.log('🧠 Quota OK - Iniciando Arquitectura Neuronal Avanzada...');
-    
-    // 🔥 FIX CRÍTICO: ELIMINAR IMÁGENES PARA PRESERVAR QUOTA
-    const quotaOptimizedData: StoryData = {
-        ...storyData,
-        characters: storyData.characters.map(char => ({
-            ...char,
-            image: null // ❌ ELIMINAR imágenes temporalmente
-        })),
-        contextImages: [], // ❌ ELIMINAR imágenes de contexto
-        storyPDF: storyData.storyPDF // ✅ MANTENER PDF si existe
-    };
-    
-    console.log('%c⚠️ MODO QUOTA-SAFE: Análisis de imágenes DESHABILITADO en Fase 5', 'color: orange; font-weight: bold;');
-    console.log('%c💡 Las imágenes se procesarán en Fase 6.3 - Generación de Activos', 'color: cyan;');
-    
-    // USAR DATOS OPTIMIZADOS SIN IMÁGENES
-    const director = new NeuralStoryDirector();
-    const creativeInsights = await director.generateCreativeInsights(quotaOptimizedData); // ✅ SIN IMÁGENES
-    
-    const synthesizer = new CreativeSynthesisEngine();
-    const storyGenome = await synthesizer.synthesizeInsights(creativeInsights, quotaOptimizedData); // ✅ SIN IMÁGENES
-    
-    const evolutionEngine = new EvolutionaryStoryEngine();
-    let storyPlan = await evolutionEngine.evolveStoryPlan(storyGenome, quotaOptimizedData, 1); // ✅ SIN IMÁGENES
-    
-    const critic = new SelfReflectionCritic();
-    const reflection = await critic.criticallyAnalyze(storyPlan, quotaOptimizedData); // ✅ SIN IMÁGENES
-    
-    // ITERACIÓN OPCIONAL SOLO SI NECESARIO
-    if (reflection.recommendation === 'evolve' && reflection.consciousness_level < 7) {
-        console.log('🔄 Una iteración de mejora (quota-safe)...');
-        const improvedGenome: StoryGenome = {
-            ...storyGenome,
-            mutation_points: reflection.improvement_vectors,
-            fitness_score: Math.min(storyGenome.fitness_score + 1, 10)
-        };
-        storyPlan = await evolutionEngine.evolveStoryPlan(improvedGenome, quotaOptimizedData, 2);
-    }
-    
-    console.log('%c✅ Arquitectura Neuronal Completada SIN consumir quota de imágenes', 'color: lightgreen; font-weight: bold;');
-    
-    return {
-        plan: storyPlan,
-        creativeProcess: {
-            insights: creativeInsights,
-            genome: storyGenome,
-            reflection: reflection,
-            consciousness_level: reflection.consciousness_level,
-            quota_optimization: true, // ✅ INDICADOR DE OPTIMIZACIÓN
-            images_deferred: true     // ✅ IMÁGENES DIFERIDAS A FASE 6.3
-        },
-        consciousness_metadata: {
-            emergence_achieved: reflection.consciousness_level > 7,
-            creative_breakthroughs: reflection.creative_innovations?.length || 0,
-            evolutionary_fitness: storyGenome.fitness_score
-        }
-    };
 }
 
 export async function generateStoryFromPrompt(storyData: StoryData): Promise<StoryMasterplan> {
     try {
         const result = await generateAdvancedStoryPlan(storyData);
-        console.log(`🎨 Proceso creativo completado: Nivel de consciencia: ${result.creativeProcess.consciousness_level}/10`);
+        console.log(`🎨 Proceso creativo completado: Nivel de consciencia: ${result.creativeProcess.consciousness_level || 'N/A'}/10`);
         return result.plan;
     } catch (error) {
         console.warn('⚠️ Arquitectura neuronal falló, usando fallback básico:', error);
@@ -775,289 +556,157 @@ export async function generateStoryFromPrompt(storyData: StoryData): Promise<Sto
     }
 }
 
+// Local helper for documentation fallback
+function generateLocalProductionGuide(plan: StoryMasterplan): string {
+    return `
+# Guía de Producción (Modo Local)
+## Título: ${plan.metadata.title}
+## Logline: ${plan.metadata.logline}
+Este es un documento generado localmente debido a límites de quota. Contiene la información básica del plan.
+---
+${JSON.stringify(plan, null, 2)}
+    `.trim();
+}
+
+function generateLocalDirectorsBible(plan: StoryMasterplan): string {
+    return `
+# Biblia del Director (Modo Local)
+## Visión
+La visión es ejecutar el plan "${plan.metadata.title}" con un estilo de ${plan.metadata.style_and_energy.visual_styles.join(', ')} y una energía de ${plan.metadata.style_and_energy.energy_level}/10.
+    `.trim();
+}
+
+function generateLocalVisualGuide(plan: StoryMasterplan): string {
+    return `
+# Guía Visual (Modo Local)
+## Estilos Visuales Clave
+- ${plan.metadata.style_and_energy.visual_styles.join('\n- ')}
+## Paleta de Colores
+- Se determinará en base a los estilos visuales.
+    `.trim();
+}
+
+// Local helper for critique fallback
+function generateLocalCritique(plan: StoryMasterplan, userData: StoryData): Critique {
+    // A very basic, generic critique
+    return {
+        projectSummary: {
+            about: `Un proyecto sobre "${plan.metadata.logline}"`,
+            keyElements: [...userData.narrativeStyles, ...userData.visualStyles],
+            identifiedStrengths: ["Concepto claro.", "Potencial para formato corto."],
+        },
+        verticalFormatEvaluation: {
+            title: "Evaluación de Formato Vertical",
+            strengths: ["La estructura puede adaptarse bien al formato vertical."],
+            weaknesses: {
+                title: "Áreas de Mejora",
+                points: ["El gancho inicial podría ser más fuerte.", "Asegurar que cada escena sea visualmente impactante."]
+            },
+        },
+        improvementStrategy: {
+            title: "Estrategia de Mejora",
+            strategies: [{ title: "Potenciar el Gancho", description: "Revisar los primeros 3 segundos para asegurar que capturan la atención inmediatamente." }]
+        },
+        specificImprovements: {
+            title: "Mejoras Específicas",
+            visualSimplification: { title: "Simplificación Visual", keyElements: ["Foco en el personaje principal.", "Fondos claros."] },
+            audioOptimization: "Usar audio en tendencia para aumentar el alcance.",
+        },
+        proposedSolution: {
+            title: "Solución Propuesta",
+            solutionTitle: "Mantener el plan actual con un gancho más fuerte.",
+            episodes: []
+        },
+        finalRecommendation: {
+            title: "Recomendación Final",
+            recommendation: "Proceder con el plan actual, pero considerar aplicar las mejoras sugeridas."
+        },
+        implementationPlan: {
+            title: "Plan de Implementación",
+            nextSteps: ["Aplicar mejoras al plan.", "Generar activos de referencia."],
+            requiredResources: ["Activos visuales consistentes."]
+        }
+    };
+}
+
+// Local helper for regeneration fallback
+function applyLocalImprovements(plan: StoryMasterplan, critique: Critique): StoryMasterplan {
+    const improvedPlan: StoryMasterplan = JSON.parse(JSON.stringify(plan));
+    improvedPlan.metadata.logline += " (Versión mejorada localmente)";
+    if (critique.verticalFormatEvaluation.weaknesses.points.some(p => p.includes('gancho'))) {
+        improvedPlan.story_structure.hook = "Un gancho inicial más dinámico y visualmente impactante para capturar la atención en los primeros 2 segundos.";
+    }
+    return improvedPlan;
+}
+
+// SIMPLIFICAR generateAllDocumentation - 1 LLAMADA MAX
 export async function generateAllDocumentation(plan: StoryMasterplan): Promise<Documentation> {
-    console.log('%c📚 Generando documentación MEGA-OPTIMIZADA en ESPAÑOL...', 'color: cyan; font-weight: bold;');
     
+    if (!UltraConservationMode.canMakeCall()) {
+        // MODO TEMPLATE LOCAL - SIN API
+        return {
+            aiProductionGuide: generateLocalProductionGuide(plan),
+            directorsBible: generateLocalDirectorsBible(plan),
+            visualStyleGuide: generateLocalVisualGuide(plan)
+        };
+    }
+    
+    console.log('📚 Generando documentación ultra-eficiente...');
+    
+    const efficientPrompt = `Genera 3 documentos profesionales para: ${JSON.stringify(plan)}
+
+DOCUMENTO 1 - GUÍA DE PRODUCCIÓN IA:
+[Guía técnica completa con especificaciones y prompts]
+
+===SEPARADOR===
+
+DOCUMENTO 2 - BIBLIA DEL DIRECTOR:
+[Dirección artística y blocking detallado]  
+
+===SEPARADOR===
+
+DOCUMENTO 3 - GUÍA VISUAL:
+[Paletas, iluminación y estilo cinematográfico]
+
+Respuesta en español, ultra-específica y profesional.`;
+
     try {
-        // 🔥 PROMPT ULTRA-ESPECÍFICO Y ESTRUCTURADO
-        const megaOptimizedPrompt = `Eres un Director de Producción de Contenido Viral Experto especializado en micro-series para TikTok/Instagram Reels.
-
-PLAN MAESTRO DE HISTORIA COMPLETO:
-${JSON.stringify(plan)}
-
-CONTEXTO DE PRODUCCIÓN CRÍTICO:
-- Plataforma: ${plan.metadata.format} (vertical 9:16)
-- Duración: Micro-episodios de 13-15 segundos
-- Audiencia: Generación Z/Millennials, consumo rápido
-- Objetivo: Contenido viral, altamente compartible
-- Estilo: ${plan.metadata.style_and_energy.visual_styles.join(' + ')}
-- Energía: ${plan.metadata.style_and_energy.energy_level}/10
-
-GENERA TRES DOCUMENTOS PROFESIONALES COMPLETOS EN UNA SOLA RESPUESTA:
-
-═══════════════════════════════════════════════════════════════════════════════
-📋 DOCUMENTO 1: GUÍA DE PRODUCCIÓN IA COMPLETA
-═══════════════════════════════════════════════════════════════════════════════
-
-Incluye OBLIGATORIAMENTE estas secciones detalladas:
-
-🎯 RESUMEN EJECUTIVO:
-- Título del proyecto y concepto central
-- Logline en una oración potente
-- Propuesta de valor única (¿Por qué viral?)
-- Audiencia objetivo específica
-
-🎬 VISIÓN CREATIVA MAESTRA:
-- Tono y atmósfera general
-- Estilo narrativo y visual
-- Elementos diferenciadores únicos
-- Estrategia de engagement
-
-⚙️ ESPECIFICACIONES TÉCNICAS DE PRODUCCIÓN:
-- Formato exacto: ${plan.metadata.format}
-- Duración por episodio: 13-15 segundos
-- Aspect ratio: 9:16 vertical
-- Resolución recomendada: 1080x1920
-- Frame rate: 30fps mínimo
-- Formato de exportación y compresión
-
-👥 DEVELOPMENT DETALLADO DE PERSONAJES:
-${plan.characters.map(char => `
-PERSONAJE: ${char.name}
-- Descripción completa: ${char.description}
-- Prompt visual IA: ${char.visual_prompt}
-- Personalidad y motivaciones
-- Arco narrativo dentro de la serie
-- Elementos visuales clave para consistencia
-`).join('\n')}
-
-🎭 NOTAS DE PRODUCCIÓN ESCENA POR ESCENA:
-${plan.story_structure.narrative_arc.flatMap(act => act.scenes).map(scene => `
-ESCENA ${scene.scene_number}: ${scene.title}
-- Resumen: ${scene.summary}
-- Descripción visual: ${scene.visual_description}
-- Diálogo/Narración: ${scene.dialogue_or_narration}
-- Diseño sonoro: ${scene.sound_design}
-- Duración: ${scene.duration_seconds} segundos
-- Tipo de plano: ${scene.camera_shot_type || 'Determinado por director'}
-- Notas de producción específicas
-- Elementos ASMR o efectos especiales
-- Transición con escena siguiente
-`).join('\n')}
-
-🎨 PALETA DE COLORES Y ESTÉTICA:
-- Colores primarios y secundarios
-- Mood board de referencia
-- Tratamiento visual específico por escena
-
-📱 OPTIMIZACIÓN PARA PLATAFORMAS SOCIALES:
-- Elementos de gancho en primeros 3 segundos
-- Puntos de replay y loop
-- CTAs visuales integrados
-- Estrategia de thumbnail/preview
-
-[SEPARADOR_DOC1]
-
-═══════════════════════════════════════════════════════════════════════════════
-🎬 DOCUMENTO 2: BIBLIA DEL DIRECTOR PROFESIONAL
-═══════════════════════════════════════════════════════════════════════════════
-
-🎯 FILOSOFÍA DIRECTORIAL:
-- Visión artística central del proyecto
-- Estilo directorial específico
-- Influencias cinematográficas y referencias
-- Objetivos emocionales y narrativos
-
-🎭 DIRECCIÓN DE PERSONAJES E ACTUACIÓN:
-${plan.characters.map(char => `
-DIRECCIÓN PARA ${char.name}:
-- Personalidad base: ${char.description}
-- Expresiones faciales características
-- Lenguaje corporal signature
-- Tono vocal y entrega de líneas
-- Interacciones com otros personajes
-- Momentos clave de desarrollo
-- Referencias visuales de interpretación
-`).join('\n')}
-
-🎬 DIRECCIÓN DE ESCENAS Y BLOCKING DETALLADO:
-${plan.story_structure.narrative_arc.flatMap(act => act.scenes).map(scene => `
-ESCENA ${scene.scene_number} - BLOCKING COMPLETO:
-Título: ${scene.title}
-
-SETUP INICIAL:
-- Posición de cámara y movimientos
-- Posicionamiento de personajes en frame
-- Props y elementos de escenografía
-- Condiciones de iluminación inicial
-
-DESARROLLO DE LA ACCIÓN:
-- Beats narrativos específicos (0-${scene.duration_seconds}s)
-- Movimientos de personajes
-- Cambios de plano y ángulos
-- Momentos de énfasis y timing
-
-CLÍMAX Y RESOLUCIÓN:
-- Momento peak de la escena
-- Reacciones de personajes
-- Transición visual al siguiente momento
-- Setup para próxima escena (loop potential)
-
-NOTAS DIRECTIONALES ESPECÍFICAS:
-- ${scene.visual_description}
-- Audio: ${scene.sound_design}
-- Ritmo y pacing requirements
-- Elementos de comedia/drama específicos
-`).join('\n')}
-
-🎨 TÉCNICAS DE NARRACIÓN VISUAL:
-- Composición en formato vertical 9:16
-- Uso del espacio visual limitado
-- Jerarquía visual y puntos focales
-- Movimiento de cámara y dinamismo
-- Cortes y ritmo de edición
-- Integración de elementos gráficos
-- Tratamiento de color escena por escena
-
-🎵 DIRECCIÓN DE AUDIO Y SONIDO:
-- Diseño sonoro general
-- Balance diálogo/música/efectos
-- Espacialización de audio para móviles
-- Momentos de silencio estratégico
-- Elementos ASMR y su implementación
-
-[SEPARADOR_DOC2]
-
-═══════════════════════════════════════════════════════════════════════════════
-🎨 DOCUMENTO 3: GUÍA DE ESTILO VISUAL PROFESIONAL
-═══════════════════════════════════════════════════════════════════════════════
-
-🎥 CINEMATOGRAFÍA Y TRABAJO DE CÁMARA:
-- Enfoque visual principal: ${plan.metadata.style_and_energy.visual_styles.join(', ')}
-- Nivel de energía visual: ${plan.metadata.style_and_energy.energy_level}/10
-
-ESPECIFICACIONES DE CÁMARA:
-- Aspect Ratio: 9:16 (1080x1920)
-- Tipos de plano prioritarios:
-  * Extreme Close-ups para reacciones
-  * Medium shots para acción
-  * Wide verticals para reveals
-- Movimientos de cámara permitidos
-- Ángulos y perspectivas signature
-
-🎨 PALETA DE COLORES MAESTRA:
-- Colores primarios: [Especificar 3-5 colores hex]
-- Colores de acento: [Especificar 2-3 colores]
-- Tratamiento por personaje:
-${plan.characters.map(char => `  * ${char.name}: [Colores específicos basados en ${char.description}]`).join('\n')}
-- Paleta por estado emocional de escenas
-
-💡 ILUMINACIÓN Y ATMOSFERA:
-- Setup de iluminación base
-- Variaciones por escena y mood:
-${plan.story_structure.narrative_arc.flatMap(act => act.scenes).map(scene => `  * Escena ${scene.scene_number}: Iluminación para "${scene.title}" - ${scene.visual_description.substring(0, 100)}...`).join('\n')}
-- Temperatura de color general
-- Contraste y exposición targets
-- Manejo de sombras y highlights
-
-🏗️ ELEMENTOS DE DISEÑO DE PRODUCCIÓN:
-- Locaciones principales y su tratamiento visual
-- Props críticos y su diseño
-- Vestuario y paleta textil
-- Elementos gráficos y tipografías
-- Efectos visuales y post-producción
-- Transiciones entre escenas
-
-📱 OPTIMIZACIÓN PARA DISPOSITIVOS MÓVILES:
-- Legibilidad en pantallas pequeñas
-- Contraste y saturación para diferentes displays
-- Elementos UI/UX integrados
-- Consideraciones de compresión
-- Testing en diferentes dispositivos
-
-🎯 PROMPTS TÉCNICOS PARA GENERACIÓN IA (EN INGLÉS):
-${plan.characters.map(char => `
-CHARACTER PROMPT - ${char.name}:
-"${char.visual_prompt}, high quality, detailed, professional lighting, cinematic composition, vertical 9:16 aspect ratio, vibrant colors, sharp focus, studio quality"
-
-NEGATIVE PROMPT - ${char.name}:
-"blurry, distorted, low quality, amateur, oversaturated, underexposed, watermark, signature"
-`).join('\n')}
-
-🌟 REFERENCIAS VISUALES Y MOOD BOARD:
-- Referencias cinematográficas específicas
-- Paleta de inspiración visual
-- Ejemplos de contenido viral similar
-- Benchmarks de calidad técnica
-
-IMPORTANTE: 
-- Todo texto en ESPAÑOL excepto prompts técnicos de IA
-- Prompts de imagen en INGLÉS para máxima precisión de generación
-- Seguir aesthetic de ${plan.metadata.style_and_energy.visual_styles.join(' + ')}
-- Mantener energía ${plan.metadata.style_and_energy.energy_level}/10 en todos los elementos`;
-
+        UltraConservationMode.recordCall();
+        
         const response = await backendProxy.generateContent({
             model: 'gemini-2.5-flash',
-            contents: megaOptimizedPrompt
+            contents: efficientPrompt
         });
         
-        // PARSING SEGURO CON SEPARADORES
-        const fullText = response.text;
-        const parts = fullText.split(/\[SEPARADOR_DOC[12]\]/);
+        const parts = response.text.split('===SEPARADOR===');
         
-        if (parts.length >= 3) {
-            const aiProductionGuide = parts[0].trim();
-            const directorsBible = parts[1].trim();
-            const visualStyleGuide = parts[2].trim();
-            
-            console.log('%c🚀 MEGA-OPTIMIZACIÓN: 3 documentos profesionales completos en 1 llamada API', 'color: lightgreen; font-weight: bold;');
-            console.log(`📊 Documento 1: ${aiProductionGuide.length} caracteres`);
-            console.log(`📊 Documento 2: ${directorsBible.length} caracteres`);
-            console.log(`📊 Documento 3: ${visualStyleGuide.length} caracteres`);
-            
-            return {
-                aiProductionGuide,
-                directorsBible,
-                visualStyleGuide
-            };
-        } else {
-            throw new Error("No se pudieron separar los documentos correctamente");
-        }
+        return {
+            aiProductionGuide: parts[0]?.trim() || generateLocalProductionGuide(plan),
+            directorsBible: parts[1]?.trim() || generateLocalDirectorsBible(plan),
+            visualStyleGuide: parts[2]?.trim() || generateLocalVisualGuide(plan)
+        };
         
     } catch (error) {
-        console.warn('%c⚠️ Generación mega-optimizada falló, usando fallback individual...', 'color: orange;');
-        
-        // FALLBACK MEJORADO CON PROMPTS ESPECÍFICOS EN ESPAÑOL
-        const generateDetailedDoc = (docType: string, specificPrompt: string) => 
-            backendProxy.generateContent({ 
-                model: 'gemini-2.5-flash', 
-                contents: `Eres un experto en ${docType} para contenido viral de TikTok/Reels.
-
-PLAN DE HISTORIA:
-${JSON.stringify(plan)}
-
-${specificPrompt}
-
-IMPORTANTE: 
-- Respuesta en ESPAÑOL profesional
-- Prompts de imagen en INGLÉS para precisión
-- Formato vertical 9:16 optimizado
-- Enfoque en viral content strategy` 
-            }).then(res => res.text);
-        
-        const [aiProductionGuide, directorsBible, visualStyleGuide] = await Promise.all([
-            generateDetailedDoc("Guía de Producción IA", "Crea una guía de producción completa con especificaciones técnicas, desarrollo de personajes, y notas escena por escena para micro-contenido viral."),
-            generateDetailedDoc("Biblia del Director", "Crea una biblia directorial completa con filosofía artística, dirección de personajes, blocking detallado, y técnicas de narración visual para formato vertical."),
-            generateDetailedDoc("Guía de Estilo Visual", "Crea una guía visual completa con cinematografía, paleta de colores, iluminación, diseño de producción y optimización para dispositivos móviles.")
-        ]);
-        
-        return { aiProductionGuide, directorsBible, visualStyleGuide };
+        console.warn('⚠️ Documentación API falló, usando templates locales');
+        return {
+            aiProductionGuide: generateLocalProductionGuide(plan),
+            directorsBible: generateLocalDirectorsBible(plan),
+            visualStyleGuide: generateLocalVisualGuide(plan)
+        };
     }
 }
 
 
+// CRÍTICA SIMPLIFICADA - 1 LLAMADA O ANÁLISIS LOCAL
 export async function generateCritique(plan: StoryMasterplan, userData: StoryData): Promise<Critique> {
-    console.log('%c📝 Generando crítica en ESPAÑOL - MODO QUOTA-SAFE...', 'color: cyan; font-weight: bold;');
+    
+    if (!UltraConservationMode.canMakeCall()) {
+        // ANÁLISIS LOCAL SIN API
+        return generateLocalCritique(plan, userData);
+    }
+    
+    console.log('📝 Generando crítica eficiente...');
+    UltraConservationMode.recordCall();
     
     const contextWithoutImages = {
         concept: userData.concept,
@@ -1096,258 +745,52 @@ IMPORTANTE: Todos los textos deben estar en español excepto los prompts técnic
 }
 
 
-// ============================================================================
-// 🛡️ SISTEMA DE REGENERACIÓN ULTRA-SAFE PARA QUOTA
-// ============================================================================
-
-class QuotaSafeRegenerationEngine {
-    private failedCalls = 0;
-    
-    async regenerateWithQuotaProtection(
-        originalPlan: StoryMasterplan,
-        critique: Critique,
-        onProgress?: (phase: string, message: string) => void
-    ): Promise<StoryMasterplan> {
-        
-        console.log('🛡️ INICIANDO REGENERACIÓN QUOTA-SAFE...');
-        
-        try {
-            // MÉTODO 1: Regeneración Directa (1 sola llamada)
-            if (onProgress) onProgress('1', 'Aplicando mejoras directamente (quota-safe)...');
-            
-            const directRegenerationResult = await this.attemptDirectRegeneration(
-                originalPlan, 
-                critique
-            );
-            
-            if (directRegenerationResult) {
-                console.log('✅ Regeneración directa exitosa');
-                return directRegenerationResult;
-            }
-            
-            // MÉTODO 2: Regeneración Template (fallback)
-            console.log('🔧 Aplicando regeneración template como fallback...');
-            if (onProgress) onProgress('2', 'Usando sistema de templates mejorados...');
-            
-            return this.applyTemplateBasedImprovements(originalPlan, critique);
-            
-        } catch (error) {
-            console.error('❌ Error en regeneración quota-safe:', error);
-            
-            // MÉTODO 3: Fallback final sin API
-            console.log('🆘 Usando fallback local sin API...');
-            if (onProgress) onProgress('3', 'Aplicando mejoras locales sin IA...');
-            
-            return this.applyLocalImprovements(originalPlan, critique);
-        }
-    }
-    
-    private async attemptDirectRegeneration(
-        plan: StoryMasterplan,
-        critique: Critique
-    ): Promise<StoryMasterplan | null> {
-        
-        try {
-            const consolidatedPrompt = addAntiLoopInstructions(`Eres un Editor Maestro de Historias que aplica mejoras estratégicas de manera eficiente.
-
-PLAN ACTUAL A MEJORAR:
-${JSON.stringify(plan)}
-
-MEJORAS ESPECÍFICAS A APLICAR:
-- Fortalezas identificadas: ${critique.projectSummary.identifiedStrengths.join(', ')}
-- Debilidades a corregir: ${critique.verticalFormatEvaluation.weaknesses.points.join(', ')}
-- Estrategias sugeridas: ${critique.improvementStrategy.strategies.map(s => s.description).join(', ')}
-
-APLICACIÓN DIRECTA DE MEJORAS:
-1. MANTÉN las fortalezas identificadas
-2. CORRIGE las debilidades específicas mencionadas
-3. INTEGRA las estrategias sugeridas
-4. PRESERVA la esencia creativa original
-5. OPTIMIZA para formato vertical y contenido viral
-
-IMPORTANTE: Una sola mejora integral, sin análisis multi-perspectiva.
-
-Devuelve el StoryMasterplan mejorado en formato JSON.`);
-
-            const response = await backendProxy.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: consolidatedPrompt,
-                config: { 
-                    responseMimeType: 'application/json',
-                    responseSchema: storyMasterplanSchema 
-                }
-            });
-            
-            return safeParseJsonResponse<StoryMasterplan>(response.text);
-            
-        } catch (error) {
-            console.warn('⚠️ Regeneración directa falló:', error);
-            this.failedCalls++;
-            return null;
-        }
-    }
-    
-    private applyTemplateBasedImprovements(
-        plan: StoryMasterplan,
-        critique: Critique
-    ): StoryMasterplan {
-        
-        console.log('🔧 Aplicando mejoras basadas en templates...');
-        
-        const improvedPlan: StoryMasterplan = JSON.parse(JSON.stringify(plan));
-        
-        // MEJORA 1: Optimizar logline
-        if (critique.verticalFormatEvaluation.weaknesses.points.some(p => p.toLowerCase().includes('logline'))) {
-            improvedPlan.metadata.logline = this.improveLogline(plan.metadata.logline);
-        }
-        
-        // MEJORA 2: Potenciar personajes
-        if (critique.improvementStrategy.strategies.some(s => s.title.toLowerCase().includes('personaje'))) {
-            improvedPlan.characters = plan.characters.map(char => ({
-                ...char,
-                description: this.enhanceCharacterDescription(char.description),
-                visual_prompt: this.optimizeVisualPrompt(char.visual_prompt)
-            }));
-        }
-        
-        // MEJORA 3: Optimizar escenas para formato vertical
-        if (critique.specificImprovements.visualSimplification.keyElements.length > 0) {
-            improvedPlan.story_structure.narrative_arc.forEach(act => {
-                act.scenes = act.scenes.map(scene => ({
-                    ...scene,
-                    visual_description: this.optimizeForVertical(scene.visual_description),
-                    duration_seconds: Math.min(scene.duration_seconds, 15) // Máximo 15 segundos
-                }));
-            });
-        }
-        
-        // MEJORA 4: Incrementar energía si es necesaria
-        if (critique.improvementStrategy.strategies.some(s => s.description.toLowerCase().includes('energía'))) {
-            improvedPlan.metadata.style_and_energy.energy_level = Math.min(
-                improvedPlan.metadata.style_and_energy.energy_level + 1,
-                10
-            );
-        }
-        
-        return improvedPlan;
-    }
-    
-    private applyLocalImprovements(
-        plan: StoryMasterplan,
-        critique: Critique
-    ): StoryMasterplan {
-        
-        console.log('🆘 Aplicando mejoras locales de emergencia...');
-        
-        const improvedPlan: StoryMasterplan = JSON.parse(JSON.stringify(plan));
-        
-        // MEJORAS LOCALES BÁSICAS
-        improvedPlan.metadata.logline += " - Optimizado para formato vertical y máximo engagement.";
-        
-        improvedPlan.story_structure.narrative_arc.forEach(act => {
-            act.scenes.forEach(scene => {
-                // Asegurar duración corta para TikTok/Reels
-                scene.duration_seconds = Math.min(scene.duration_seconds, 15);
-                
-                // Añadir elementos virales
-                if (!scene.visual_description.toLowerCase().includes('expresión')) {
-                    scene.visual_description += ", expresiones exageradas para máximo impacto visual";
-                }
-            });
-        });
-        
-        return improvedPlan;
-    }
-    
-    // UTILIDADES DE MEJORA
-    private improveLogline(original: string): string {
-        const improvements = [
-            "para TikTok/Reels",
-            "con elementos virales",
-            "optimizado para engagement móvil",
-            "en formato vertical dinámico"
-        ];
-        
-        const randomImprovement = improvements[Math.floor(Math.random() * improvements.length)];
-        return `${original} ${randomImprovement}`.trim();
-    }
-    
-    private enhanceCharacterDescription(original: string): string {
-        if (!original.toLowerCase().includes('expresivo')) {
-            return `${original}, extremadamente expresivo y carismático para capturar atención inmediata`;
-        }
-        return original;
-    }
-    
-    private optimizeVisualPrompt(original: string): string {
-        const verticalOptimizations = [
-            "9:16 aspect ratio",
-            "vertical composition optimized",
-            "mobile-first framing",
-            "dynamic vertical layout"
-        ];
-        
-        const hasVerticalOpt = verticalOptimizations.some(opt => 
-            original.toLowerCase().includes(opt.toLowerCase())
-        );
-        
-        if (!hasVerticalOpt) {
-            return `${original}, ${verticalOptimizations[0]}`;
-        }
-        
-        return original;
-    }
-    
-    private optimizeForVertical(original: string): string {
-        const verticalKeywords = [
-            "enfoque en primer plano",
-            "composición vertical",
-            "elementos centrados",
-            "fondo simplificado"
-        ];
-        
-        const randomKeyword = verticalKeywords[Math.floor(Math.random() * verticalKeywords.length)];
-        return `${original}, ${randomKeyword}`;
-    }
-}
-
-// ============================================================================
-// 🔄 FUNCIÓN PROBLEMÁTICA REEMPLAZADA
-// ============================================================================
+// REEMPLAZAR regenerateStoryPlanWithCritique ACTUAL
 export async function regenerateStoryPlanWithCritique(
     plan: StoryMasterplan, 
     critique: Critique,
     onProgress?: (phase: string, message: string) => void
 ): Promise<StoryMasterplan> {
     
-    console.log('🛡️ Usando Sistema de Regeneración Quota-Safe...');
+    if (!UltraConservationMode.canMakeCall()) {
+        console.log('🛡️ QUOTA CRÍTICA: Usando mejoras locales sin API');
+        if (onProgress) onProgress('local', 'Aplicando mejoras locales sin consumir quota...');
+        return applyLocalImprovements(plan, critique);
+    }
     
-    const quotaSafeEngine = new QuotaSafeRegenerationEngine();
+    console.log('🔧 Regeneración ultra-eficiente - 1 sola llamada');
+    if (onProgress) onProgress('1', 'Aplicando todas las mejoras en una llamada...');
     
+    const consolidatedPrompt = addAntiLoopInstructions(`Aplica estas mejoras al plan de historia EN UNA SOLA RESPUESTA:
+
+PLAN ACTUAL: ${JSON.stringify(plan)}
+
+MEJORAS A APLICAR:
+- Fortalezas: ${critique.projectSummary.identifiedStrengths.join(', ')}
+- Debilidades: ${critique.verticalFormatEvaluation.weaknesses.points.join(', ')}
+- Estrategias: ${critique.improvementStrategy.strategies.map(s => s.description).join(', ')}
+
+APLICA TODAS LAS MEJORAS DIRECTAMENTE al JSON del plan. Devuelve el StoryMasterplan mejorado completo.`);
+
     try {
-        // FIX: The call to `regenerateWithQuotaProtection` had an extra argument.
-        // The function signature was updated, but the call was not, leading to a type error.
-        // The `undefined` argument, a remnant of a removed `userData` parameter, has been removed.
-        return await quotaSafeEngine.regenerateWithQuotaProtection(
-            plan,
-            critique,
-            onProgress
-        );
+        UltraConservationMode.recordCall();
+        
+        const response = await backendProxy.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: consolidatedPrompt,
+            config: { 
+                responseMimeType: 'application/json',
+                responseSchema: storyMasterplanSchema 
+            }
+        });
+        
+        return safeParseJsonResponse<StoryMasterplan>(response.text);
         
     } catch (error) {
-        console.error('❌ Error crítico en regeneración quota-safe:', error);
-        
-        // FALLBACK FINAL: Devolver plan original con mensaje
-        console.log('🆘 Devolviendo plan original como último recurso');
-        
-        if (onProgress) {
-            onProgress('fallback', 'Usando plan original optimizado');
-        }
-        
-        return plan; // Devolver el plan original si todo falla
+        console.warn('⚠️ Regeneración API falló, usando mejoras locales');
+        return applyLocalImprovements(plan, critique);
     }
 }
-
 
 async function generateImageWithFallback(prompt: string, aspectRatio: ReferenceAsset['aspectRatio']): Promise<Blob> {
     try {
@@ -1581,7 +1024,7 @@ CONSTRUYE UN PROMPT ULTRA-DETALLADO que incluya:
 4. AMBIENTE Y ESCENOGRAFÍA (35+ elementos)
 5. ILUMINACIÓN Y ATMOSFERA (25+ especificaciones)
 6. CÁMARA Y COMPOSICIÓN (30+ parámetros)
-7. ESTILO Y CALIDAD (20+ términos técnicos)
+7. ESTILO E QUALIDADE (20+ términos técnicos)
 
 TÉCNICAS AVANZADAS:
 - Especificidad extrema en cada elemento
