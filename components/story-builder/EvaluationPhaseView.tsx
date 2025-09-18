@@ -35,66 +35,74 @@ const EvaluationPhaseView: React.FC<EvaluationPhaseViewProps> = ({ critique, isL
         );
     }
     
+    // FIX: All references to non-existent properties on the `critique` object have been replaced
+    // with the correct properties from the `Critique` type definition. The entire component
+    // structure has been updated to reflect the new data model.
+    const viralPotentialColor = critique.viralPotential >= 8 ? 'text-green-400' : critique.viralPotential >= 5 ? 'text-yellow-400' : 'text-red-400';
+    
+    const EnrichedElement: React.FC<{ title: string; items: any[] }> = ({ title, items }) => (
+        <details className="bg-gray-800/50 p-2 rounded-md cursor-pointer hover:bg-gray-800">
+            <summary className="font-semibold">{title}</summary>
+            <ul className="list-disc list-inside ml-4 mt-2 space-y-1">
+                {items.map((item, i) => {
+                    const name = item.name || item.type || item.beat || item.element || item.spec || 'Item';
+                    return <li key={i}><strong>{name}:</strong> {item.enhancements.join(', ')}</li>
+                })}
+            </ul>
+        </details>
+    );
+
     return (
         <div className="animate-fade-in">
             <h3 className="text-2xl font-bold mb-2 text-green-400">Fase 6.1: Evaluación y Estrategia</h3>
             <p className="text-gray-400 mb-6">Un agente de IA ha analizado tu plan y ha preparado un diagnóstico para optimizarlo para tu formato de salida. Revisa las sugerencias y decide cómo proceder.</p>
             
             <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-                <Section title="Resumen del Proyecto" icon="🎬">
-                    <p><strong>De Qué Se Trata:</strong> {critique.projectSummary?.about || 'N/A'}</p>
-                    <p><strong>Elementos Clave:</strong> {(critique.projectSummary?.keyElements || []).join(', ')}</p>
-                    <p><strong>Fortalezas Identificadas:</strong> {(critique.projectSummary?.identifiedStrengths || []).join(', ')}</p>
-                </Section>
-                
-                <Section title={critique.verticalFormatEvaluation?.title || 'Evaluación de Formato Vertical'} icon="📈">
-                     <div>
-                        <h5 className="font-semibold text-green-400">🎯 Fortalezas Actuales:</h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Section title="Puntos Fuertes Narrativos" icon="👍">
                         <ul className="list-disc list-inside ml-2">
-                            {(critique.verticalFormatEvaluation?.strengths || []).map((s, i) => <li key={i}>{s}</li>)}
+                            {critique.narrativeStrengths.map((s, i) => <li key={i}>{s}</li>)}
                         </ul>
-                    </div>
-                    <div>
-                        <h5 className="font-semibold text-red-400">⚠️ {critique.verticalFormatEvaluation?.weaknesses?.title || 'Debilidades'}:</h5>
-                        <ul className="list-disc list-inside ml-2">
-                            {(critique.verticalFormatEvaluation?.weaknesses?.points || []).map((p, i) => <li key={i}>{p}</li>)}
-                        </ul>
-                    </div>
+                    </Section>
+                    <Section title="Potencial Viral" icon="📈">
+                        <div className="text-center">
+                            <p className={`text-5xl font-bold ${viralPotentialColor}`}>{critique.viralPotential}<span className="text-2xl">/10</span></p>
+                            <p className="text-gray-400 mt-2">Puntuación estimada por la IA basada en el formato y el concepto.</p>
+                        </div>
+                    </Section>
+                </div>
+
+                <Section title="Puntos Débiles y Sugerencias" icon="⚠️">
+                    <ul className="space-y-3">
+                        {critique.weaknesses.map((w, i) => (
+                            <li key={i} className="bg-gray-800/50 p-2 rounded-md">
+                                <p className="font-semibold text-red-400">{w.point}</p>
+                                <p className="text-gray-300 pl-2 border-l-2 border-red-400/30 mt-1"><strong>Sugerencia:</strong> {w.suggestion}</p>
+                            </li>
+                        ))}
+                    </ul>
                 </Section>
 
-                 <Section title={critique.improvementStrategy?.title || 'Estrategia de Mejora'} icon="🚀">
-                    {(critique.improvementStrategy?.strategies || []).filter(Boolean).map((s, i) => (
-                        <div key={i}>
+                <Section title="Estrategias de Mejora" icon="🚀">
+                    {critique.improvementStrategies.map((s, i) => (
+                        <div key={i} className="mb-2">
                            <h5 className="font-semibold text-gray-200">{s.title}</h5>
                            <p className="text-gray-400">{s.description}</p>
                         </div>
                     ))}
                 </Section>
-                
-                 <Section title={critique.proposedSolution?.title || 'Solución Propuesta'} icon="💡">
-                    <h5 className="font-semibold text-yellow-300">{critique.proposedSolution?.solutionTitle || 'Propuesta'}</h5>
-                     <ul className="list-decimal list-inside ml-2 space-y-1">
-                        {(critique.proposedSolution?.episodes || []).filter(Boolean).map((ep, i) => (
-                            <li key={i}><strong>{ep.title}:</strong> {ep.description}</li>
-                        ))}
-                    </ul>
-                </Section>
-                
-                 <Section title={critique.implementationPlan?.title || 'Plan de Implementación'} icon="🔧">
-                    <div>
-                        <h5 className="font-semibold text-gray-200">Pasos Siguientes Recomendados:</h5>
-                        <ul className="list-disc list-inside ml-2">
-                             {(critique.implementationPlan?.nextSteps || []).map((s, i) => <li key={i}>{s}</li>)}
-                        </ul>
-                    </div>
-                    <div>
-                        <h5 className="font-semibold text-gray-200">Recursos Necesarios:</h5>
-                        <ul className="list-disc list-inside ml-2">
-                            {(critique.implementationPlan?.requiredResources || []).map((r, i) => <li key={i}>{r}</li>)}
-                        </ul>
-                    </div>
-                </Section>
 
+                <Section title="Elementos Enriquecidos Sugeridos" icon="✨">
+                    <p className="text-gray-400 mb-3">La IA ha propuesto mejoras específicas para cada aspecto de tu historia:</p>
+                    <div className="space-y-2">
+                       <EnrichedElement title="Personajes" items={critique.enrichedElements.characters} />
+                       <EnrichedElement title="Acciones" items={critique.enrichedElements.actions} />
+                       <EnrichedElement title="Ambientes" items={critique.enrichedElements.environments} />
+                       <EnrichedElement title="Narrativa" items={critique.enrichedElements.narratives} />
+                       <EnrichedElement title="Visuales" items={critique.enrichedElements.visuals} />
+                       <EnrichedElement title="Aspectos Técnicos" items={critique.enrichedElements.technicals} />
+                    </div>
+                </Section>
             </div>
 
             <div className="pt-6 border-t border-gray-700 mt-6 space-y-3">

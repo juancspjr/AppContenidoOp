@@ -37,15 +37,12 @@ class GeminiWebService {
         return this.initialized;
     }
 
-    // INICIALIZAR CON VALIDACIÓN REAL
     public async initialize(cookieString: string): Promise<boolean> {
         console.log('🔐 Inicializando Gemini Web Service...');
         
         try {
-            // PARSEAR COOKIES
             const parsedCookies = this.parseCookieString(cookieString);
             
-            // VERIFICAR COOKIES ESENCIALES
             const hasPsid = Object.keys(parsedCookies).some(key => key.startsWith('__Secure-') && key.endsWith('PSID') && !key.includes('PSIDTS') && !key.includes('PSIDCC'));
             const hasPsidTs = Object.keys(parsedCookies).some(key => key.startsWith('__Secure-') && key.endsWith('PSIDTS'));
 
@@ -56,7 +53,6 @@ class GeminiWebService {
             this.cookies = parsedCookies;
             this.sessionId = this.generateSessionId();
             
-            // VALIDAR CONEXIÓN REAL CON MÚLTIPLES ESTRATEGIAS
             const validation = await this.validateConnectionWithStrategies();
             
             if (validation.success) {
@@ -64,7 +60,6 @@ class GeminiWebService {
                 this.validationCache = true;
                 this.lastValidation = Date.now();
                 
-                // GUARDAR EN LOCALSTORAGE
                 localStorage.setItem('gemini_web_cookies', btoa(JSON.stringify({
                     cookies: cookieString,
                     timestamp: Date.now(),
@@ -86,11 +81,9 @@ class GeminiWebService {
         }
     }
     
-    // VALIDACIÓN CON MÚLTIPLES ESTRATEGIAS (PRINCIPAL MEJORA)
     private async validateConnectionWithStrategies(): Promise<ValidationResult> {
         console.log('🔍 Validando conexión con Gemini Web (múltiples estrategias)...');
         
-        // ESTRATEGIA 1: VERIFICAR PÁGINA PRINCIPAL GEMINI
         try {
             const homeValidation = await this.validateGeminiHomePage();
             if (homeValidation.success) {
@@ -101,7 +94,6 @@ class GeminiWebService {
             console.warn('⚠️ Estrategia 1 falló:', error);
         }
         
-        // ESTRATEGIA 2: VERIFICAR VÍA API INTERNA (MÁS SUAVE)
         try {
             const apiValidation = await this.validateViaInternalAPI();
             if (apiValidation.success) {
@@ -112,7 +104,6 @@ class GeminiWebService {
             console.warn('⚠️ Estrategia 2 falló:', error);
         }
         
-        // ESTRATEGIA 3: VERIFICAR SOLO COOKIES (FALLBACK)
         try {
             const cookieValidation = await this.validateCookiesOnly();
             if (cookieValidation.success) {
@@ -123,7 +114,6 @@ class GeminiWebService {
             console.warn('⚠️ Estrategia 3 falló:', error);
         }
         
-        // TODAS LAS ESTRATEGIAS FALLARON
         return {
             success: false,
             needsCaptcha: true,
@@ -132,7 +122,6 @@ class GeminiWebService {
         };
     }
     
-    // ESTRATEGIA 1: VALIDAR PÁGINA PRINCIPAL
     private async validateGeminiHomePage(): Promise<ValidationResult> {
         console.log('🏠 Validando página principal de Gemini...');
         
@@ -148,13 +137,10 @@ class GeminiWebService {
             
             const html = await response.text();
             
-            // VERIFICAR INDICADORES DE SESIÓN VÁLIDA
             const isValid = this.checkGeminiPageValidation(html);
             
             if (isValid.success) {
-                // EXTRAER NONCE PARA USO FUTURO
                 await this.extractNonceFromHTML(html);
-                
                 return {
                     success: true,
                     needsCaptcha: false,
@@ -171,12 +157,10 @@ class GeminiWebService {
         }
     }
     
-    // ESTRATEGIA 2: VALIDAR VÍA API INTERNA (MÁS DISCRETA)
     private async validateViaInternalAPI(): Promise<ValidationResult> {
         console.log('🔧 Validando vía API interna...');
         
         try {
-            // REQUEST MÁS DISCRETO A UN ENDPOINT INTERNO
             const response = await stealthFetch('https://gemini.google.com/app', {
                 method: 'GET',
                 headers: {
@@ -187,88 +171,39 @@ class GeminiWebService {
                 },
             });
             
-            // INCLUSO UN 403 PUEDE DARNOS INFO ÚTIL
             if (response.status === 200 || response.status === 403) {
                 const text = await response.text();
-                
-                // BUSCAR INDICADORES DE AUTENTICACIÓN
                 if (text.includes('_reqid') || text.includes('SNlM0e') || text.includes('session')) {
-                    return {
-                        success: true,
-                        needsCaptcha: false,
-                        needsReauth: false,
-                        message: 'Validación exitosa via API interna'
-                    };
+                    return { success: true, needsCaptcha: false, needsReauth: false, message: 'Validación exitosa via API interna' };
                 }
             }
-            
             throw new Error(`API interna respondió: ${response.status}`);
-            
         } catch (error: any) {
             throw new Error(`Error en API interna: ${error.message}`);
         }
     }
     
-    // ESTRATEGIA 3: VALIDAR SOLO COOKIES (FALLBACK)
     private async validateCookiesOnly(): Promise<ValidationResult> {
         console.log('🍪 Validando solo cookies...');
-        
-        // VERIFICAR ESTRUCTURA Y FRESCURA DE COOKIES
         if (!this.cookies || !Object.keys(this.cookies).some(k => k.includes('PSID') && !k.includes('TS'))) {
             throw new Error('Cookie __Secure-1PSID (o variante) faltante');
         }
-        
-        // FALLBACK: ASUMIR QUE LAS COOKIES SON VÁLIDAS SI TIENEN FORMATO CORRECTO
-        return {
-            success: true,
-            needsCaptcha: false,
-            needsReauth: false,
-            message: 'Cookies validadas por formato (modo fallback)'
-        };
+        return { success: true, needsCaptcha: false, needsReauth: false, message: 'Cookies validadas por formato (modo fallback)' };
     }
     
-    // VERIFICAR INDICADORES EN HTML DE GEMINI
     private checkGeminiPageValidation(html: string): ValidationResult {
-        // INDICADORES DE CAPTCHA/BLOQUEO
         if (html.includes('captcha') || html.includes('unusual traffic') || html.includes('verify you are human')) {
-            return {
-                success: false,
-                needsCaptcha: true,
-                needsReauth: false,
-                message: 'CAPTCHA requerido. Ve a gemini.google.com y resuelve el CAPTCHA manualmente.'
-            };
+            return { success: false, needsCaptcha: true, needsReauth: false, message: 'CAPTCHA requerido. Ve a gemini.google.com y resuelve el CAPTCHA manualmente.' };
         }
-        
-        // INDICADORES DE SESIÓN EXPIRADA
         if (html.includes('accounts.google.com') || html.includes('Sign in') || html.includes('signin')) {
-            return {
-                success: false,
-                needsCaptcha: false,
-                needsReauth: true,
-                message: 'Sesión expirada. Ve a gemini.google.com y logúeate nuevamente.'
-            };
+            return { success: false, needsCaptcha: false, needsReauth: true, message: 'Sesión expirada. Ve a gemini.google.com y logúeate nuevamente.' };
         }
-        
-        // INDICADORES DE SESIÓN VÁLIDA
         if (html.includes('SNlM0e') || html.includes('_reqid') || html.includes('How can I help you')) {
-            return {
-                success: true,
-                needsCaptcha: false,
-                needsReauth: false,
-                message: 'Sesión válida detectada'
-            };
+            return { success: true, needsCaptcha: false, needsReauth: false, message: 'Sesión válida detectada' };
         }
-        
-        // SI NO ENCONTRAMOS INDICADORES CLAROS
-        return {
-            success: false,
-            needsCaptcha: true,
-            needsReauth: false,
-            message: 'Estado de sesión ambiguo. Puede requerir verificación manual.'
-        };
+        return { success: false, needsCaptcha: true, needsReauth: false, message: 'Estado de sesión ambiguo. Puede requerir verificación manual.' };
     }
     
-    // EXTRAER NONCE DEL HTML
     private async extractNonceFromHTML(html: string): Promise<void> {
         try {
             const nonceMatch = html.match(/\"SNlM0e\":\"([^\"]+)\"/);
@@ -281,13 +216,11 @@ class GeminiWebService {
         }
     }
     
-    // GENERAR IMAGEN (IMPLEMENTACIÓN FUTURA)
     public async generateImage(prompt: string, referenceImageBase64?: string): Promise<Blob> {
         if (!this.initialized || !this.cookies) {
             throw new Error('🚫 Servicio no inicializado. Ejecuta initialize() primero.');
         }
         
-        // VERIFICAR SI NECESITAMOS REVALIDAR
         const timeSinceValidation = Date.now() - this.lastValidation;
         if (timeSinceValidation > 30 * 60 * 1000) { // 30 minutos
             console.log('🔄 Revalidando conexión después de 30 minutos...');
@@ -298,21 +231,12 @@ class GeminiWebService {
             this.lastValidation = Date.now();
         }
         
-        // PLACEHOLDER: IMPLEMENTACIÓN FUTURA DE GENERACIÓN
         throw new Error('🚧 Generación de imágenes aún no implementada. Conexión validada correctamente.');
     }
     
-    // CONSTRUIR HEADERS MEJORADOS
     private buildHeaders(): Record<string, string> {
-        if (!this.cookies) {
-            throw new Error('No hay cookies disponibles');
-        }
-        
-        const cookieString = Object.entries(this.cookies)
-            .filter(([_, value]) => value)
-            .map(([key, value]) => `${key}=${value}`)
-            .join('; ');
-            
+        if (!this.cookies) throw new Error('No hay cookies disponibles');
+        const cookieString = Object.entries(this.cookies).filter(([_, value]) => value).map(([key, value]) => `${key}=${value}`).join('; ');
         return {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Encoding': 'gzip, deflate, br',
@@ -327,33 +251,22 @@ class GeminiWebService {
         };
     }
     
-    // UTILIDADES
     private parseCookieString(cookieString: string): Partial<GeminiWebCookies> {
         const cookies: any = {};
         cookieString.split(';').forEach(cookie => {
             const parts = cookie.match(/(.*?)=(.*)/)
             if (parts) {
-                const name = parts[1].trim();
-                const value = parts[2].trim();
-                cookies[name] = value;
+                cookies[parts[1].trim()] = parts[2].trim();
             }
         });
         return cookies;
     }
     
     private generateSessionId(): string {
-        return Math.random().toString(36).substring(2, 15) + 
-               Math.random().toString(36).substring(2, 15);
+        return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
     }
     
-    // OBTENER ESTADO DEL SERVICIO
-    public getStatus(): { 
-        initialized: boolean; 
-        sessionId?: string; 
-        hasValidCookies?: boolean;
-        lastValidation?: number;
-        validationCache?: boolean;
-    } {
+    public getStatus(): { initialized: boolean; sessionId?: string; hasValidCookies?: boolean; lastValidation?: number; validationCache?: boolean; } {
         return {
             initialized: this.initialized,
             sessionId: this.sessionId,
@@ -363,7 +276,6 @@ class GeminiWebService {
         };
     }
     
-    // CARGAR COOKIES GUARDADAS CON VALIDACIÓN
     public async loadSavedCookies(): Promise<boolean> {
         try {
             const saved = localStorage.getItem('gemini_web_cookies');
@@ -372,7 +284,6 @@ class GeminiWebService {
             const data = JSON.parse(atob(saved));
             const age = Date.now() - data.timestamp;
             
-            // SI LAS COOKIES TIENEN MÁS DE 2 HORAS, REVALIDAR
             if (age > 2 * 60 * 60 * 1000) {
                 console.log('🕒 Cookies guardadas son antiguas, validando...');
                 localStorage.removeItem('gemini_web_cookies');
@@ -385,8 +296,6 @@ class GeminiWebService {
             if (hasPsid) {
                 this.cookies = parsedCookies;
                 this.sessionId = data.sessionId || this.generateSessionId();
-                
-                // VALIDAR CONEXIÓN ANTES DE MARCAR COMO INICIALIZADO
                 const validation = await this.validateConnectionWithStrategies();
                 
                 if (validation.success) {
@@ -401,7 +310,6 @@ class GeminiWebService {
                     return false;
                 }
             }
-            
             return false;
         } catch (error) {
             console.warn('⚠️ Error cargando cookies guardadas:', error);

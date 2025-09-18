@@ -384,18 +384,19 @@ export async function generateReferenceAssetsPhase63(
     onProgress?: (current: number, total: number, message: string) => void
 ): Promise<Omit<GeneratedReferenceAssets, 'sceneFrames'>> {
     const charactersToGen = plan.characters || [];
-    const totalPlanned = charactersToGen.length + countUniqueEnvironments(plan) + countUniqueProps(plan);
-    let current = 0; 
+    const environmentsToGen = extractUniqueEnvironments(plan);
+    const propsToGen = extractUniqueProps(plan);
+
+    const totalPlanned = charactersToGen.length + environmentsToGen.length + propsToGen.length;
+    let completedCount = 0; 
     const step = (msg: string) => {
-        current++;
-        onProgress?.(current, totalPlanned, msg);
+        completedCount++;
+        onProgress?.(completedCount, totalPlanned, msg);
     };
 
-    const characters: ReferenceAsset[] = [];
-    for (const character of charactersToGen) {
-        if (assetRegistry.findByName(character.name, 'character')) continue;
+    const characterPromises = charactersToGen.map(async (character) => {
+        if (assetRegistry.findByName(character.name, 'character')) return null;
         const userChar = userData.characters.find(c => c.name.toLowerCase() === character.name.toLowerCase());
-        step(`Generando personaje: ${character.name}`);
         
         const prompt = buildCharacterPromptConsistent(character, plan, userData);
         const blob = await generateImageWithFallback(prompt, aspectRatio, {
@@ -403,92 +404,63 @@ export async function generateReferenceAssetsPhase63(
         });
         const id = crypto.randomUUID();
         imageBlobCache.set(id, blob);
-
         const originHash = userChar?.image ? await hashFile(userChar.image) : undefined;
 
         assetRegistry.add({
-          id,
-          name: character.name,
-          type: 'character',
-          tags: ['reference','identity-lock'],
-          aspectRatio,
-          prompt,
-          blobId: id,
-          sourcePhase: 'phase6.3',
-          originHash
+          id, name: character.name, type: 'character', tags: ['reference','identity-lock'], aspectRatio, prompt, blobId: id, sourcePhase: 'phase6.3', originHash
         });
 
-        characters.push({
-          id,
-          name: character.name,
-          type: 'character',
-          prompt,
-          aspectRatio,
-          source: userChar?.image ? 'hybrid' : 'generated'
-        });
-    }
+        step(`Generado personaje: ${character.name}`);
+        return {
+          id, name: character.name, type: 'character', prompt, aspectRatio, source: userChar?.image ? 'hybrid' : 'generated'
+        } as ReferenceAsset;
+    });
 
-    const environments: ReferenceAsset[] = [];
-    for (const envName of extractUniqueEnvironments(plan)) {
-        if (assetRegistry.findByName(envName, 'environment')) continue;
-        step(`Generando ambiente: ${envName}`);
+    const environmentPromises = environmentsToGen.map(async (envName) => {
+        if (assetRegistry.findByName(envName, 'environment')) return null;
         const envPrompt = buildEnvironmentPrompt(envName, plan, userData);
         const blob = await generateImageWithFallback(envPrompt, aspectRatio);
         const id = crypto.randomUUID();
         imageBlobCache.set(id, blob);
 
         assetRegistry.add({
-          id,
-          name: envName,
-          type: 'environment',
-          tags: ['location','reference','style-sheet'],
-          aspectRatio,
-          prompt: envPrompt,
-          blobId: id,
-          sourcePhase: 'phase6.3'
+          id, name: envName, type: 'environment', tags: ['location','reference','style-sheet'], aspectRatio, prompt: envPrompt, blobId: id, sourcePhase: 'phase6.3'
         });
+        
+        step(`Generado ambiente: ${envName}`);
+        return {
+          id, name: envName, type: 'environment', prompt: envPrompt, aspectRatio, source: 'generated'
+        } as ReferenceAsset;
+    });
 
-        environments.push({
-          id,
-          name: envName,
-          type: 'environment',
-          prompt: envPrompt,
-          aspectRatio,
-          source: 'generated'
-        });
-    }
-
-    const elements: ReferenceAsset[] = [];
-    for (const propName of extractUniqueProps(plan)) {
-        if (assetRegistry.findByName(propName, 'element')) continue;
-        step(`Generando elemento clave: ${propName}`);
+    const elementPromises = propsToGen.map(async (propName) => {
+        if (assetRegistry.findByName(propName, 'element')) return null;
         const propPrompt = buildPropPrompt(propName, plan, userData);
         const blob = await generateImageWithFallback(propPrompt, aspectRatio);
         const id = crypto.randomUUID();
         imageBlobCache.set(id, blob);
 
         assetRegistry.add({
-          id,
-          name: propName,
-          type: 'element',
-          tags: ['prop','reference','sheet'],
-          aspectRatio,
-          prompt: propPrompt,
-          blobId: id,
-          sourcePhase: 'phase6.3'
+          id, name: propName, type: 'element', tags: ['prop','reference','sheet'], aspectRatio, prompt: propPrompt, blobId: id, sourcePhase: 'phase6.3'
         } as any);
 
-        elements.push({
-          id,
-          name: propName,
-          type: 'element',
-          prompt: propPrompt,
-          aspectRatio,
-          source: 'generated'
-        });
-    }
+        step(`Generado elemento clave: ${propName}`);
+        return {
+          id, name: propName, type: 'element', prompt: propPrompt, aspectRatio, source: 'generated'
+        } as ReferenceAsset;
+    });
 
-    return { characters, environments, elements };
+    const [characters, environments, elements] = await Promise.all([
+        Promise.all(characterPromises),
+        Promise.all(environmentPromises),
+        Promise.all(elementPromises)
+    ]);
+
+    return { 
+        characters: characters.filter(Boolean) as ReferenceAsset[], 
+        environments: environments.filter(Boolean) as ReferenceAsset[], 
+        elements: elements.filter(Boolean) as ReferenceAsset[]
+    };
 }
 
 
@@ -515,17 +487,63 @@ export async function generateAllDocumentation(plan: StoryMasterplan): Promise<D
 }
 
 export async function generateCritique(plan: StoryMasterplan, storyData: StoryData): Promise<Critique> {
-    // Dummy critique for demonstration
-    return {
-        projectSummary: { about: "A promising project.", keyElements: [], identifiedStrengths: [] },
-        verticalFormatEvaluation: { title: "Format Evaluation", strengths: ["Good hook"], weaknesses: { title: "Pacing", points: ["Could be faster"] } },
-        improvementStrategy: { title: "Improvement Strategy", strategies: [] },
-        specificImprovements: { title: "Specifics", visualSimplification: { title: "Simplify", keyElements: [] }, audioOptimization: "" },
-        proposedSolution: { title: "Proposed Solution", solutionTitle: "Refactor", episodes: [] },
-        finalRecommendation: { title: "Final Rec", recommendation: "Proceed with caution" },
-        implementationPlan: { title: "Implementation", nextSteps: [], requiredResources: [] },
-    };
+    const prompt = `
+You are a world-class story analyst and viral content strategist for short-form video.
+Analyze the following story masterplan and user data. Provide a detailed critique and improvement strategy.
+Your response MUST be a single, valid JSON object that strictly adheres to the following TypeScript interface:
+
+\`\`\`typescript
+export interface Critique {
+  narrativeStrengths: string[];
+  weaknesses: { point: string; suggestion: string; }[];
+  viralPotential: number; // Score out of 10
+  improvementStrategies: { title: string; description: string; }[];
+  enrichedElements: {
+    characters: { name: string; enhancements: string[]; }[];
+    actions: { type: string; enhancements: string[]; }[];
+    environments: { name: string; enhancements: string[]; }[];
+    narratives: { beat: string; enhancements: string[]; }[];
+    visuals: { element: string; enhancements: string[]; }[];
+    technicals: { spec: string; enhancements: string[]; }[];
+  };
 }
+\`\`\`
+
+Constraint Checklist & Confidence Score:
+1. Is the output a single JSON object? (Yes/No)
+2. Does the JSON object perfectly match the Critique interface? (Yes/No)
+3. Does 'enrichedElements' contain all six categories? (Yes/No)
+4. Does EACH category within 'enrichedElements' contain AT LEAST 6 distinct enhancement suggestions? (Yes/No)
+5. Is 'viralPotential' a number between 0 and 10? (Yes/No)
+Confidence Score (1-5): 5
+
+**CRITICAL INSTRUCTION:** For each category inside 'enrichedElements' (characters, actions, environments, narratives, visuals, technicals), you MUST provide a minimum of SIX (6) distinct and creative enhancement suggestions. Do not provide fewer than six for any category.
+
+Story Plan:
+${JSON.stringify(plan)}
+
+User Data:
+${JSON.stringify(storyData)}
+`;
+
+    // FIX: Explicitly type the response to resolve property access errors.
+    const response: GenerateContentResponse = await makeApiRequestWithRetry(client =>
+        client.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: { responseMimeType: 'application/json' }
+        })
+    );
+    
+    try {
+        const text = response.text.trim();
+        return JSON.parse(text) as Critique;
+    } catch (e) {
+        console.error("Failed to parse critique JSON:", e, "Raw text:", response.text);
+        throw new Error("The AI returned an invalid JSON format for the critique.");
+    }
+}
+
 
 export async function regenerateStoryPlanWithCritique(plan: StoryMasterplan, critique: Critique, onProgress: (phase: string, message: string) => void): Promise<StoryMasterplan> {
     onProgress('start', 'Regenerating plan...');
@@ -718,7 +736,6 @@ export async function generateImageWithFallback(
     
     const { referenceImage } = options || {};
     
-    // AÑADIR ESPECIFICACIONES DE ASPECT RATIO
     const aspectPrompt = aspectRatio === '9:16' 
         ? 'vertical 9:16 aspect ratio, mobile composition, portrait orientation' 
         : `${aspectRatio} aspect ratio`;
@@ -726,27 +743,24 @@ export async function generateImageWithFallback(
     const enhancedPrompt = `${prompt}, ${aspectPrompt}, high quality, professional rendering, sharp focus, detailed`;
     
     try {
-        // INTENTAR API OFICIAL PRIMERO
         console.log("%c🟢 PRIMARIO: Gemini API Oficial", "color: lightgreen; font-weight: bold;");
         return await generateWithGeminiAPI(enhancedPrompt, aspectRatio, options);
         
     } catch (apiError: any) {
         console.warn(`%c🟡 API FALLÓ: ${apiError.message}`, "color: orange; font-weight: bold;");
         
-        // FALLBACK 1: GEMINI WEB (SI ESTÁ INICIALIZADO)
         if (geminiWebService.isInitialized()) {
             try {
                 console.log("%c🌐 FALLBACK GEMINI WEB: Generación ilimitada activa", "color: cyan; font-weight: bold;");
                 
                 let referenceBase64: string | undefined;
                 
-                // CONVERTIR IMAGEN DE REFERENCIA A BASE64 SI EXISTE
                 if (referenceImage) {
                     referenceBase64 = await new Promise<string>((resolve, reject) => {
                         const reader = new FileReader();
                         reader.onload = () => {
                             const result = reader.result as string;
-                            const base64 = result.split(',')[1]; // Remover prefijo data:image/...;base64,
+                            const base64 = result.split(',')[1];
                             resolve(base64);
                         };
                         reader.onerror = reject;
@@ -754,7 +768,6 @@ export async function generateImageWithFallback(
                     });
                 }
                 
-                // GENERAR IMAGEN CON GEMINI WEB
                 const image = await geminiWebService.generateImage(enhancedPrompt, referenceBase64);
                 
                 console.log("%c✅ ÉXITO: Imagen generada con Gemini Web", "color: cyan; font-weight: bold;");
@@ -767,7 +780,6 @@ export async function generateImageWithFallback(
             console.warn("%c⚠️ GEMINI WEB NO CONECTADO - Usa el botón de conexión", "color: orange; font-weight: bold;");
         }
         
-        // FALLBACK 2: IMAGEN-4.0 (ORIGINAL)
         console.log("%c🔶 FALLBACK FINAL: Imagen-4.0", "color: orange; font-weight: bold;");
         return await generateWithImagen(enhancedPrompt, aspectRatio);
     }

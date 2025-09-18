@@ -76,77 +76,39 @@ export interface Documentation {
   visualStyleGuide: string;
 }
 
-// Represents the AI-generated critique and strategic proposal
+// NEW: Represents the structured analysis of a reference image based on ImageAnalysisSchema
+export interface ImageAnalysis {
+  features: {
+    faces: { identity: string; expression: string; pose: string; }[];
+    colors: { dominant: string[]; palette: string; };
+    style: string;
+    lighting: string;
+    composition: string;
+    consistencyScore: number;
+    matchesReference: boolean;
+    differencesFromReference: string[];
+  };
+  overallDescription: string;
+  visualDNA: string; // A string for reuse in prompts
+  tags: string[];
+}
+
+// NEW: Replaced the old Critique interface with a more structured one based on TextAnalysisSchema
 export interface Critique {
-  projectSummary: {
-    about: string;
-    keyElements: string[];
-    identifiedStrengths: string[];
-  };
-  verticalFormatEvaluation: {
-    title: string;
-    strengths: string[];
-    weaknesses: {
-      title: string;
-      points: string[];
-    };
-  };
-  improvementStrategy: {
-    title: string;
-    strategies: {
-      title: string;
-      description: string;
-    }[];
-  };
-  specificImprovements: {
-    title: string;
-    visualSimplification: {
-      title: string;
-      keyElements: string[];
-    };
-    audioOptimization: string;
-  };
-  proposedSolution: {
-    title: string;
-    solutionTitle: string;
-    episodes: {
-      title: string;
-      description: string;
-    }[];
-  };
-  finalRecommendation: {
-    title: string;
-    recommendation: string;
-  };
-  implementationPlan: {
-    title: string;
-    nextSteps: string[];
-    requiredResources: string[];
+  narrativeStrengths: string[];
+  weaknesses: { point: string; suggestion: string; }[];
+  viralPotential: number; // Score out of 10
+  improvementStrategies: { title: string; description: string; }[];
+  enrichedElements: {
+    characters: { name: string; enhancements: string[]; }[];
+    actions: { type: string; enhancements: string[]; }[];
+    environments: { name: string; enhancements: string[]; }[];
+    narratives: { beat: string; enhancements: string[]; }[];
+    visuals: { element: string; enhancements: string[]; }[];
+    technicals: { spec: string; enhancements: string[]; }[];
   };
 }
 
-// Represents the structured analysis of a reference image
-export interface ImageAnalysis {
-    style: string;
-    subject_description: string;
-    key_visual_elements: string[];
-    facial_features: {
-        eyes: string;
-        hair: string;
-        expression: string;
-        other: string[];
-    };
-    clothing_and_accessories: {
-        item: string;
-        description: string;
-    }[];
-    posture_and_body: string;
-    color_palette: {
-        color_name: string;
-        hex_code?: string | null;
-        prominence: string;
-    }[];
-}
 
 // --- Nuevas Interfaces para la Arquitectura de Agentes Optimizada ---
 
