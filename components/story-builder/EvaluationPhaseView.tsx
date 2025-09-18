@@ -35,19 +35,23 @@ const EvaluationPhaseView: React.FC<EvaluationPhaseViewProps> = ({ critique, isL
         );
     }
     
-    const viralPotentialColor = critique.viralPotential >= 8 ? 'text-green-400' : critique.viralPotential >= 5 ? 'text-yellow-400' : 'text-red-400';
+    const viralPotentialColor = (critique.viralPotential || 0) >= 8 ? 'text-green-400' : (critique.viralPotential || 0) >= 5 ? 'text-yellow-400' : 'text-red-400';
     
-    const EnrichedElement: React.FC<{ title: string; items: any[] }> = ({ title, items }) => (
-        <details className="bg-gray-800/50 p-2 rounded-md cursor-pointer hover:bg-gray-800">
-            <summary className="font-semibold">{title}</summary>
-            <ul className="list-disc list-inside ml-4 mt-2 space-y-1">
-                {items.map((item, i) => {
-                    const name = item.name || item.type || item.beat || item.element || item.spec || 'Item';
-                    return <li key={i}><strong>{name}:</strong> {item.enhancements.join(', ')}</li>
-                })}
-            </ul>
-        </details>
-    );
+    const EnrichedElement: React.FC<{ title: string; items?: any[] }> = ({ title, items }) => {
+        if (!items || items.length === 0) return null;
+        return (
+            <details className="bg-gray-800/50 p-2 rounded-md cursor-pointer hover:bg-gray-800">
+                <summary className="font-semibold">{title}</summary>
+                <ul className="list-disc list-inside ml-4 mt-2 space-y-1">
+                    {items.map((item, i) => {
+                        const name = item?.name || item?.type || item?.beat || item?.element || item?.spec || 'Item';
+                        const enhancements = item?.enhancements?.join(', ') || 'N/A';
+                        return <li key={i}><strong>{name}:</strong> {enhancements}</li>
+                    })}
+                </ul>
+            </details>
+        );
+    };
 
     return (
         <div className="animate-fade-in">
@@ -58,12 +62,12 @@ const EvaluationPhaseView: React.FC<EvaluationPhaseViewProps> = ({ critique, isL
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Section title="Puntos Fuertes Narrativos" icon="👍">
                         <ul className="list-disc list-inside ml-2">
-                            {critique.narrativeStrengths.map((s, i) => <li key={i}>{s}</li>)}
+                            {critique.narrativeStrengths?.map((s, i) => <li key={i}>{s}</li>)}
                         </ul>
                     </Section>
                     <Section title="Potencial Viral" icon="📈">
                         <div className="text-center">
-                            <p className={`text-5xl font-bold ${viralPotentialColor}`}>{critique.viralPotential}<span className="text-2xl">/10</span></p>
+                            <p className={`text-5xl font-bold ${viralPotentialColor}`}>{critique.viralPotential?.toFixed(1) || 'N/A'}<span className="text-2xl">/10</span></p>
                             <p className="text-gray-400 mt-2">Puntuación estimada por la IA basada en el formato y el concepto.</p>
                         </div>
                     </Section>
@@ -71,20 +75,20 @@ const EvaluationPhaseView: React.FC<EvaluationPhaseViewProps> = ({ critique, isL
 
                 <Section title="Puntos Débiles y Sugerencias" icon="⚠️">
                     <ul className="space-y-3">
-                        {critique.weaknesses.map((w, i) => (
+                        {critique.weaknesses?.map((w, i) => (
                             <li key={i} className="bg-gray-800/50 p-2 rounded-md">
-                                <p className="font-semibold text-red-400">{w.point}</p>
-                                <p className="text-gray-300 pl-2 border-l-2 border-red-400/30 mt-1"><strong>Sugerencia:</strong> {w.suggestion}</p>
+                                <p className="font-semibold text-red-400">{w?.point}</p>
+                                <p className="text-gray-300 pl-2 border-l-2 border-red-400/30 mt-1"><strong>Sugerencia:</strong> {w?.suggestion}</p>
                             </li>
                         ))}
                     </ul>
                 </Section>
 
                 <Section title="Estrategias de Mejora" icon="🚀">
-                    {critique.improvementStrategies.map((s, i) => (
+                    {critique.improvementStrategies?.map((s, i) => (
                         <div key={i} className="mb-2">
-                           <h5 className="font-semibold text-gray-200">{s.title}</h5>
-                           <p className="text-gray-400">{s.description}</p>
+                           <h5 className="font-semibold text-gray-200">{s?.title}</h5>
+                           <p className="text-gray-400">{s?.description}</p>
                         </div>
                     ))}
                 </Section>
@@ -92,12 +96,12 @@ const EvaluationPhaseView: React.FC<EvaluationPhaseViewProps> = ({ critique, isL
                 <Section title="Elementos Enriquecidos Sugeridos" icon="✨">
                     <p className="text-gray-400 mb-3">La IA ha propuesto mejoras específicas para cada aspecto de tu historia:</p>
                     <div className="space-y-2">
-                       <EnrichedElement title="Personajes" items={critique.enrichedElements.characters} />
-                       <EnrichedElement title="Acciones" items={critique.enrichedElements.actions} />
-                       <EnrichedElement title="Ambientes" items={critique.enrichedElements.environments} />
-                       <EnrichedElement title="Narrativa" items={critique.enrichedElements.narratives} />
-                       <EnrichedElement title="Visuales" items={critique.enrichedElements.visuals} />
-                       <EnrichedElement title="Aspectos Técnicos" items={critique.enrichedElements.technicals} />
+                       <EnrichedElement title="Personajes" items={critique.enrichedElements?.characters} />
+                       <EnrichedElement title="Acciones" items={critique.enrichedElements?.actions} />
+                       <EnrichedElement title="Ambientes" items={critique.enrichedElements?.environments} />
+                       <EnrichedElement title="Narrativa" items={critique.enrichedElements?.narratives} />
+                       <EnrichedElement title="Visuales" items={critique.enrichedElements?.visuals} />
+                       <EnrichedElement title="Aspectos Técnicos" items={critique.enrichedElements?.technicals} />
                     </div>
                 </Section>
             </div>

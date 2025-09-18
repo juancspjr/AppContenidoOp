@@ -67,7 +67,7 @@ const ProgressTracker: React.FC<{ phase: string, data: StoryData, plan: StoryMas
             <div className="border-t border-gray-700 pt-4">
                  <h3 className="text-lg font-bold text-gray-200 mb-2">📝 Tu Historia Hasta Ahora:</h3>
                  <div className="space-y-2 text-sm text-gray-400 max-h-48 overflow-y-auto pr-2">
-                    {plan?.metadata?.title ? <div><strong>Título:</strong> {plan?.metadata?.title}</div> : data.concept && <div><strong>Concepto:</strong> {data.concept}</div>}
+                    {plan?.metadata?.title ? <div><strong>Título:</strong> {plan.metadata.title}</div> : data.concept && <div><strong>Concepto:</strong> {data.concept}</div>}
                     {data.format && <div><strong>Formato:</strong> {Object.values(outputFormats).flat().find(f => f.value === data.format)?.name || data.format}</div>}
                     {data.storyPDF && <div><strong>PDF:</strong> {data.storyPDF.name}</div>}
                     {data.contextImages.length > 0 && <div><strong>Imágenes Contexto:</strong> {data.contextImages.length}</div>}
@@ -369,8 +369,8 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ onExit, importedProject }) 
         setGenerationProgress({ plan: 'in_progress', critique: 'pending', docs: 'pending' });
         try {
             const { plan: newPlan } = await generateAdvancedStoryPlan(storyData);
-            if (!newPlan || !newPlan.metadata || !newPlan.metadata.title) {
-                throw new Error("El plan de historia generado por la IA es inválido o está incompleto. Faltan metadatos esenciales.");
+            if (!newPlan?.metadata?.title) {
+                throw new Error("Plan generado inválido: 'title' es indefinido. La IA puede haber devuelto un formato incorrecto.");
             }
             setGeneratedStoryPlan(newPlan);
             setGenerationProgress(prev => ({ ...prev, plan: 'complete', docs: 'in_progress', critique: 'in_progress' }));
@@ -383,11 +383,24 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ onExit, importedProject }) 
             setDocumentation(docs);
             setCritique(crit);
             setGenerationProgress(prev => ({ ...prev, docs: 'complete', critique: 'complete' }));
+            
+            // Auto-save progress
+            try {
+                const projectToSave: ExportedProject = {
+                    plan: newPlan,
+                    documentation: docs,
+                    critique: crit,
+                    assets: { characters: [], environments: [], elements: [], sceneFrames: [] }
+                };
+                projectPersistenceService.saveProject(projectToSave);
+                console.log("💾 Progreso del proyecto guardado automáticamente en el almacenamiento local.");
+            } catch (saveError) {
+                console.warn("No se pudo guardar automáticamente el progreso del proyecto:", saveError);
+            }
 
             setPhase('6.1');
-        } catch(err) {
-            const msg = err instanceof Error ? err.message : "Error desconocido";
-            setError(msg);
+        } catch(err: any) {
+            setError(err.message);
             setGenerationProgress({ plan: 'error', critique: 'error', docs: 'error' });
         } finally {
             setIsLoading(false);

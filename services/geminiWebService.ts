@@ -82,125 +82,49 @@ class GeminiWebService {
     private async validateConnectionWithStrategies(): Promise<ValidationResult> {
         console.log('🔍 Validando conexión con Gemini Web (múltiples estrategias)...');
         
-        // Strategy 1: Attempt to fetch the main Gemini app page. This is the most reliable check.
+        // Strategy 1: Attempt to fetch the main Gemini app page with 'no-cors'.
+        // This is a weak validation due to browser security (CORS), but it can bypass
+        // the "Failed to fetch" error for initial checks.
         try {
             const homeValidation = await this.validateGeminiHomePage();
             if (homeValidation.success) {
-                console.log('✅ Validación exitosa: Página principal Gemini');
+                console.log('✅ Validación (no-cors) exitosa: Página principal Gemini');
                 return homeValidation;
             }
         } catch (error) {
             console.warn('⚠️ Estrategia 1 (Página Principal) falló:', error);
         }
         
-        // Strategy 2: Check a secondary, often less protected, endpoint.
-        try {
-            const apiValidation = await this.validateViaInternalAPI();
-            if (apiValidation.success) {
-                console.log('✅ Validación exitosa: API interna');
-                return apiValidation;
-            }
-        } catch (error) {
-            console.warn('⚠️ Estrategia 2 (API Interna) falló:', error);
-        }
-
-        // Strategy 3: Basic cookie format check as a last resort.
-        try {
-            const cookieValidation = await this.validateCookiesOnly();
-            if (cookieValidation.success) {
-                console.log('✅ Validación exitosa: Solo formato de cookies (fallback)');
-                return cookieValidation;
-            }
-        } catch(error) {
-            console.warn('⚠️ Estrategia 3 (Solo Cookies) falló:', error);
-        }
-        
         // If all strategies fail, return a comprehensive error message.
         return {
             success: false,
-            needsCaptcha: true, // Assume CAPTCHA or re-auth is needed
+            needsCaptcha: true, // Assume CAPTCHA or re-auth is needed as we can't be sure
             needsReauth: true,
             message: 'La validación de la conexión con Gemini falló. Las cookies pueden haber expirado, ser incorrectas o se requiere resolver un CAPTCHA en gemini.google.com.'
         };
     }
     
     private async validateGeminiHomePage(): Promise<ValidationResult> {
-        console.log('🏠 Estrategia 1: Validando página principal de Gemini...');
+        console.log('🏠 Estrategia 1: Validando página principal de Gemini (con no-cors)...');
         try {
-            const response = await stealthFetch('https://gemini.google.com/', {
+            // Using 'no-cors' mode results in an opaque response. We cannot read the content,
+            // status, or headers. However, if the request itself doesn't throw a network error,
+            // it acts as a weak signal that the endpoint is reachable, bypassing the CORS error.
+            // This is the best we can do for validation without a backend proxy.
+            await stealthFetch('https://gemini.google.com/', {
                 method: 'GET',
                 headers: this.buildHeaders(),
+                mode: 'no-cors', // Bypass CORS for initial validation.
             });
             
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            
-            const html = await response.text();
-            
-            const isValid = this.checkGeminiPageValidation(html);
-            
-            if (isValid.success) {
-                await this.extractNonceFromHTML(html);
-            }
-            return isValid;
-            
-        } catch (error: any) {
-            throw new Error(`Error validando página principal: ${error.message}`);
-        }
-    }
-
-    private async validateViaInternalAPI(): Promise<ValidationResult> {
-        console.log('🔧 Estrategia 2: Validando vía API interna...');
-        try {
-            const response = await stealthFetch('https://gemini.google.com/app', {
-                method: 'GET',
-                headers: { ...this.buildHeaders(), 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' },
-            });
-
-            if (response.status === 200) {
-                 const text = await response.text();
-                return this.checkGeminiPageValidation(text);
-            }
-            throw new Error(`API interna respondió con estado: ${response.status}`);
+            // Because the response is opaque, we cannot check for CAPTCHA or re-auth pages.
+            // We must assume success if the fetch promise resolves. The real test will be
+            // the first actual image generation call.
+            return { success: true, needsCaptcha: false, needsReauth: false, message: 'Conexión (no-cors) exitosa. La validación real ocurrirá en la primera petición.' };
 
         } catch (error: any) {
-             throw new Error(`Error en API interna: ${error.message}`);
-        }
-    }
-    
-    private async validateCookiesOnly(): Promise<ValidationResult> {
-        console.log('🍪 Estrategia 3: Validando solo formato de cookies...');
-        if (!this.cookies || !Object.keys(this.cookies).some(k => k.includes('PSID') && !k.includes('TS'))) {
-            throw new Error('Cookie __Secure-1PSID (o variante) faltante');
-        }
-        return { success: true, needsCaptcha: false, needsReauth: false, message: 'Cookies validadas por formato (modo fallback)' };
-    }
-    
-    private checkGeminiPageValidation(html: string): ValidationResult {
-        if (html.includes('captcha') || html.includes('unusual traffic') || html.includes('verify you are human')) {
-            return { success: false, needsCaptcha: true, needsReauth: false, message: 'CAPTCHA requerido. Ve a gemini.google.com y resuelve el CAPTCHA manualmente.' };
-        }
-        if (html.includes('accounts.google.com') || html.includes('Sign in') || html.includes('signin')) {
-            return { success: false, needsCaptcha: false, needsReauth: true, message: 'Sesión expirada. Ve a gemini.google.com y logúeate nuevamente.' };
-        }
-        if (html.includes('SNlM0e') || html.includes('_reqid') || html.includes('How can I help you')) {
-            return { success: true, needsCaptcha: false, needsReauth: false, message: 'Sesión válida detectada' };
-        }
-        return { success: false, needsCaptcha: true, needsReauth: true, message: 'Estado de sesión ambiguo. Puede requerir verificación manual en gemini.google.com.' };
-    }
-    
-    private async extractNonceFromHTML(html: string): Promise<void> {
-        try {
-            const nonceMatch = html.match(/\"SNlM0e\":\"([^\"]+)\"/);
-            if (nonceMatch) {
-                this.nonce = nonceMatch[1];
-                console.log('🔑 Nonce extraído exitosamente');
-            } else {
-                console.warn('⚠️ No se pudo extraer nonce de la página principal.');
-            }
-        } catch (error) {
-            console.warn('⚠️ Error al procesar HTML para nonce, continuando sin él');
+            // This will now only catch genuine network errors, not CORS preflight failures.
+            throw new Error(`Error de red validando página principal: ${error.message}`);
         }
     }
     

@@ -77,7 +77,7 @@ const getGeminiClient = (): { client: GoogleGenAI, keyData: typeof GEMINI_KEYS[0
 
 async function makeApiRequestWithRetry<T>(
     requestFn: (client: GoogleGenAI) => Promise<T>,
-    maxRetries = 3
+    maxRetries = 2
 ): Promise<T> {
     let lastError: Error | null = null;
     // Use a copy of all keys for retry attempts, not just the currently "available" ones.
