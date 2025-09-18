@@ -27,9 +27,33 @@ class GeminiWebService {
     public isInitialized(): boolean {
         return this.initialized;
     }
+    
+    // FIX: Re-introduce a validation step to provide clearer error messages on connection.
+    private async validateConnection(): Promise<void> {
+        if (!this.cookies) throw new Error("No hay cookies para validar.");
+        const headers = this.buildHeaders();
+        try {
+            const response = await stealthFetch('https://gemini.google.com/app', { headers });
+            const text = await response.text();
+
+            // Check for indicators of failure (e.g., redirect to login, CAPTCHA page)
+            if (!response.ok || text.includes('accounts.google.com') || text.includes('Captcha') || text.includes('solve this puzzle')) {
+                throw new Error("No se pudo validar la sesión con los servidores de Google. La sesión puede haber sido invalidada por seguridad (ej. cambio de red), se requiere un CAPTCHA, o las cookies son incorrectas. Intenta obtener cookies nuevas de gemini.google.com.");
+            }
+            console.log("✅ Conexión con Gemini Web validada exitosamente.");
+        } catch (error: any) {
+            // If it's already our specific error, just re-throw it.
+            if (error.message.startsWith('No se pudo validar')) {
+                throw error;
+            }
+            // Otherwise, wrap it for clarity.
+            throw new Error(`Error de red al intentar validar la sesión con Gemini: ${error.message}`);
+        }
+    }
+
 
     public async initialize(cookieString: string): Promise<boolean> {
-        console.log('🔐 Inicializando Gemini Web Service (validación diferida)...');
+        console.log('🔐 Inicializando Gemini Web Service (con validación)...');
         
         try {
             const parsedCookies = this.parseCookieString(cookieString);
@@ -42,9 +66,13 @@ class GeminiWebService {
             }
             
             this.cookies = parsedCookies;
+            
+            // Perform connection validation
+            await this.validateConnection();
+
             this.sessionId = this.generateSessionId();
-            this.initialized = true; // Assume success
-            this.lastValidation = Date.now(); // Mark as "validated"
+            this.initialized = true;
+            this.lastValidation = Date.now();
             
             localStorage.setItem('gemini_web_cookies', btoa(JSON.stringify({
                 cookies: cookieString,
@@ -53,12 +81,13 @@ class GeminiWebService {
                 validated: true
             })));
             
-            console.log('✅ Gemini Web Service inicializado. La validación real ocurrirá en la primera petición de generación.');
+            console.log('✅ Gemini Web Service inicializado y validado.');
             return true;
             
         } catch (error: any) {
-            console.error('❌ Error inicializando Gemini Web Service:', error);
+            console.error('❌ Error inicializando Gemini Web Service:', error.message);
             this.initialized = false;
+            // Re-throw the specific, user-friendly error from validation or parsing.
             throw error;
         }
     }
@@ -131,21 +160,14 @@ class GeminiWebService {
                 return false;
             }
             
-            const parsedCookies = this.parseCookieString(data.cookies);
-            const hasPsid = Object.keys(parsedCookies).some(key => key.startsWith('__Secure-') && key.endsWith('PSID'));
+            // Instead of just accepting, re-validate the connection
+            await this.initialize(data.cookies);
+            return true;
 
-            if (hasPsid) {
-                this.cookies = parsedCookies;
-                this.sessionId = data.sessionId || this.generateSessionId();
-                this.initialized = true; // Assume success
-                this.lastValidation = Date.now();
-                console.log('🔄 Cookies cargadas y aceptadas desde localStorage (validación diferida).');
-                return true;
-            }
-            return false;
         } catch (error) {
-            console.warn('⚠️ Error cargando cookies guardadas:', error);
+            console.warn('⚠️ Error cargando o revalidando cookies guardadas:', error);
             localStorage.removeItem('gemini_web_cookies');
+            // Do not re-throw here, just indicate failure to load.
             return false;
         }
     }

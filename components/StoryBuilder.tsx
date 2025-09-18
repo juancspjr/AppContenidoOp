@@ -67,6 +67,7 @@ const ProgressTracker: React.FC<{ phase: string, data: StoryData, plan: StoryMas
             <div className="border-t border-gray-700 pt-4">
                  <h3 className="text-lg font-bold text-gray-200 mb-2">📝 Tu Historia Hasta Ahora:</h3>
                  <div className="space-y-2 text-sm text-gray-400 max-h-48 overflow-y-auto pr-2">
+                    {/* FIX: Use optional chaining to prevent crash if plan or metadata is missing. */}
                     {plan?.metadata?.title ? <div><strong>Título:</strong> {plan.metadata.title}</div> : data.concept && <div><strong>Concepto:</strong> {data.concept}</div>}
                     {data.format && <div><strong>Formato:</strong> {Object.values(outputFormats).flat().find(f => f.value === data.format)?.name || data.format}</div>}
                     {data.storyPDF && <div><strong>PDF:</strong> {data.storyPDF.name}</div>}
@@ -369,36 +370,58 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ onExit, importedProject }) 
         setGenerationProgress({ plan: 'in_progress', critique: 'pending', docs: 'pending' });
         try {
             const { plan: newPlan } = await generateAdvancedStoryPlan(storyData);
-            if (!newPlan?.metadata?.title) {
-                throw new Error("Plan generado inválido: 'title' es indefinido. La IA puede haber devuelto un formato incorrecto.");
-            }
             setGeneratedStoryPlan(newPlan);
             setGenerationProgress(prev => ({ ...prev, plan: 'complete', docs: 'in_progress', critique: 'in_progress' }));
 
-            const [docs, crit] = await Promise.all([
+            // FIX: Use Promise.allSettled to allow partial success if one promise fails.
+            const [docsResult, critResult] = await Promise.allSettled([
                 generateAllDocumentation(newPlan),
                 generateCritique(newPlan, storyData),
             ]);
-            
-            setDocumentation(docs);
-            setCritique(crit);
-            setGenerationProgress(prev => ({ ...prev, docs: 'complete', critique: 'complete' }));
-            
-            // Auto-save progress
-            try {
-                const projectToSave: ExportedProject = {
-                    plan: newPlan,
-                    documentation: docs,
-                    critique: crit,
-                    assets: { characters: [], environments: [], elements: [], sceneFrames: [] }
-                };
-                projectPersistenceService.saveProject(projectToSave);
-                console.log("💾 Progreso del proyecto guardado automáticamente en el almacenamiento local.");
-            } catch (saveError) {
-                console.warn("No se pudo guardar automáticamente el progreso del proyecto:", saveError);
+
+            let partialError = '';
+
+            if (docsResult.status === 'fulfilled') {
+                setDocumentation(docsResult.value);
+                setGenerationProgress(prev => ({ ...prev, docs: 'complete' }));
+            } else {
+                console.error("Fallo al generar documentación:", docsResult.reason);
+                partialError += `No se pudo generar la documentación. Error: ${docsResult.reason.message}. `;
+                setGenerationProgress(prev => ({ ...prev, docs: 'error' }));
             }
 
+            if (critResult.status === 'fulfilled') {
+                setCritique(critResult.value);
+                setGenerationProgress(prev => ({ ...prev, critique: 'complete' }));
+            } else {
+                console.error("Fallo al generar crítica:", critResult.reason);
+                partialError += `No se pudo generar la crítica. Error: ${critResult.reason.message}.`;
+                setGenerationProgress(prev => ({ ...prev, critique: 'error' }));
+            }
+            
+            if (partialError) {
+                setError(`El plan se generó, pero con errores: ${partialError}`);
+            }
+
+            // Auto-save progress, even if partial
+            if (newPlan) {
+                 try {
+                    const projectToSave: ExportedProject = {
+                        plan: newPlan,
+                        documentation: docsResult.status === 'fulfilled' ? docsResult.value : ({} as Documentation),
+                        critique: critResult.status === 'fulfilled' ? critResult.value : ({} as Critique),
+                        assets: { characters: [], environments: [], elements: [], sceneFrames: [] }
+                    };
+                    projectPersistenceService.saveProject(projectToSave);
+                    console.log("💾 Progreso del proyecto guardado automáticamente en el almacenamiento local.");
+                } catch (saveError) {
+                    console.warn("No se pudo guardar automáticamente el progreso del proyecto:", saveError);
+                }
+            }
+            
+            // Allow advancing even with partial failure, the user can review what was generated.
             setPhase('6.1');
+
         } catch(err: any) {
             setError(err.message);
             setGenerationProgress({ plan: 'error', critique: 'error', docs: 'error' });
@@ -641,9 +664,9 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ onExit, importedProject }) 
                 <Spinner />
                 <p className="mt-4 text-gray-400">Generando plan de historia, documentación y crítica...</p>
                 <div className="mt-2 text-sm text-blue-400 space-y-1">
-                    <p>{generationProgress.plan === 'in_progress' ? '🔄' : '✅'} Generando Plan de Historia...</p>
-                    <p>{generationProgress.plan === 'complete' && generationProgress.docs === 'in_progress' ? '🔄' : (generationProgress.docs === 'complete' ? '✅' : '⏳')} Generando Documentación...</p>
-                    <p>{generationProgress.plan === 'complete' && generationProgress.critique === 'in_progress' ? '🔄' : (generationProgress.critique === 'complete' ? '✅' : '⏳')} Generando Crítica...</p>
+                    <p>{generationProgress.plan === 'in_progress' ? '🔄' : (generationProgress.plan === 'complete' ? '✅' : (generationProgress.plan === 'error' ? '❌' : '⏳'))} Generando Plan de Historia...</p>
+                    <p>{generationProgress.docs === 'in_progress' ? '🔄' : (generationProgress.docs === 'complete' ? '✅' : (generationProgress.docs === 'error' ? '❌' : '⏳'))} Generando Documentación...</p>
+                    <p>{generationProgress.critique === 'in_progress' ? '🔄' : (generationProgress.critique === 'complete' ? '✅' : (generationProgress.critique === 'error' ? '❌' : '⏳'))} Generando Crítica...</p>
                 </div>
             </div>
         );

@@ -77,15 +77,20 @@ const getGeminiClient = (): { client: GoogleGenAI, keyData: typeof GEMINI_KEYS[0
 
 async function makeApiRequestWithRetry<T>(
     requestFn: (client: GoogleGenAI) => Promise<T>,
-    maxRetries = 2
+    maxRetries = 3
 ): Promise<T> {
     let lastError: Error | null = null;
-    // Use a copy of all keys for retry attempts, not just the currently "available" ones.
-    const keysToTry = [...GEMINI_KEYS];
+    
+    // FIX: Only attempt to use keys that are currently marked as available, preventing wasted retries on known-bad keys.
+    const keysToTry = PersistentAPIKeyManager.getAvailableAPIs(GEMINI_KEYS);
+    if (keysToTry.length === 0) {
+        throw new Error("RESOURCE_EXHAUSTED: All API keys are currently exhausted. Cannot make a request.");
+    }
 
-    for (let attempt = 0; attempt < maxRetries && keysToTry.length > 0; attempt++) {
-        // Simple round-robin for retries
-        const keyData = keysToTry.shift()!;
+    const maxRetriesToAttempt = Math.min(maxRetries, keysToTry.length);
+
+    for (let attempt = 0; attempt < maxRetriesToAttempt; attempt++) {
+        const keyData = keysToTry[attempt]; // Iterate through available keys
         const client = new GoogleGenAI({ apiKey: keyData.api_key });
         
         try {
@@ -93,8 +98,9 @@ async function makeApiRequestWithRetry<T>(
             PersistentAPIKeyManager.markAsSuccessful(keyData.id, keyData);
             return result;
         } catch (error) {
-            console.error(`API request failed with key ${keyData.projectName} (Attempt ${attempt + 1}/${maxRetries}):`, error);
+            console.error(`API request failed with key ${keyData.projectName} (Attempt ${attempt + 1}/${maxRetriesToAttempt}):`, error);
             lastError = error as Error;
+            // FIX: Immediately mark the key as exhausted on failure to prevent it from being used in subsequent operations.
             PersistentAPIKeyManager.markAsExhausted(keyData.id, keyData, (error as Error).message);
         }
     }
@@ -220,7 +226,7 @@ export const getAIFilterRecommendations = getAIRecommendations;
 
 async function hashFile(file: File): Promise<string> {
     const buf = await file.arrayBuffer();
-    const hash = await crypto.subtle.digest('SHA-256', buf);
+    const hash = await crypto.subtle.digest('SHA-26', buf);
     return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
@@ -380,7 +386,11 @@ export async function generateReferenceAssetsPhase63(
     };
 
     const characterPromises = charactersToGen.map(async (character) => {
-        if (assetRegistry.findByName(character.name, 'character')) return null;
+        // FIX: Prevent duplicate asset generation by checking the registry first.
+        if (assetRegistry.findByName(character.name, 'character')) {
+            console.log(`Skipping existing character asset: ${character.name}`);
+            return null;
+        }
         const userChar = userData.characters.find(c => c.name.toLowerCase() === character.name.toLowerCase());
         
         const prompt = buildCharacterPromptConsistent(character, plan, userData);
@@ -402,7 +412,11 @@ export async function generateReferenceAssetsPhase63(
     });
 
     const environmentPromises = environmentsToGen.map(async (envName) => {
-        if (assetRegistry.findByName(envName, 'environment')) return null;
+        // FIX: Prevent duplicate asset generation by checking the registry first.
+        if (assetRegistry.findByName(envName, 'environment')) {
+            console.log(`Skipping existing environment asset: ${envName}`);
+            return null;
+        }
         const envPrompt = buildEnvironmentPrompt(envName, plan, userData);
         const blob = await generateImageWithFallback(envPrompt, aspectRatio);
         const id = crypto.randomUUID();
@@ -419,7 +433,11 @@ export async function generateReferenceAssetsPhase63(
     });
 
     const elementPromises = propsToGen.map(async (propName) => {
-        if (assetRegistry.findByName(propName, 'element')) return null;
+        // FIX: Prevent duplicate asset generation by checking the registry first.
+        if (assetRegistry.findByName(propName, 'element')) {
+            console.log(`Skipping existing element asset: ${propName}`);
+            return null;
+        }
         const propPrompt = buildPropPrompt(propName, plan, userData);
         const blob = await generateImageWithFallback(propPrompt, aspectRatio);
         const id = crypto.randomUUID();
@@ -450,6 +468,24 @@ export async function generateReferenceAssetsPhase63(
 
 
 // --- Story Builder Functions (Simplified Stubs) ---
+// FIX: Add a validation function for the StoryMasterplan structure.
+function validateStoryMasterplan(plan: any): asserts plan is StoryMasterplan {
+    if (!plan || typeof plan !== 'object') {
+        throw new Error("El plan de historia recibido no es un objeto JSON válido.");
+    }
+    if (!plan.metadata || typeof plan.metadata !== 'object') {
+        throw new Error("La propiedad 'metadata' es obligatoria en el plan de historia.");
+    }
+    if (typeof plan.metadata.title !== 'string' || !plan.metadata.title) {
+        throw new Error("La propiedad 'metadata.title' es obligatoria y debe ser un string.");
+    }
+    if (!Array.isArray(plan.characters)) {
+        throw new Error("La propiedad 'characters' es obligatoria y debe ser un array.");
+    }
+    if (!plan.story_structure?.narrative_arc || !Array.isArray(plan.story_structure.narrative_arc)) {
+        throw new Error("La propiedad 'story_structure.narrative_arc' es obligatoria y debe ser un array.");
+    }
+}
 
 export async function generateAdvancedStoryPlan(storyData: StoryData): Promise<{ plan: StoryMasterplan }> {
     const response: GenerateContentResponse = await makeApiRequestWithRetry(client => 
@@ -459,7 +495,16 @@ export async function generateAdvancedStoryPlan(storyData: StoryData): Promise<{
             config: { responseMimeType: 'application/json' }
         })
     );
-    return { plan: JSON.parse(response.text) };
+    
+    // FIX: Implement robust parsing and validation for the AI's response.
+    try {
+        const plan = JSON.parse(response.text);
+        validateStoryMasterplan(plan);
+        return { plan };
+    } catch (e: any) {
+        console.error("Fallo al analizar o validar el plan de historia:", e, "Respuesta cruda de la IA:", response.text);
+        throw new Error(`La IA devolvió un JSON inválido o con una estructura incorrecta. Error: ${e.message}`);
+    }
 }
 
 export async function generateAllDocumentation(plan: StoryMasterplan): Promise<Documentation> {
