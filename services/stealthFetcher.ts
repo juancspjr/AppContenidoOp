@@ -40,10 +40,19 @@ export const stealthFetch = (url: string, options?: RequestInit): Promise<Respon
     // Clone existing headers or create a new Headers object
     const headers = new Headers(options?.headers);
 
-    // Set the randomized and standard headers
+    // Set more realistic, randomized headers to evade basic bot detection
     headers.set('User-Agent', randomUserAgent);
     headers.set('Accept-Language', randomLanguage);
-    headers.set('Referer', window.location.origin); // Set a plausible Referer
+    headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7');
+    headers.set('Referer', 'https://gemini.google.com/'); // A more plausible referer
+    headers.set('Sec-Ch-Ua', '"Google Chrome";v="125", "Chromium";v="125", "Not.A/Brand";v="24"');
+    headers.set('Sec-Ch-Ua-Mobile', '?0');
+    headers.set('Sec-Ch-Ua-Platform', '"Windows"'); // Can be randomized in the future
+    headers.set('Sec-Fetch-Dest', 'document');
+    headers.set('Sec-Fetch-Mode', 'navigate');
+    headers.set('Sec-Fetch-Site', 'same-origin');
+    headers.set('Sec-Fetch-User', '?1');
+    headers.set('Upgrade-Insecure-Requests', '1');
 
     // Build the final request options
     const requestOptions: RequestInit = {
@@ -52,8 +61,6 @@ export const stealthFetch = (url: string, options?: RequestInit): Promise<Respon
         mode: 'cors', // Ensure CORS is handled correctly
         credentials: 'omit'
     };
-
-    console.log(`Stealth Fetch: UA='${randomUserAgent}', Lang='${randomLanguage}'`);
 
     // Perform the fetch call with the modified options
     return fetch(url, requestOptions);
