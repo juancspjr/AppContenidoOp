@@ -116,7 +116,6 @@ const dataUrlToGoogleGenerativePart = (dataUrl: string): Part => {
 
 export async function refineUserPrompt(prompt: string, context: 'magic-edit' | 'filter' | 'adjustment'): Promise<string> {
     const systemInstruction = `You are an AI assistant specializing in image editing prompts. A user will provide a simple prompt and a context. Your task is to refine and expand the prompt to be more descriptive and effective for a generative AI image model. Return only the refined prompt text, nothing else. Context: ${context}`;
-    // FIX: Explicitly type the response to resolve property access errors.
     const response: GenerateContentResponse = await makeApiRequestWithRetry(client => 
         client.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -138,7 +137,6 @@ export async function generateMagicEditImage({ prompt, baseHoleDataURL, referenc
         parts.push({ text: "Use the second image as a style and content reference." });
     }
 
-    // FIX: Explicitly type the response to resolve property access errors.
     const response: GenerateContentResponse = await makeApiRequestWithRetry(client => 
         client.models.generateContent({
             model: 'gemini-2.5-flash-image-preview',
@@ -160,12 +158,10 @@ export async function generateFilteredImage(image: File, prompt: string): Promis
      const imagePart = {
         inlineData: {
             mimeType: image.type,
-            // FIX: Use browser-compatible ArrayBuffer to Base64 conversion instead of Node.js Buffer.
             data: arrayBufferToBase64(await image.arrayBuffer()),
         },
     };
 
-    // FIX: Explicitly type the response to resolve property access errors.
     const response: GenerateContentResponse = await makeApiRequestWithRetry(client => 
         client.models.generateContent({
             model: 'gemini-2.5-flash-image-preview',
@@ -188,7 +184,6 @@ export async function generatePhotoshootScene(subjectImage: File, scenePrompt: s
     const results: string[] = [];
 
     for (let i = 0; i < numImages; i++) {
-        // FIX: Cast the response to the expected structure for generateImages.
         const response = await makeApiRequestWithRetry(client => 
             client.models.generateImages({
                 model: 'imagen-4.0-generate-001',
@@ -204,7 +199,6 @@ export async function generatePhotoshootScene(subjectImage: File, scenePrompt: s
 
 export async function getAIRecommendations(image: File, presets: any[], context: string): Promise<AIRecommendation[]> {
     // This is a simplified implementation for demonstration.
-    // FIX: Explicitly type the response to resolve property access errors.
     const response: GenerateContentResponse = await makeApiRequestWithRetry(client => 
         client.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -273,14 +267,6 @@ function extractUniqueProps(plan: StoryMasterplan): string[] {
     return Array.from(set);
 }
 
-function countUniqueEnvironments(plan: StoryMasterplan): number {
-    return extractUniqueEnvironments(plan).length;
-}
-
-function countUniqueProps(plan: StoryMasterplan): number {
-    return extractUniqueProps(plan).length;
-}
-
 function buildCharacterPromptConsistent(char: any, plan: StoryMasterplan, userData: StoryData): string {
     const styles = plan.metadata.style_and_energy?.visual_styles?.join(', ') || userData.visualStyles?.join(', ') || 'cinematic 3D';
     return [
@@ -336,7 +322,6 @@ async function generateWithGeminiFlashRefs(prompt: string, aspect: ReferenceAsse
 
     parts.push({ text: `${prompt}, aspect ratio ${aspect}, vertical mobile framing` });
     
-    // FIX: Explicitly type the response to resolve property access errors.
     const response: GenerateContentResponse = await makeApiRequestWithRetry(client =>
         client.models.generateContent({
             model: 'gemini-2.5-flash-image-preview',
@@ -467,7 +452,6 @@ export async function generateReferenceAssetsPhase63(
 // --- Story Builder Functions (Simplified Stubs) ---
 
 export async function generateAdvancedStoryPlan(storyData: StoryData): Promise<{ plan: StoryMasterplan }> {
-    // FIX: Explicitly type the response to resolve property access errors.
     const response: GenerateContentResponse = await makeApiRequestWithRetry(client => 
         client.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -526,7 +510,6 @@ User Data:
 ${JSON.stringify(storyData)}
 `;
 
-    // FIX: Explicitly type the response to resolve property access errors.
     const response: GenerateContentResponse = await makeApiRequestWithRetry(client =>
         client.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -547,7 +530,6 @@ ${JSON.stringify(storyData)}
 
 export async function regenerateStoryPlanWithCritique(plan: StoryMasterplan, critique: Critique, onProgress: (phase: string, message: string) => void): Promise<StoryMasterplan> {
     onProgress('start', 'Regenerating plan...');
-    // FIX: Explicitly type the response to resolve property access errors.
     const response: GenerateContentResponse = await makeApiRequestWithRetry(client => 
         client.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -637,7 +619,6 @@ export function resetAllAPIs() {
 export function resetSpecificAPI(projectName: string) {
     const key = GEMINI_KEYS.find(k => k.projectName === projectName);
     if (key) {
-        // FIX: Corrected typo from `PersistentAPIKeyKeyManager` to `PersistentAPIKeyManager`.
         const statusMap = PersistentAPIKeyManager.loadAPIStatus();
         statusMap.delete(key.id);
         PersistentAPIKeyManager.saveAPIStatus(statusMap);
@@ -680,12 +661,10 @@ async function generateWithGeminiAPI(prompt: string, aspectRatio: ReferenceAsset
     const parts: Part[] = [{ text: prompt }];
     if (options?.referenceImage) {
         const file = options.referenceImage;
-        // FIX: Use browser-compatible ArrayBuffer to Base64 conversion instead of Node.js Buffer.
         const base64 = arrayBufferToBase64(await file.arrayBuffer());
         parts.unshift({ inlineData: { mimeType: file.type, data: base64 } });
     }
     
-    // FIX: Explicitly type the response to resolve property access errors.
     const response: GenerateContentResponse = await makeApiRequestWithRetry(client => 
         client.models.generateContent({
             model: 'gemini-2.5-flash-image-preview',
@@ -702,7 +681,6 @@ async function generateWithGeminiAPI(prompt: string, aspectRatio: ReferenceAsset
 }
 
 async function generateWithImagen(prompt: string, aspectRatio: ReferenceAsset['aspectRatio']) {
-    // FIX: Cast the response to the expected structure for generateImages.
     const response = await makeApiRequestWithRetry(client => 
         client.models.generateImages({
             model: 'imagen-4.0-generate-001',
@@ -730,7 +708,7 @@ export async function generateImageWithFallback(
         scene?: Scene;
         storyPlan?: StoryMasterplan;
         userData?: StoryData;
-        referenceImage?: File; // Nueva opción para imagen de referencia
+        referenceImage?: File;
     }
 ): Promise<Blob> {
     

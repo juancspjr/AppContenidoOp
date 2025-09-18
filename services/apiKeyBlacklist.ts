@@ -63,7 +63,6 @@ class PersistentAPIKeyManager {
         const statusMap = this.loadAPIStatus();
         const now = Date.now();
         
-        // FIX: Explicitly type `currentStatus` to `APIKeyStatus` to allow access to optional properties.
         const currentStatus: APIKeyStatus = statusMap.get(keyId) || {
             id: keyId,
             api_key: keyData.api_key,

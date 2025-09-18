@@ -35,9 +35,6 @@ const EvaluationPhaseView: React.FC<EvaluationPhaseViewProps> = ({ critique, isL
         );
     }
     
-    // FIX: All references to non-existent properties on the `critique` object have been replaced
-    // with the correct properties from the `Critique` type definition. The entire component
-    // structure has been updated to reflect the new data model.
     const viralPotentialColor = critique.viralPotential >= 8 ? 'text-green-400' : critique.viralPotential >= 5 ? 'text-yellow-400' : 'text-red-400';
     
     const EnrichedElement: React.FC<{ title: string; items: any[] }> = ({ title, items }) => (

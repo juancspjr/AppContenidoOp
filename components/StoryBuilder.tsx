@@ -369,6 +369,9 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ onExit, importedProject }) 
         setGenerationProgress({ plan: 'in_progress', critique: 'pending', docs: 'pending' });
         try {
             const { plan: newPlan } = await generateAdvancedStoryPlan(storyData);
+            if (!newPlan || !newPlan.metadata || !newPlan.metadata.title) {
+                throw new Error("El plan de historia generado por la IA es inválido o está incompleto. Faltan metadatos esenciales.");
+            }
             setGeneratedStoryPlan(newPlan);
             setGenerationProgress(prev => ({ ...prev, plan: 'complete', docs: 'in_progress', critique: 'in_progress' }));
 
@@ -669,7 +672,7 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ onExit, importedProject }) 
                             </optgroup>
                         ))}
                     </select>
-                     <p className="text-xs text-gray-500 mt-1">{outputFormats[Object.keys(outputFormats).find(k => outputFormats[k].some(f => f.value === storyData.format)) || 'Video (Redes Sociales)'].find(f => f.value === storyData.format)?.description}</p>
+                     <p className="text-xs text-gray-500 mt-1">{outputFormats[Object.keys(outputFormats).find(k => outputFormats[k as keyof typeof outputFormats].some(f => f.value === storyData.format)) || 'Video (Redes Sociales)'].find(f => f.value === storyData.format)?.description}</p>
                 </div>
                  <div>
                     <MultiSelectGrid
@@ -737,7 +740,7 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ onExit, importedProject }) 
                                 {char.image && <button onClick={() => updateCharacter(char.id, 'image', null)} className="w-full text-xs text-red-400 hover:underline mt-1">Quitar</button>}
                             </div>
                             {storyData.characters.length > 1 && (
-                                <button onClick={() => removeCharacter(char.id)} className="self-start text-red-400"><XCircleIcon/></button>
+                                <button onClick={() => removeCharacter(char.id)} className="self-start text-red-400"><XCircleIcon className="w-6 h-6"/></button>
                             )}
                         </div>
                     ))}

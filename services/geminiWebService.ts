@@ -31,7 +31,6 @@ class GeminiWebService {
     private nonce: string = '';
     private reqId: number = 100000;
     private lastValidation: number = 0;
-    private validationCache: boolean = false;
 
     public isInitialized(): boolean {
         return this.initialized;
@@ -57,7 +56,6 @@ class GeminiWebService {
             
             if (validation.success) {
                 this.initialized = true;
-                this.validationCache = true;
                 this.lastValidation = Date.now();
                 
                 localStorage.setItem('gemini_web_cookies', btoa(JSON.stringify({
@@ -84,6 +82,7 @@ class GeminiWebService {
     private async validateConnectionWithStrategies(): Promise<ValidationResult> {
         console.log('🔍 Validando conexión con Gemini Web (múltiples estrategias)...');
         
+        // Strategy 1: Attempt to fetch the main Gemini app page. This is the most reliable check.
         try {
             const homeValidation = await this.validateGeminiHomePage();
             if (homeValidation.success) {
@@ -91,9 +90,10 @@ class GeminiWebService {
                 return homeValidation;
             }
         } catch (error) {
-            console.warn('⚠️ Estrategia 1 falló:', error);
+            console.warn('⚠️ Estrategia 1 (Página Principal) falló:', error);
         }
         
+        // Strategy 2: Check a secondary, often less protected, endpoint.
         try {
             const apiValidation = await this.validateViaInternalAPI();
             if (apiValidation.success) {
@@ -101,30 +101,31 @@ class GeminiWebService {
                 return apiValidation;
             }
         } catch (error) {
-            console.warn('⚠️ Estrategia 2 falló:', error);
+            console.warn('⚠️ Estrategia 2 (API Interna) falló:', error);
         }
-        
+
+        // Strategy 3: Basic cookie format check as a last resort.
         try {
             const cookieValidation = await this.validateCookiesOnly();
             if (cookieValidation.success) {
-                console.log('✅ Validación exitosa: Solo cookies');
+                console.log('✅ Validación exitosa: Solo formato de cookies (fallback)');
                 return cookieValidation;
             }
-        } catch (error) {
-            console.warn('⚠️ Estrategia 3 falló:', error);
+        } catch(error) {
+            console.warn('⚠️ Estrategia 3 (Solo Cookies) falló:', error);
         }
         
+        // If all strategies fail, return a comprehensive error message.
         return {
             success: false,
-            needsCaptcha: true,
+            needsCaptcha: true, // Assume CAPTCHA or re-auth is needed
             needsReauth: true,
             message: 'La validación de la conexión con Gemini falló. Las cookies pueden haber expirado, ser incorrectas o se requiere resolver un CAPTCHA en gemini.google.com.'
         };
     }
     
     private async validateGeminiHomePage(): Promise<ValidationResult> {
-        console.log('🏠 Validando página principal de Gemini...');
-        
+        console.log('🏠 Estrategia 1: Validando página principal de Gemini...');
         try {
             const response = await stealthFetch('https://gemini.google.com/', {
                 method: 'GET',
@@ -141,50 +142,35 @@ class GeminiWebService {
             
             if (isValid.success) {
                 await this.extractNonceFromHTML(html);
-                return {
-                    success: true,
-                    needsCaptcha: false,
-                    needsReauth: false,
-                    message: 'Conexión validada correctamente via página principal',
-                    response: html
-                };
-            } else {
-                return isValid;
             }
+            return isValid;
             
         } catch (error: any) {
             throw new Error(`Error validando página principal: ${error.message}`);
         }
     }
-    
+
     private async validateViaInternalAPI(): Promise<ValidationResult> {
-        console.log('🔧 Validando vía API interna...');
-        
+        console.log('🔧 Estrategia 2: Validando vía API interna...');
         try {
             const response = await stealthFetch('https://gemini.google.com/app', {
                 method: 'GET',
-                headers: {
-                    ...this.buildHeaders(),
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Cache-Control': 'no-cache',
-                    'Pragma': 'no-cache'
-                },
+                headers: { ...this.buildHeaders(), 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' },
             });
-            
-            if (response.status === 200 || response.status === 403) {
-                const text = await response.text();
-                if (text.includes('_reqid') || text.includes('SNlM0e') || text.includes('session')) {
-                    return { success: true, needsCaptcha: false, needsReauth: false, message: 'Validación exitosa via API interna' };
-                }
+
+            if (response.status === 200) {
+                 const text = await response.text();
+                return this.checkGeminiPageValidation(text);
             }
-            throw new Error(`API interna respondió: ${response.status}`);
+            throw new Error(`API interna respondió con estado: ${response.status}`);
+
         } catch (error: any) {
-            throw new Error(`Error en API interna: ${error.message}`);
+             throw new Error(`Error en API interna: ${error.message}`);
         }
     }
     
     private async validateCookiesOnly(): Promise<ValidationResult> {
-        console.log('🍪 Validando solo cookies...');
+        console.log('🍪 Estrategia 3: Validando solo formato de cookies...');
         if (!this.cookies || !Object.keys(this.cookies).some(k => k.includes('PSID') && !k.includes('TS'))) {
             throw new Error('Cookie __Secure-1PSID (o variante) faltante');
         }
@@ -201,7 +187,7 @@ class GeminiWebService {
         if (html.includes('SNlM0e') || html.includes('_reqid') || html.includes('How can I help you')) {
             return { success: true, needsCaptcha: false, needsReauth: false, message: 'Sesión válida detectada' };
         }
-        return { success: false, needsCaptcha: true, needsReauth: false, message: 'Estado de sesión ambiguo. Puede requerir verificación manual.' };
+        return { success: false, needsCaptcha: true, needsReauth: true, message: 'Estado de sesión ambiguo. Puede requerir verificación manual en gemini.google.com.' };
     }
     
     private async extractNonceFromHTML(html: string): Promise<void> {
@@ -210,9 +196,11 @@ class GeminiWebService {
             if (nonceMatch) {
                 this.nonce = nonceMatch[1];
                 console.log('🔑 Nonce extraído exitosamente');
+            } else {
+                console.warn('⚠️ No se pudo extraer nonce de la página principal.');
             }
         } catch (error) {
-            console.warn('⚠️ No se pudo extraer nonce, continuando sin él');
+            console.warn('⚠️ Error al procesar HTML para nonce, continuando sin él');
         }
     }
     
@@ -221,17 +209,15 @@ class GeminiWebService {
             throw new Error('🚫 Servicio no inicializado. Ejecuta initialize() primero.');
         }
         
-        const timeSinceValidation = Date.now() - this.lastValidation;
-        if (timeSinceValidation > 30 * 60 * 1000) { // 30 minutos
-            console.log('🔄 Revalidando conexión después de 30 minutos...');
-            const revalidation = await this.validateConnectionWithStrategies();
-            if (!revalidation.success) {
-                throw new Error(`Revalidación falló: ${revalidation.message}`);
-            }
-            this.lastValidation = Date.now();
-        }
-        
-        throw new Error('🚧 Generación de imágenes aún no implementada. Conexión validada correctamente.');
+        // Plausible implementation - this may require future updates as the web UI changes.
+        // This is a simplified example of what the request structure might look like.
+        // The actual endpoint and parameters would need to be determined by inspecting network traffic.
+        console.log('🖼️ Iniciando generación de imagen con Gemini Web (simulación plausible)...');
+
+        // This is a placeholder implementation. A real implementation would require reverse-engineering the
+        // actual Gemini web app's API calls, which is complex and brittle.
+        // We will throw an error to indicate this is not fully implemented yet.
+        throw new Error('La generación de imágenes a través de Gemini Web es una funcionalidad avanzada que requiere una implementación de backend compleja para ser robusta y no está completamente implementada en esta simulación del lado del cliente. La conexión y validación de cookies, sin embargo, han sido exitosas.');
     }
     
     private buildHeaders(): Record<string, string> {
@@ -266,13 +252,12 @@ class GeminiWebService {
         return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
     }
     
-    public getStatus(): { initialized: boolean; sessionId?: string; hasValidCookies?: boolean; lastValidation?: number; validationCache?: boolean; } {
+    public getStatus(): { initialized: boolean; sessionId?: string; hasValidCookies?: boolean; lastValidation?: number; } {
         return {
             initialized: this.initialized,
             sessionId: this.sessionId,
             hasValidCookies: !!(this.cookies && Object.keys(this.cookies).some(k => k.includes('PSID'))),
             lastValidation: this.lastValidation,
-            validationCache: this.validationCache
         };
     }
     
@@ -284,8 +269,9 @@ class GeminiWebService {
             const data = JSON.parse(atob(saved));
             const age = Date.now() - data.timestamp;
             
+            // Re-validate if older than 2 hours
             if (age > 2 * 60 * 60 * 1000) {
-                console.log('🕒 Cookies guardadas son antiguas, validando...');
+                console.log('🕒 Cookies guardadas son antiguas, se requiere nueva validación.');
                 localStorage.removeItem('gemini_web_cookies');
                 return false;
             }
@@ -300,7 +286,6 @@ class GeminiWebService {
                 
                 if (validation.success) {
                     this.initialized = true;
-                    this.validationCache = true;
                     this.lastValidation = Date.now();
                     console.log('🔄 Cookies cargadas y validadas desde localStorage');
                     return true;
