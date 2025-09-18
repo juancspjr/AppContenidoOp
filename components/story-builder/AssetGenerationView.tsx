@@ -88,7 +88,7 @@ const AssetGenerationView: React.FC<AssetGenerationViewProps> = ({
     onGoToPhase,
 }) => {
 
-    const scenes = storyPlan?.story_structure?.narrative_arc?.flatMap(act => act.scenes) || [];
+    const scenes = storyPlan?.story_structure?.narrative_arc?.flatMap(act => act?.scenes || []).filter(Boolean) || [];
 
     if (isLoading && Object.keys(progress).length === 0) {
         return (

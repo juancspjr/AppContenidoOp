@@ -3,9 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import type { ReferenceAsset } from '@/components/story-builder/types';
-import { imageBlobCache } from './imageBlobCache';
-
 export type AssetType = 'character' | 'environment' | 'element' | 'scene_frame';
 
 export interface CanonicalAsset {
@@ -28,16 +25,12 @@ class AssetRegistry {
 
     add(asset: CanonicalAsset) {
         const exists = this.assets.find(a => a.type === asset.type && a.name.toLowerCase() === asset.name.toLowerCase());
-        if (!exists) { 
-            this.assets.push(asset); 
-            this.save(); 
-        }
+        if (!exists) { this.assets.push(asset); this.save(); }
     }
 
     upsert(asset: CanonicalAsset) {
         const idx = this.assets.findIndex(a => a.type === asset.type && a.name.toLowerCase() === asset.name.toLowerCase());
-        if (idx >= 0) this.assets[idx] = asset; 
-        else this.assets.push(asset);
+        if (idx >= 0) this.assets[idx] = asset; else this.assets.push(asset);
         this.save();
     }
 
@@ -45,30 +38,11 @@ class AssetRegistry {
         const n = name.trim().toLowerCase();
         return this.assets.find(a => a.name.toLowerCase() === n && (!type || a.type === type));
     }
-    
-    findById(id: string): CanonicalAsset | undefined {
-        return this.assets.find(a => a.id === id);
-    }
 
-    list(type?: AssetType): CanonicalAsset[] { 
-        return type ? this.assets.filter(a => a.type === type) : this.assets; 
-    }
-    
-    clear() {
-        this.assets = [];
-        localStorage.removeItem(AssetRegistry.LS_KEY);
-    }
+    list(type?: AssetType): CanonicalAsset[] { return type ? this.assets.filter(a => a.type === type) : this.assets; }
 
-    private load() { 
-        try { 
-            this.assets = JSON.parse(localStorage.getItem(AssetRegistry.LS_KEY) || '[]'); 
-        } catch { 
-            this.assets = []; 
-        } 
-    }
-    private save() { 
-        localStorage.setItem(AssetRegistry.LS_KEY, JSON.stringify(this.assets, null, 2)); 
-    }
+    private load() { try { this.assets = JSON.parse(localStorage.getItem(AssetRegistry.LS_KEY) || '[]'); } catch { this.assets = []; } }
+    private save() { localStorage.setItem(AssetRegistry.LS_KEY, JSON.stringify(this.assets)); }
 }
 
 export const assetRegistry = new AssetRegistry();

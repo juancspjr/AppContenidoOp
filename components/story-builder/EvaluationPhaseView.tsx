@@ -63,7 +63,7 @@ const EvaluationPhaseView: React.FC<EvaluationPhaseViewProps> = ({ critique, isL
                 </Section>
 
                  <Section title={critique.improvementStrategy?.title || 'Estrategia de Mejora'} icon="🚀">
-                    {(critique.improvementStrategy?.strategies || []).map((s, i) => (
+                    {(critique.improvementStrategy?.strategies || []).filter(Boolean).map((s, i) => (
                         <div key={i}>
                            <h5 className="font-semibold text-gray-200">{s.title}</h5>
                            <p className="text-gray-400">{s.description}</p>
@@ -74,7 +74,7 @@ const EvaluationPhaseView: React.FC<EvaluationPhaseViewProps> = ({ critique, isL
                  <Section title={critique.proposedSolution?.title || 'Solución Propuesta'} icon="💡">
                     <h5 className="font-semibold text-yellow-300">{critique.proposedSolution?.solutionTitle || 'Propuesta'}</h5>
                      <ul className="list-decimal list-inside ml-2 space-y-1">
-                        {(critique.proposedSolution?.episodes || []).map((ep, i) => (
+                        {(critique.proposedSolution?.episodes || []).filter(Boolean).map((ep, i) => (
                             <li key={i}><strong>{ep.title}:</strong> {ep.description}</li>
                         ))}
                     </ul>

@@ -67,7 +67,7 @@ const ProgressTracker: React.FC<{ phase: string, data: StoryData, plan: StoryMas
             <div className="border-t border-gray-700 pt-4">
                  <h3 className="text-lg font-bold text-gray-200 mb-2">📝 Tu Historia Hasta Ahora:</h3>
                  <div className="space-y-2 text-sm text-gray-400 max-h-48 overflow-y-auto pr-2">
-                    {plan?.metadata.title ? <div><strong>Título:</strong> {plan.metadata.title}</div> : data.concept && <div><strong>Concepto:</strong> {data.concept}</div>}
+                    {plan?.metadata?.title ? <div><strong>Título:</strong> {plan?.metadata?.title}</div> : data.concept && <div><strong>Concepto:</strong> {data.concept}</div>}
                     {data.format && <div><strong>Formato:</strong> {Object.values(outputFormats).flat().find(f => f.value === data.format)?.name || data.format}</div>}
                     {data.storyPDF && <div><strong>PDF:</strong> {data.storyPDF.name}</div>}
                     {data.contextImages.length > 0 && <div><strong>Imágenes Contexto:</strong> {data.contextImages.length}</div>}
@@ -303,7 +303,7 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ onExit, importedProject }) 
     const shouldAutoGenerate = phase === '6.3' && 
                                !isLoading && 
                                generatedStoryPlan &&
-                               (!referenceAssets || referenceAssets.characters.length === 0);
+                               (!referenceAssets || (referenceAssets.characters.length === 0 && referenceAssets.environments.length === 0));
     if (shouldAutoGenerate) {
         handleAutoGeneratePhase63();
     }

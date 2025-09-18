@@ -170,7 +170,7 @@ const ReferenceAssetView: React.FC<ReferenceAssetViewProps> = ({
         { label: 'Post', value: '4:5' },
     ];
 
-    const allScenes = useMemo(() => storyPlan?.story_structure.narrative_arc.flatMap(act => act.scenes) || [], [storyPlan]);
+    const allScenes = useMemo(() => storyPlan?.story_structure?.narrative_arc?.flatMap(act => act?.scenes || []).filter(Boolean) || [], [storyPlan]);
 
     if (isLoading && (!assets || (assets.characters.length === 0 && assets.environments.length === 0 && !generationProgress))) {
         return (

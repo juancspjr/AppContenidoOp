@@ -11,6 +11,18 @@ import type { StoryData, StoryMasterplan, CharacterData, ProgressUpdate, FinalAs
 import { imageBlobCache } from './imageBlobCache';
 import { assetDBService } from './assetDBService';
 import { assetRegistry } from './assetRegistry';
+import { geminiWebService } from '@/services/geminiWebService';
+
+// FIX: Add a browser-compatible way to convert ArrayBuffer to Base64, as Buffer is a Node.js API.
+const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return window.btoa(binary);
+};
 
 // In a real backend, these would be loaded from environment variables.
 const GEMINI_KEYS = Array.from({ length: 10 }, (_, i) => ({
@@ -104,7 +116,8 @@ const dataUrlToGoogleGenerativePart = (dataUrl: string): Part => {
 
 export async function refineUserPrompt(prompt: string, context: 'magic-edit' | 'filter' | 'adjustment'): Promise<string> {
     const systemInstruction = `You are an AI assistant specializing in image editing prompts. A user will provide a simple prompt and a context. Your task is to refine and expand the prompt to be more descriptive and effective for a generative AI image model. Return only the refined prompt text, nothing else. Context: ${context}`;
-    const response = await makeApiRequestWithRetry(client => 
+    // FIX: Explicitly type the response to resolve property access errors.
+    const response: GenerateContentResponse = await makeApiRequestWithRetry(client => 
         client.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
@@ -125,7 +138,8 @@ export async function generateMagicEditImage({ prompt, baseHoleDataURL, referenc
         parts.push({ text: "Use the second image as a style and content reference." });
     }
 
-    const response = await makeApiRequestWithRetry(client => 
+    // FIX: Explicitly type the response to resolve property access errors.
+    const response: GenerateContentResponse = await makeApiRequestWithRetry(client => 
         client.models.generateContent({
             model: 'gemini-2.5-flash-image-preview',
             contents: { parts },
@@ -146,11 +160,13 @@ export async function generateFilteredImage(image: File, prompt: string): Promis
      const imagePart = {
         inlineData: {
             mimeType: image.type,
-            data: Buffer.from(await image.arrayBuffer()).toString("base64"),
+            // FIX: Use browser-compatible ArrayBuffer to Base64 conversion instead of Node.js Buffer.
+            data: arrayBufferToBase64(await image.arrayBuffer()),
         },
     };
 
-    const response = await makeApiRequestWithRetry(client => 
+    // FIX: Explicitly type the response to resolve property access errors.
+    const response: GenerateContentResponse = await makeApiRequestWithRetry(client => 
         client.models.generateContent({
             model: 'gemini-2.5-flash-image-preview',
             contents: { parts: [imagePart, { text: `Apply this filter to the image: ${prompt}` }] },
@@ -172,13 +188,14 @@ export async function generatePhotoshootScene(subjectImage: File, scenePrompt: s
     const results: string[] = [];
 
     for (let i = 0; i < numImages; i++) {
+        // FIX: Cast the response to the expected structure for generateImages.
         const response = await makeApiRequestWithRetry(client => 
             client.models.generateImages({
                 model: 'imagen-4.0-generate-001',
                 prompt: `Photorealistic photoshoot. Subject is described by the first image. Scene is described by the text prompt and optional second image. Prompt: ${scenePrompt}. Shot ${i+1} of ${numImages}.`,
                 config: { numberOfImages: 1 },
             })
-        );
+        ) as { generatedImages: { image: { imageBytes: string } }[] };
         const base64ImageBytes = response.generatedImages[0].image.imageBytes;
         results.push(`data:image/png;base64,${base64ImageBytes}`);
     }
@@ -187,7 +204,8 @@ export async function generatePhotoshootScene(subjectImage: File, scenePrompt: s
 
 export async function getAIRecommendations(image: File, presets: any[], context: string): Promise<AIRecommendation[]> {
     // This is a simplified implementation for demonstration.
-    const response = await makeApiRequestWithRetry(client => 
+    // FIX: Explicitly type the response to resolve property access errors.
+    const response: GenerateContentResponse = await makeApiRequestWithRetry(client => 
         client.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: `Analyze the provided image. Based on the following presets, recommend the top 3 that would most improve the image. Context: "${context}". Presets: ${JSON.stringify(presets.map(p => p.name))}. Respond in JSON format: [{ "presetName": "...", "reason": "..." }]`,
@@ -264,7 +282,7 @@ function countUniqueProps(plan: StoryMasterplan): number {
 }
 
 function buildCharacterPromptConsistent(char: any, plan: StoryMasterplan, userData: StoryData): string {
-    const styles = plan?.metadata?.style_and_energy?.visual_styles?.join(', ') || userData.visualStyles?.join(', ') || 'cinematic 3D';
+    const styles = plan.metadata.style_and_energy?.visual_styles?.join(', ') || userData.visualStyles?.join(', ') || 'cinematic 3D';
     return [
         `High-consistency character portrait of ${char.name}`,
         `${char.description}`,
@@ -281,7 +299,7 @@ function buildCharacterPromptConsistent(char: any, plan: StoryMasterplan, userDa
 }
 
 function buildEnvironmentPrompt(envName: string, plan: StoryMasterplan, userData: StoryData): string {
-    const styles = plan?.metadata?.style_and_energy?.visual_styles?.join(', ') || userData.visualStyles?.join(', ') || 'cinematic 3D';
+    const styles = plan.metadata.style_and_energy?.visual_styles?.join(', ') || userData.visualStyles?.join(', ') || 'cinematic 3D';
     return [
         `Environment style sheet: ${envName}`,
         'Architectural cues and layout readable in a single shot',
@@ -294,7 +312,7 @@ function buildEnvironmentPrompt(envName: string, plan: StoryMasterplan, userData
 }
 
 function buildPropPrompt(propName: string, plan: StoryMasterplan, userData: StoryData): string {
-    const styles = plan?.metadata?.style_and_energy?.visual_styles?.join(', ') || userData.visualStyles?.join(', ');
+    const styles = plan.metadata.style_and_energy?.visual_styles?.join(', ') || userData.visualStyles?.join(', ');
     return [
         `Prop reference sheet: ${propName}`,
         'Orthographic 3/4 reference, readable materials and controls',
@@ -304,10 +322,181 @@ function buildPropPrompt(propName: string, plan: StoryMasterplan, userData: Stor
     ].join(', ');
 }
 
+async function generateWithGeminiFlashRefs(prompt: string, aspect: ReferenceAsset['aspectRatio'], refs: { name: string; type: string; blobId: string }[]) {
+    const parts: Part[] = [];
+
+    for (const r of refs) {
+        const b = imageBlobCache.get(r.blobId);
+        if (!b) continue;
+        const buf = new Uint8Array(await b.arrayBuffer());
+        const base64 = btoa(String.fromCharCode(...buf));
+        parts.push({ inlineData: { mimeType: 'image/png', data: base64 } });
+        parts.push({ text: `Reference: ${r.type} "${r.name}". Keep identity/style exactly.` });
+    }
+
+    parts.push({ text: `${prompt}, aspect ratio ${aspect}, vertical mobile framing` });
+    
+    // FIX: Explicitly type the response to resolve property access errors.
+    const response: GenerateContentResponse = await makeApiRequestWithRetry(client =>
+        client.models.generateContent({
+            model: 'gemini-2.5-flash-image-preview',
+            contents: { parts },
+            config: { responseModalities: [Modality.IMAGE] }
+        })
+    );
+    
+    const img = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+    if (!img?.inlineData) throw new Error('No image returned');
+    const res = await fetch(`data:${img.inlineData.mimeType};base64,${img.inlineData.data}`);
+    return res.blob();
+}
+
+function buildSceneReferencePack(scene: Scene, plan: StoryMasterplan) {
+    if (!scene) return [];
+    const text = `${scene.title || ''} ${scene.summary || ''} ${scene.visual_description || ''}`.toLowerCase();
+    const presentChars = (plan.characters || [])
+        .filter(c => c && c.name && text.includes(c.name.toLowerCase()))
+        .map(c => c.name);
+
+    const refs: { name: string; type: 'character' | 'environment'; blobId: string }[] = [];
+
+    if (presentChars.length > 0) {
+        const main = assetRegistry.findByName(presentChars[0], 'character');
+        if (main) refs.push({ name: main.name, type: 'character', blobId: main.blobId });
+    }
+    if (presentChars.length > 1) {
+        const sec = assetRegistry.findByName(presentChars[1], 'character');
+        if (sec && !refs.some(r => r.blobId === sec.blobId)) refs.push({ name: sec.name, type: 'character', blobId: sec.blobId });
+    }
+
+    const env = guessEnvironment(scene);
+    if (env) {
+        const envAsset = assetRegistry.findByName(env, 'environment');
+        if (envAsset) refs.push({ name: envAsset.name, type: 'environment', blobId: envAsset.blobId });
+    }
+    return refs.slice(0, 3);
+}
+
+export async function generateReferenceAssetsPhase63(
+    plan: StoryMasterplan,
+    userData: StoryData,
+    aspectRatio: '9:16' | '1:1' | '16:9' | '4:5',
+    onProgress?: (current: number, total: number, message: string) => void
+): Promise<Omit<GeneratedReferenceAssets, 'sceneFrames'>> {
+    const charactersToGen = plan.characters || [];
+    const totalPlanned = charactersToGen.length + countUniqueEnvironments(plan) + countUniqueProps(plan);
+    let current = 0; 
+    const step = (msg: string) => {
+        current++;
+        onProgress?.(current, totalPlanned, msg);
+    };
+
+    const characters: ReferenceAsset[] = [];
+    for (const character of charactersToGen) {
+        if (assetRegistry.findByName(character.name, 'character')) continue;
+        const userChar = userData.characters.find(c => c.name.toLowerCase() === character.name.toLowerCase());
+        step(`Generando personaje: ${character.name}`);
+        
+        const prompt = buildCharacterPromptConsistent(character, plan, userData);
+        const blob = await generateImageWithFallback(prompt, aspectRatio, {
+          referenceImage: userChar?.image || undefined
+        });
+        const id = crypto.randomUUID();
+        imageBlobCache.set(id, blob);
+
+        const originHash = userChar?.image ? await hashFile(userChar.image) : undefined;
+
+        assetRegistry.add({
+          id,
+          name: character.name,
+          type: 'character',
+          tags: ['reference','identity-lock'],
+          aspectRatio,
+          prompt,
+          blobId: id,
+          sourcePhase: 'phase6.3',
+          originHash
+        });
+
+        characters.push({
+          id,
+          name: character.name,
+          type: 'character',
+          prompt,
+          aspectRatio,
+          source: userChar?.image ? 'hybrid' : 'generated'
+        });
+    }
+
+    const environments: ReferenceAsset[] = [];
+    for (const envName of extractUniqueEnvironments(plan)) {
+        if (assetRegistry.findByName(envName, 'environment')) continue;
+        step(`Generando ambiente: ${envName}`);
+        const envPrompt = buildEnvironmentPrompt(envName, plan, userData);
+        const blob = await generateImageWithFallback(envPrompt, aspectRatio);
+        const id = crypto.randomUUID();
+        imageBlobCache.set(id, blob);
+
+        assetRegistry.add({
+          id,
+          name: envName,
+          type: 'environment',
+          tags: ['location','reference','style-sheet'],
+          aspectRatio,
+          prompt: envPrompt,
+          blobId: id,
+          sourcePhase: 'phase6.3'
+        });
+
+        environments.push({
+          id,
+          name: envName,
+          type: 'environment',
+          prompt: envPrompt,
+          aspectRatio,
+          source: 'generated'
+        });
+    }
+
+    const elements: ReferenceAsset[] = [];
+    for (const propName of extractUniqueProps(plan)) {
+        if (assetRegistry.findByName(propName, 'element')) continue;
+        step(`Generando elemento clave: ${propName}`);
+        const propPrompt = buildPropPrompt(propName, plan, userData);
+        const blob = await generateImageWithFallback(propPrompt, aspectRatio);
+        const id = crypto.randomUUID();
+        imageBlobCache.set(id, blob);
+
+        assetRegistry.add({
+          id,
+          name: propName,
+          type: 'element',
+          tags: ['prop','reference','sheet'],
+          aspectRatio,
+          prompt: propPrompt,
+          blobId: id,
+          sourcePhase: 'phase6.3'
+        } as any);
+
+        elements.push({
+          id,
+          name: propName,
+          type: 'element',
+          prompt: propPrompt,
+          aspectRatio,
+          source: 'generated'
+        });
+    }
+
+    return { characters, environments, elements };
+}
+
+
 // --- Story Builder Functions (Simplified Stubs) ---
 
 export async function generateAdvancedStoryPlan(storyData: StoryData): Promise<{ plan: StoryMasterplan }> {
-    const response = await makeApiRequestWithRetry(client => 
+    // FIX: Explicitly type the response to resolve property access errors.
+    const response: GenerateContentResponse = await makeApiRequestWithRetry(client => 
         client.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: `Create a detailed story masterplan in JSON format based on this data: ${JSON.stringify(storyData)}. The JSON must match the StoryMasterplan interface structure.`,
@@ -340,7 +529,8 @@ export async function generateCritique(plan: StoryMasterplan, storyData: StoryDa
 
 export async function regenerateStoryPlanWithCritique(plan: StoryMasterplan, critique: Critique, onProgress: (phase: string, message: string) => void): Promise<StoryMasterplan> {
     onProgress('start', 'Regenerating plan...');
-    const response = await makeApiRequestWithRetry(client => 
+    // FIX: Explicitly type the response to resolve property access errors.
+    const response: GenerateContentResponse = await makeApiRequestWithRetry(client => 
         client.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: `Regenerate this story plan: ${JSON.stringify(plan)} by applying these critiques: ${JSON.stringify(critique)}. Output valid JSON.`,
@@ -349,122 +539,6 @@ export async function regenerateStoryPlanWithCritique(plan: StoryMasterplan, cri
     );
     onProgress('complete', 'Plan regenerated.');
     return JSON.parse(response.text);
-}
-
-export async function generateReferenceAssetsPhase63(
-    plan: StoryMasterplan,
-    userData: StoryData,
-    aspectRatio: '9:16' | '1:1' | '16:9' | '4:5',
-    onProgress?: (current: number, total: number, message: string) => void
-): Promise<Omit<GeneratedReferenceAssets, 'sceneFrames'>> {
-
-    const totalPlanned = plan.characters.length + countUniqueEnvironments(plan) + countUniqueProps(plan);
-    let current = 0; const step = (msg: string) => onProgress?.(++current, totalPlanned, msg);
-
-    // 1) Personajes – 1 por personaje usando referencia de FASE 3 si existe
-    const characters: ReferenceAsset[] = [];
-    for (const character of plan.characters) {
-        if (assetRegistry.findByName(character.name, 'character')) continue;
-        const userChar = userData.characters.find(c => c.name.toLowerCase() === character.name.toLowerCase());
-        step(`Generando personaje: ${character.name}`);
-        
-        const prompt = buildCharacterPromptConsistent(character, plan, userData);
-        const blob = await generateImageWithFallback(prompt, aspectRatio, {
-          referenceImage: userChar?.image || undefined // usa FASE 3 si hay
-        });
-        const id = crypto.randomUUID();
-        imageBlobCache.set(id, blob);
-
-        // opcional: hash de imagen de FASE 3 para trazabilidad
-        const originHash = userChar?.image ? await hashFile(userChar.image) : undefined;
-
-        assetRegistry.add({
-          id,
-          name: character.name,
-          type: 'character',
-          tags: ['reference','identity-lock'],
-          aspectRatio,
-          prompt,
-          blobId: id,
-          sourcePhase: 'phase6.3',
-          originHash
-        });
-
-        characters.push({
-          id,
-          name: character.name,
-          type: 'character',
-          prompt,
-          aspectRatio,
-          source: userChar?.image ? 'hybrid' : 'generated'
-        });
-    }
-
-    // 2) Ambientes únicos – 1 por cada lugar detectado en escenas
-    const environments: ReferenceAsset[] = [];
-    for (const envName of extractUniqueEnvironments(plan)) {
-        if (assetRegistry.findByName(envName, 'environment')) continue;
-        step(`Generando ambiente: ${envName}`);
-
-        const envPrompt = buildEnvironmentPrompt(envName, plan, userData);
-        const blob = await generateImageWithFallback(envPrompt, aspectRatio);
-        const id = crypto.randomUUID();
-        imageBlobCache.set(id, blob);
-
-        assetRegistry.add({
-          id,
-          name: envName,
-          type: 'environment',
-          tags: ['location','reference','style-sheet'],
-          aspectRatio,
-          prompt: envPrompt,
-          blobId: id,
-          sourcePhase: 'phase6.3'
-        });
-
-        environments.push({
-          id,
-          name: envName,
-          type: 'environment',
-          prompt: envPrompt,
-          aspectRatio,
-          source: 'generated'
-        });
-    }
-
-    // 3) Props/Elementos clave – 1 por elemento
-    const elements: ReferenceAsset[] = [];
-    for (const propName of extractUniqueProps(plan)) {
-        if (assetRegistry.findByName(propName, 'element')) continue;
-        step(`Generando elemento clave: ${propName}`);
-
-        const propPrompt = buildPropPrompt(propName, plan, userData);
-        const blob = await generateImageWithFallback(propPrompt, aspectRatio);
-        const id = crypto.randomUUID();
-        imageBlobCache.set(id, blob);
-
-        assetRegistry.add({
-          id,
-          name: propName,
-          type: 'element',
-          tags: ['prop','reference','sheet'],
-          aspectRatio,
-          prompt: propPrompt,
-          blobId: id,
-          sourcePhase: 'phase6.3'
-        } as any); // cast because of type difference
-
-        elements.push({
-          id,
-          name: propName,
-          type: 'element',
-          prompt: propPrompt,
-          aspectRatio,
-          source: 'generated'
-        });
-    }
-
-    return { characters, environments, elements };
 }
 
 export async function runFinalVideoGenerationPipeline(plan: StoryMasterplan, assets: GeneratedReferenceAssets, guide: string, onProgress: (update: ProgressUpdate) => void): Promise<FinalAssets> {
@@ -553,65 +627,6 @@ export function resetSpecificAPI(projectName: string) {
 }
 
 
-// --- Scene Generation with References ---
-
-function buildSceneReferencePack(scene: Scene, plan: StoryMasterplan) {
-    if (!scene) return [];
-    const text = `${scene.title || ''} ${scene.summary || ''} ${scene.visual_description || ''}`.toLowerCase();
-    const presentChars = (plan.characters || [])
-        .filter(c => c && c.name && text.includes(c.name.toLowerCase()))
-        .map(c => c.name);
-
-    const refs: { name: string; type: 'character' | 'environment'; blobId: string }[] = [];
-
-    if (presentChars.length > 0) {
-        const main = assetRegistry.findByName(presentChars[0], 'character');
-        if (main) refs.push({ name: main.name, type: 'character', blobId: main.blobId });
-    }
-    if (presentChars.length > 1) {
-        const sec = assetRegistry.findByName(presentChars[1], 'character');
-        if (sec && !refs.some(r => r.blobId === sec.blobId)) refs.push({ name: sec.name, type: 'character', blobId: sec.blobId });
-    }
-
-    const env = guessEnvironment(scene);
-    if (env) {
-        const envAsset = assetRegistry.findByName(env, 'environment');
-        if (envAsset) refs.push({ name: envAsset.name, type: 'environment', blobId: envAsset.blobId });
-    }
-    return refs.slice(0, 3);
-}
-
-
-async function generateWithGeminiFlashRefs(prompt: string, aspect: ReferenceAsset['aspectRatio'], refs: { name: string; type: string; blobId: string }[]) {
-    const parts: Part[] = [];
-
-    for (const r of refs) {
-        const b = imageBlobCache.get(r.blobId);
-        if (!b) continue;
-        const buf = new Uint8Array(await b.arrayBuffer());
-        const base64 = btoa(String.fromCharCode(...buf));
-        parts.push({ inlineData: { mimeType: 'image/png', data: base64 } });
-        parts.push({ text: `Reference: ${r.type} "${r.name}". Keep identity/style exactly.` });
-    }
-
-    parts.push({ text: `${prompt}, aspect ratio ${aspect}, vertical mobile framing` });
-    
-    const response = await makeApiRequestWithRetry(client => 
-        client.models.generateContent({
-            model: 'gemini-2.5-flash-image-preview',
-            contents: { parts },
-            config: { responseModalities: [Modality.IMAGE] }
-        })
-    );
-    
-    const img = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-    if (!img?.inlineData) throw new Error('No image returned from reference generation.');
-    
-    const res = await fetch(`data:${img.inlineData.mimeType};base64,${img.inlineData.data}`);
-    return res.blob();
-}
-
-
 export async function generateHybridNeuralSceneFrame(
     plan: StoryMasterplan, 
     scene: Scene, 
@@ -642,56 +657,118 @@ export async function generateHybridNeuralSceneFrame(
     return newFrame;
 }
 
+
+async function generateWithGeminiAPI(prompt: string, aspectRatio: ReferenceAsset['aspectRatio'], options?: { referenceImage?: File; }) {
+    const parts: Part[] = [{ text: prompt }];
+    if (options?.referenceImage) {
+        const file = options.referenceImage;
+        // FIX: Use browser-compatible ArrayBuffer to Base64 conversion instead of Node.js Buffer.
+        const base64 = arrayBufferToBase64(await file.arrayBuffer());
+        parts.unshift({ inlineData: { mimeType: file.type, data: base64 } });
+    }
+    
+    // FIX: Explicitly type the response to resolve property access errors.
+    const response: GenerateContentResponse = await makeApiRequestWithRetry(client => 
+        client.models.generateContent({
+            model: 'gemini-2.5-flash-image-preview',
+            contents: { parts },
+            config: { responseModalities: [Modality.IMAGE] }
+        })
+    );
+    const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+    if (!imagePart?.inlineData) {
+        throw new Error("No se encontró data de imagen en la respuesta de Gemini API");
+    }
+    const res = await fetch(`data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`);
+    return res.blob();
+}
+
+async function generateWithImagen(prompt: string, aspectRatio: ReferenceAsset['aspectRatio']) {
+    // FIX: Cast the response to the expected structure for generateImages.
+    const response = await makeApiRequestWithRetry(client => 
+        client.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt,
+            config: { 
+                numberOfImages: 1, 
+                outputMimeType: 'image/png', 
+                aspectRatio: aspectRatio === '4:5' ? '3:4' : aspectRatio 
+            },
+        })
+    ) as { generatedImages: { image: { imageBytes: string } }[] };
+    if (!response.generatedImages?.[0]?.image?.imageBytes) {
+        throw new Error(`Fallback a Imagen-4.0 falló para prompt: "${prompt.substring(0, 100)}..."`);
+    }
+    
+    const res = await fetch(`data:image/png;base64,${response.generatedImages[0].image.imageBytes}`);
+    return res.blob();
+}
+
 export async function generateImageWithFallback(
     prompt: string, 
     aspectRatio: ReferenceAsset['aspectRatio'],
     options?: {
-        referenceImage?: File;
+        referenceAssets?: GeneratedReferenceAssets;
+        scene?: Scene;
+        storyPlan?: StoryMasterplan;
+        userData?: StoryData;
+        referenceImage?: File; // Nueva opción para imagen de referencia
     }
 ): Promise<Blob> {
-     try {
-        const parts: Part[] = [{ text: prompt }];
-        if (options?.referenceImage) {
-            const file = options.referenceImage;
-            const base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
-            parts.unshift({ inlineData: { mimeType: file.type, data: base64 }});
-        }
+    
+    const { referenceImage } = options || {};
+    
+    // AÑADIR ESPECIFICACIONES DE ASPECT RATIO
+    const aspectPrompt = aspectRatio === '9:16' 
+        ? 'vertical 9:16 aspect ratio, mobile composition, portrait orientation' 
+        : `${aspectRatio} aspect ratio`;
         
+    const enhancedPrompt = `${prompt}, ${aspectPrompt}, high quality, professional rendering, sharp focus, detailed`;
+    
+    try {
+        // INTENTAR API OFICIAL PRIMERO
         console.log("%c🟢 PRIMARIO: Gemini API Oficial", "color: lightgreen; font-weight: bold;");
-        const response = await makeApiRequestWithRetry(client => 
-            client.models.generateContent({
-                model: 'gemini-2.5-flash-image-preview',
-                contents: { parts },
-                config: { responseModalities: [Modality.IMAGE] }
-            })
-        );
-        const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-        if (!imagePart?.inlineData) {
-            throw new Error("No se encontró data de imagen en la respuesta de Gemini API");
-        }
-        const res = await fetch(`data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`);
-        return res.blob();
+        return await generateWithGeminiAPI(enhancedPrompt, aspectRatio, options);
+        
     } catch (apiError: any) {
         console.warn(`%c🟡 API FALLÓ: ${apiError.message}`, "color: orange; font-weight: bold;");
         
-        console.log("%c🔶 FALLBACK FINAL: Imagen-4.0", "color: orange; font-weight: bold;");
-        
-        const response = await makeApiRequestWithRetry(client => 
-            client.models.generateImages({
-                model: 'imagen-4.0-generate-001',
-                prompt,
-                config: { 
-                    numberOfImages: 1, 
-                    outputMimeType: 'image/png', 
-                    aspectRatio: aspectRatio === '4:5' ? '3:4' : aspectRatio 
-                },
-            })
-        );
-        if (!response.generatedImages?.[0]?.image?.imageBytes) {
-            throw new Error(`Fallback a Imagen-4.0 falló para prompt: "${prompt.substring(0, 100)}..."`);
+        // FALLBACK 1: GEMINI WEB (SI ESTÁ INICIALIZADO)
+        if (geminiWebService.isInitialized()) {
+            try {
+                console.log("%c🌐 FALLBACK GEMINI WEB: Generación ilimitada activa", "color: cyan; font-weight: bold;");
+                
+                let referenceBase64: string | undefined;
+                
+                // CONVERTIR IMAGEN DE REFERENCIA A BASE64 SI EXISTE
+                if (referenceImage) {
+                    referenceBase64 = await new Promise<string>((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                            const result = reader.result as string;
+                            const base64 = result.split(',')[1]; // Remover prefijo data:image/...;base64,
+                            resolve(base64);
+                        };
+                        reader.onerror = reject;
+                        reader.readAsDataURL(referenceImage);
+                    });
+                }
+                
+                // GENERAR IMAGEN CON GEMINI WEB
+                const image = await geminiWebService.generateImage(enhancedPrompt, referenceBase64);
+                
+                console.log("%c✅ ÉXITO: Imagen generada con Gemini Web", "color: cyan; font-weight: bold;");
+                return image;
+                
+            } catch (webError: any) {
+                console.warn(`%c🟡 GEMINI WEB FALLÓ: ${webError.message}`, "color: orange; font-weight: bold;");
+            }
+        } else {
+            console.warn("%c⚠️ GEMINI WEB NO CONECTADO - Usa el botón de conexión", "color: orange; font-weight: bold;");
         }
         
-        const res = await fetch(`data:image/png;base64,${response.generatedImages[0].image.imageBytes}`);
-        return res.blob();
+        // FALLBACK 2: IMAGEN-4.0 (ORIGINAL)
+        console.log("%c🔶 FALLBACK FINAL: Imagen-4.0", "color: orange; font-weight: bold;");
+        return await generateWithImagen(enhancedPrompt, aspectRatio);
     }
 }
