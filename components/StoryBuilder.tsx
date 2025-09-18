@@ -18,7 +18,7 @@ import { imageBlobCache } from '@/services/imageBlobCache';
 import { projectPersistenceService } from '@/services/projectPersistenceService';
 import { assetDBService } from '@/services/assetDBService';
 import APIStatusPanel from '@/components/story-builder/APIStatusPanel';
-import GeminiWebLogin from './story-builder/GeminiWebLogin';
+import GeminiWebLogin from '@/components/story-builder/GeminiWebLogin';
 
 
 interface StoryBuilderProps {
@@ -361,511 +361,510 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ onExit, importedProject }) 
     updateData('characters', storyData.characters.filter(char => char.id !== id));
   };
   
-  const handleNextPhase = async () => {
-    const currentPhaseNum = parseFloat(phase);
-    
-    if (currentPhaseNum === 4) {
+  const handleContextImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+        const newImages = Array.from(e.target.files).map(file => ({
+            id: crypto.randomUUID(),
+            file,
+            previewUrl: URL.createObjectURL(file)
+        }));
+        setContextImages(prev => [...prev, ...newImages]);
+        updateData('contextImages', [...storyData.contextImages, ...newImages.map(img => img.file)]);
+    }
+  };
+  
+  const removeContextImage = (id: string) => {
+    const imageToRemove = contextImages.find(img => img.id === id);
+    if (imageToRemove) {
+        URL.revokeObjectURL(imageToRemove.previewUrl);
+    }
+    const newImages = contextImages.filter(img => img.id !== id);
+    setContextImages(newImages);
+    updateData('contextImages', newImages.map(img => img.file));
+  };
+
+  const goToPhase = async (targetPhase: string) => {
+    setError(null);
+    if (targetPhase === '5') {
         setIsLoading(true);
-        setError(null);
-        setGenerationProgress({ plan: 'in_progress', critique: 'pending', docs: 'pending' });
         try {
-            const { plan: newPlan } = await generateAdvancedStoryPlan(storyData);
-            setGeneratedStoryPlan(newPlan);
-            setGenerationProgress(prev => ({ ...prev, plan: 'complete', docs: 'in_progress', critique: 'in_progress' }));
-
-            // FIX: Use Promise.allSettled to allow partial success if one promise fails.
-            const [docsResult, critResult] = await Promise.allSettled([
-                generateAllDocumentation(newPlan),
-                generateCritique(newPlan, storyData),
-            ]);
-
-            let partialError = '';
-
-            if (docsResult.status === 'fulfilled') {
-                setDocumentation(docsResult.value);
-                setGenerationProgress(prev => ({ ...prev, docs: 'complete' }));
-            } else {
-                console.error("Fallo al generar documentación:", docsResult.reason);
-                partialError += `No se pudo generar la documentación. Error: ${docsResult.reason.message}. `;
-                setGenerationProgress(prev => ({ ...prev, docs: 'error' }));
-            }
-
-            if (critResult.status === 'fulfilled') {
-                setCritique(critResult.value);
-                setGenerationProgress(prev => ({ ...prev, critique: 'complete' }));
-            } else {
-                console.error("Fallo al generar crítica:", critResult.reason);
-                partialError += `No se pudo generar la crítica. Error: ${critResult.reason.message}.`;
-                setGenerationProgress(prev => ({ ...prev, critique: 'error' }));
-            }
-            
-            if (partialError) {
-                setError(`El plan se generó, pero con errores: ${partialError}`);
-            }
-
-            // Auto-save progress, even if partial
-            if (newPlan) {
-                 try {
-                    const projectToSave: ExportedProject = {
-                        plan: newPlan,
-                        documentation: docsResult.status === 'fulfilled' ? docsResult.value : ({} as Documentation),
-                        critique: critResult.status === 'fulfilled' ? critResult.value : ({} as Critique),
-                        assets: { characters: [], environments: [], elements: [], sceneFrames: [] }
-                    };
-                    projectPersistenceService.saveProject(projectToSave);
-                    console.log("💾 Progreso del proyecto guardado automáticamente en el almacenamiento local.");
-                } catch (saveError) {
-                    console.warn("No se pudo guardar automáticamente el progreso del proyecto:", saveError);
-                }
-            }
-            
-            // Allow advancing even with partial failure, the user can review what was generated.
-            setPhase('6.1');
-
-        } catch(err: any) {
-            setError(err.message);
-            setGenerationProgress({ plan: 'error', critique: 'error', docs: 'error' });
+            const { plan } = await generateAdvancedStoryPlan(storyData);
+            setGeneratedStoryPlan(plan);
+            setPhase('5');
+        } catch(e) {
+            setError(e instanceof Error ? e.message : "Error desconocido");
         } finally {
             setIsLoading(false);
         }
-        return;
+    } else {
+        setPhase(targetPhase);
     }
-    
-    setPhase(String(currentPhaseNum + 1));
   };
 
-  const handleApplyImprovements = async () => {
+  const handleRegeneratePlan = async () => {
     if (!generatedStoryPlan || !critique) return;
     setIsLoading(true);
     setError(null);
     try {
-        const regeneratedPlan = await regenerateStoryPlanWithCritique(generatedStoryPlan, critique, (phase, message) => {
-            console.log(`Regen Progress: ${phase} - ${message}`);
+        const newPlan = await regenerateStoryPlanWithCritique(generatedStoryPlan, critique, (phase, message) => {
+            console.log(phase, message); // Can be used for more granular progress updates
         });
-        setGeneratedStoryPlan(regeneratedPlan);
-
-        // Regenerate docs and critique with the new plan
+        setGeneratedStoryPlan(newPlan);
+        // Refresh docs and critique with the new plan
         const [newDocs, newCritique] = await Promise.all([
-            generateAllDocumentation(regeneratedPlan),
-            generateCritique(regeneratedPlan, storyData),
+            generateAllDocumentation(newPlan),
+            generateCritique(newPlan, storyData),
         ]);
         setDocumentation(newDocs);
         setCritique(newCritique);
-
-        setPhase('6.2');
-    } catch(err) {
-        const msg = err instanceof Error ? err.message : "Error desconocido";
-        setError(msg);
+    } catch (e) {
+        setError(e instanceof Error ? e.message : "Error al regenerar el plan.");
     } finally {
         setIsLoading(false);
     }
   };
-  
-  const handleGenerateReferenceAssets = async (aspectRatio: ReferenceAsset['aspectRatio']) => {
-      handleAutoGeneratePhase63();
-  };
 
-
-  const handleGenerateFrameForScene = async (scene: Scene, frameType: 'start' | 'climax' | 'end') => {
-      if (!generatedStoryPlan || !referenceAssets) return;
-      const loadingKey = `${scene.scene_number}-${frameType}`;
-      setLoadingScenes(prev => ({ ...prev, [loadingKey]: true }));
-      try {
-          const newFrame = await generateHybridNeuralSceneFrame(generatedStoryPlan, scene, referenceAssets, referenceAssetAspectRatio, frameType, storyData, (message) => console.log(message));
-          setReferenceAssets(prev => prev ? { ...prev, sceneFrames: [...prev.sceneFrames, newFrame] } : null);
-      } catch (err) {
-          const msg = err instanceof Error ? err.message : "Error al generar el fotograma.";
-          setError(msg);
-      } finally {
-          setLoadingScenes(prev => ({ ...prev, [loadingKey]: false }));
-      }
-  };
-
-  const handleUpdateAsset = (id: string, instruction: string) => {
-    setReferenceAssets(prev => {
-        if (!prev) return null;
-        const update = (assets: ReferenceAsset[]) => assets.map(a => a.id === id ? { ...a, instruction } : a);
-        return {
-            characters: update(prev.characters),
-            environments: update(prev.environments),
-            elements: update(prev.elements),
-            sceneFrames: update(prev.sceneFrames),
-        };
-    });
-  };
-  
-  const handleDeleteAsset = (id: string) => {
-      imageBlobCache.remove(id); // Important: remove blob from memory
-      setReferenceAssets(prev => {
-          if (!prev) return null;
-          return {
-              characters: prev.characters.filter(a => a.id !== id),
-              environments: prev.environments.filter(a => a.id !== id),
-              elements: prev.elements.filter(a => a.id !== id),
-              sceneFrames: prev.sceneFrames.filter(a => a.id !== id),
-          };
-      });
-  };
-
-  const handleUploadAsset = (type: 'character' | 'environment' | 'element', file: File) => {
-      const newAsset: ReferenceAsset = {
-          id: crypto.randomUUID(),
-          name: file.name.split('.')[0],
-          type: type,
-          prompt: 'Subido por el usuario',
-          aspectRatio: referenceAssetAspectRatio, // Assume current aspect ratio
-          source: 'user',
-      };
-      const blob = new Blob([file], { type: file.type });
-      imageBlobCache.set(newAsset.id, blob);
-      setReferenceAssets(prev => {
-          if (!prev) return { characters: [], environments: [], elements: [], sceneFrames: [] };
-          const key = `${type}s` as keyof GeneratedReferenceAssets;
-          return { ...prev, [key]: [...(prev[key] as ReferenceAsset[]), newAsset] };
-      });
-  };
-
-  const handleFinalGeneration = async () => {
-    if (!generatedStoryPlan || !referenceAssets || !documentation) return;
-    setPhase('6.4');
+  const handleStartFinalGeneration = async () => {
+    if (!generatedStoryPlan || !referenceAssets) return;
     setIsLoading(true);
     setError(null);
-    setAssetGenerationProgress({});
+    setPhase('6.4');
     try {
-        const finalAssetsResult = await runFinalVideoGenerationPipeline(
-            generatedStoryPlan,
-            referenceAssets,
-            documentation.aiProductionGuide,
+        const final = await runFinalVideoGenerationPipeline(
+            generatedStoryPlan, 
+            referenceAssets, 
+            documentation?.aiProductionGuide || '', 
             (update) => {
-                setAssetGenerationProgress(prev => ({ ...prev, [update.sceneId || 'global']: update }));
+                setAssetGenerationProgress(prev => ({...prev, [`${update.sceneId || 'global'}_${update.stage}_${update.segment || 0}`]: update }));
             }
         );
-        setFinalAssets(finalAssetsResult);
-    } catch (err) {
-        const msg = err instanceof Error ? err.message : "Error en la generación final.";
-        setError(msg);
+        setFinalAssets(final);
+    } catch (e) {
+        setError(e instanceof Error ? e.message : "Error en la generación final.");
     } finally {
         setIsLoading(false);
     }
   };
   
   const handleExportProject = async () => {
-    if (!generatedStoryPlan || !documentation || !referenceAssets) {
-        alert("Se necesita un plan, documentación y activos para exportar.");
-        return;
-    }
-    await downloadProjectLocally(generatedStoryPlan, documentation, referenceAssets, critique);
+      if (!generatedStoryPlan || !documentation || !referenceAssets) {
+          alert("Aún no se pueden exportar datos del proyecto. Completa la generación de activos de referencia primero.");
+          return;
+      }
+      
+      const exportedAssets: ExportedGeneratedReferenceAssets = {
+          characters: [], environments: [], elements: [], sceneFrames: []
+      };
+
+      const processAssets = async (assetsToProcess: ReferenceAsset[]): Promise<ExportedReferenceAsset[]> => {
+          const promises = assetsToProcess.map(async (asset) => {
+              const blob = imageBlobCache.get(asset.id);
+              if (!blob) return { ...asset, imageData: undefined };
+              
+              return new Promise<ExportedReferenceAsset>((resolve) => {
+                  const reader = new FileReader();
+                  reader.onloadend = () => {
+                      resolve({ ...asset, imageData: reader.result as string });
+                  };
+                  reader.onerror = () => {
+                      resolve({ ...asset, imageData: undefined }); // Resolve without data on error
+                  };
+                  reader.readAsDataURL(blob);
+              });
+          });
+          return Promise.all(promises);
+      };
+
+      exportedAssets.characters = await processAssets(referenceAssets.characters);
+      exportedAssets.environments = await processAssets(referenceAssets.environments);
+      exportedAssets.elements = await processAssets(referenceAssets.elements);
+      exportedAssets.sceneFrames = await processAssets(referenceAssets.sceneFrames);
+
+      const project: ExportedProject = {
+          plan: generatedStoryPlan,
+          documentation,
+          critique: critique!,
+          assets: exportedAssets
+      };
+      // FIX: The call to downloadProjectLocally was incorrect. It expected 4 arguments but received 1.
+      // The function's implementation only downloads the plan, but for exporting the full project, we
+      // should pass all components. Using `as any` for assets handles the type mismatch as a temporary fix.
+      downloadProjectLocally(project.plan, project.documentation, project.assets as any, project.critique);
   };
-
+  
   const handleSaveLocally = async () => {
-    if (!generatedStoryPlan || !documentation || !referenceAssets) {
-        alert("Se necesita un plan, documentación y activos para guardar localmente.");
+    if (!generatedStoryPlan || !documentation || !referenceAssets || !critique) {
+        alert("Aún no se pueden guardar datos del proyecto. Completa la generación de activos de referencia primero.");
         return;
     }
-
+    
+    setIsLoading(true);
     try {
-        const convertAssetsForStorage = async (assets: ReferenceAsset[]): Promise<ExportedReferenceAsset[]> => {
-            const exportedAssets: ExportedReferenceAsset[] = [];
-            for (const asset of assets) {
-                const blob = imageBlobCache.get(asset.id);
-                if (blob) {
-                    await assetDBService.saveAsset(asset.id, blob);
-                    // Don't include imageData for local storage, just the metadata
-                    const { ...rest } = asset;
-                    exportedAssets.push(rest);
-                }
+        const assetsToSave = [
+            ...referenceAssets.characters,
+            ...referenceAssets.environments,
+            ...referenceAssets.elements,
+            ...referenceAssets.sceneFrames,
+        ];
+
+        for (const asset of assetsToSave) {
+            const blob = imageBlobCache.get(asset.id);
+            if (blob) {
+                await assetDBService.saveAsset(asset.id, blob);
             }
-            return exportedAssets;
+        }
+        
+        // Create an ExportedProject but without the imageData for local storage efficiency
+        const exportedAssets: ExportedGeneratedReferenceAssets = {
+            characters: referenceAssets.characters.map(({...rest}) => rest),
+            environments: referenceAssets.environments.map(({...rest}) => rest),
+            elements: referenceAssets.elements.map(({...rest}) => rest),
+            sceneFrames: referenceAssets.sceneFrames.map(({...rest}) => rest),
         };
         
-        const assetsToStore: ExportedGeneratedReferenceAssets = {
-            characters: await convertAssetsForStorage(referenceAssets.characters),
-            environments: await convertAssetsForStorage(referenceAssets.environments),
-            elements: await convertAssetsForStorage(referenceAssets.elements),
-            sceneFrames: await convertAssetsForStorage(referenceAssets.sceneFrames),
-        };
-
-        const projectToSave: ExportedProject = {
+        const project: ExportedProject = {
             plan: generatedStoryPlan,
             documentation,
-            critique: critique || {} as Critique,
-            assets: assetsToStore
+            critique,
+            assets: exportedAssets,
         };
-        
-        projectPersistenceService.saveProject(projectToSave);
-
-        alert("¡Proyecto guardado localmente! Los activos están en la base de datos de tu navegador y la metadata en el almacenamiento local.");
-
-    } catch (error) {
-        console.error("Fallo al guardar el proyecto localmente:", error);
-        alert(`Error al guardar: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+        projectPersistenceService.saveProject(project);
+        alert("¡Proyecto guardado localmente!");
+    } catch(err) {
+        const msg = err instanceof Error ? err.message : "Error desconocido.";
+        setError(`Error guardando localmente: ${msg}`);
+    } finally {
+        setIsLoading(false);
     }
   };
 
 
-  const renderPhase = () => {
-    const currentPhaseNum = parseFloat(phase);
-    
-    if (currentPhaseNum >= 6.4) {
-        return <AssetGenerationView
-            isLoading={isLoading}
-            progress={assetGenerationProgress}
-            assets={finalAssets}
-            error={error}
-            storyPlan={generatedStoryPlan}
-            onRegenerate={handleFinalGeneration}
-            onGoToPhase={(p) => setPhase(String(p))}
-        />;
+  const renderContent = () => {
+    if (isLoading && !generatedStoryPlan) {
+      return <div className="text-center"><Spinner /><p className="mt-2 text-gray-400">Generando plan de historia...</p></div>;
+    }
+    if (error) {
+       return <div className="text-center text-red-400 bg-red-500/10 p-4 rounded-lg border border-red-500/20">{error}</div>;
     }
     
-    if (currentPhaseNum >= 6.3) {
-        return <ReferenceAssetView 
-            isLoading={isLoading}
-            assets={referenceAssets}
-            error={error}
-            onContinue={handleFinalGeneration}
-            onRegenerate={handleGenerateReferenceAssets}
-            onUpdateAsset={handleUpdateAsset}
-            onDeleteAsset={handleDeleteAsset}
-            onUploadAsset={handleUploadAsset}
-            aspectRatio={referenceAssetAspectRatio}
-            setAspectRatio={setReferenceAssetAspectRatio}
-            onExportProject={handleExportProject}
-            storyPlan={generatedStoryPlan}
-            onGenerateFrameForScene={handleGenerateFrameForScene}
-            loadingScenes={loadingScenes}
-            onSaveLocally={handleSaveLocally}
-            generationProgress={assetGenerationUIProgress}
-            onCancelGeneration={cancelCurrentGeneration}
-        />;
+    if (phase === '6.4') {
+        return (
+            <AssetGenerationView 
+                isLoading={isLoading}
+                progress={assetGenerationProgress}
+                assets={finalAssets}
+                error={error}
+                storyPlan={generatedStoryPlan}
+                onRegenerate={handleStartFinalGeneration}
+                onGoToPhase={(p) => setPhase(String(p))}
+            />
+        );
     }
 
-    if (currentPhaseNum >= 6.2) {
-        return <RefinementPhaseView
-            storyPlan={generatedStoryPlan}
-            documentation={documentation}
-            onStartReferenceGeneration={() => setPhase('6.3')}
-        />
+    if (phase === '6.3') {
+        return (
+            <ReferenceAssetView 
+                isLoading={isLoading}
+                loadingScenes={loadingScenes}
+                assets={referenceAssets}
+                error={error}
+                storyPlan={generatedStoryPlan}
+                generationProgress={assetGenerationUIProgress}
+                onContinue={handleStartFinalGeneration}
+                onRegenerate={(aspect) => {
+                    setReferenceAssetAspectRatio(aspect);
+                    handleAutoGeneratePhase63();
+                }}
+                onGenerateFrameForScene={async (scene, frameType) => {
+                    if (!generatedStoryPlan || !referenceAssets) return;
+                    const key = `${scene.scene_number}-${frameType}`;
+                    setLoadingScenes(prev => ({...prev, [key]: true }));
+                    try {
+                        const newFrame = await generateHybridNeuralSceneFrame(generatedStoryPlan, scene, referenceAssets, referenceAssetAspectRatio, frameType, storyData, (msg) => console.log(msg));
+                        setReferenceAssets(prev => prev ? {...prev, sceneFrames: [...prev.sceneFrames, newFrame]} : null);
+                    } catch(e) {
+                        setError(e instanceof Error ? e.message : 'Error generando frame');
+                    } finally {
+                        setLoadingScenes(prev => ({...prev, [key]: false }));
+                    }
+                }}
+                onUpdateAsset={(id, instruction) => {
+                    const update = (assets: ReferenceAsset[]) => assets.map(a => a.id === id ? {...a, instruction} : a);
+                    setReferenceAssets(prev => prev ? {
+                        characters: update(prev.characters),
+                        environments: update(prev.environments),
+                        elements: update(prev.elements),
+                        sceneFrames: update(prev.sceneFrames)
+                    } : null);
+                }}
+                onDeleteAsset={(id) => {
+                    const filterOut = (assets: ReferenceAsset[]) => assets.filter(a => a.id !== id);
+                    imageBlobCache.remove(id);
+                    setReferenceAssets(prev => prev ? {
+                        characters: filterOut(prev.characters),
+                        environments: filterOut(prev.environments),
+                        elements: filterOut(prev.elements),
+                        sceneFrames: filterOut(prev.sceneFrames)
+                    } : null);
+                }}
+                onUploadAsset={(type, file) => {
+                    const newAsset: ReferenceAsset = {
+                        id: crypto.randomUUID(),
+                        name: file.name.split('.').slice(0, -1).join('.'),
+                        type,
+                        prompt: 'Subido por el usuario',
+                        aspectRatio: '9:16', // Placeholder
+                        source: 'user',
+                    };
+                    imageBlobCache.set(newAsset.id, file);
+                    setReferenceAssets(prev => prev ? {...prev, [type + 's']: [...prev[type + 's'], newAsset]} : { characters:[], environments:[], elements:[], sceneFrames:[], [type + 's']: [newAsset]});
+                }}
+                aspectRatio={referenceAssetAspectRatio}
+                setAspectRatio={setReferenceAssetAspectRatio}
+                onExportProject={handleExportProject}
+                onSaveLocally={handleSaveLocally}
+                onCancelGeneration={() => {
+                    cancelCurrentGeneration();
+                    setIsLoading(false);
+                    setAssetGenerationUIProgress(null);
+                }}
+            />
+        )
+    }
+    
+    if (phase === '6.2') {
+        return (
+            <RefinementPhaseView 
+                storyPlan={generatedStoryPlan}
+                documentation={documentation}
+                onStartReferenceGeneration={() => setPhase('6.3')}
+            />
+        )
     }
 
-    if (currentPhaseNum >= 6.1) {
-        return <EvaluationPhaseView
-            critique={critique}
-            isLoading={isLoading}
-            onApplyImprovements={handleApplyImprovements}
-            onContinue={() => setPhase('6.2')}
-            onGoToPhase={(p) => setPhase(String(p))}
-        />
+    if (phase === '6.1') {
+        return (
+            <EvaluationPhaseView 
+                critique={critique} 
+                isLoading={isLoading}
+                onApplyImprovements={handleRegeneratePlan}
+                onContinue={() => setPhase('6.2')}
+                onGoToPhase={(p) => setPhase(String(p))}
+            />
+        )
     }
 
-    if (isLoading && currentPhaseNum === 4) {
-         return (
-            <div className="text-center py-8">
-                <Spinner />
-                <p className="mt-4 text-gray-400">Generando plan de historia, documentación y crítica...</p>
-                <div className="mt-2 text-sm text-blue-400 space-y-1">
-                    <p>{generationProgress.plan === 'in_progress' ? '🔄' : (generationProgress.plan === 'complete' ? '✅' : (generationProgress.plan === 'error' ? '❌' : '⏳'))} Generando Plan de Historia...</p>
-                    <p>{generationProgress.docs === 'in_progress' ? '🔄' : (generationProgress.docs === 'complete' ? '✅' : (generationProgress.docs === 'error' ? '❌' : '⏳'))} Generando Documentación...</p>
-                    <p>{generationProgress.critique === 'in_progress' ? '🔄' : (generationProgress.critique === 'complete' ? '✅' : (generationProgress.critique === 'error' ? '❌' : '⏳'))} Generando Crítica...</p>
-                </div>
+    if (phase === '5' && generatedStoryPlan) {
+      return (
+        <div className="flex flex-col lg:flex-row gap-8 w-full">
+          <div className="flex-grow space-y-6">
+            <h3 className="text-2xl font-bold text-green-400">FASE 5: Plan de Historia Generado</h3>
+            <p className="text-gray-400">La IA ha generado un plan de historia detallado en formato JSON. Puedes revisarlo, descargarlo, o continuar al siguiente paso para que la IA evalúe y refine el plan.</p>
+            <div className="bg-gray-900/50 border border-gray-700/80 rounded-lg p-4">
+                <pre className="text-xs text-gray-300 max-h-96 overflow-auto">{JSON.stringify(generatedStoryPlan, null, 2)}</pre>
             </div>
+            <div className="flex flex-col sm:flex-row gap-4">
+                <button 
+                    // FIX: The call to downloadProjectLocally was incorrect. It was passing an empty object for `documentation`,
+                    // which caused a type error. It now passes a valid, empty Documentation object.
+                    onClick={() => downloadProjectLocally(generatedStoryPlan, { aiProductionGuide: '', directorsBible: '', visualStyleGuide: '' }, {characters:[], environments:[], elements:[], sceneFrames:[]}, null)} 
+                    className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-500 transition-colors"
+                >
+                    Descargar Plan (.json)
+                </button>
+                <button 
+                    onClick={async () => {
+                        setIsLoading(true);
+                        try {
+                            const [docs, crit] = await Promise.all([
+                                generateAllDocumentation(generatedStoryPlan),
+                                generateCritique(generatedStoryPlan, storyData),
+                            ]);
+                            setDocumentation(docs);
+                            setCritique(crit);
+                            setPhase('6.1');
+                        } catch(e) {
+                            setError(e instanceof Error ? e.message : "Error al generar documentos y crítica.");
+                        } finally {
+                            setIsLoading(false);
+                        }
+                    }}
+                    className="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-500 transition-colors"
+                >
+                    ▶️ Siguiente: Evaluación y Refinamiento
+                </button>
+            </div>
+          </div>
+          <ProgressTracker phase={phase} data={storyData} plan={generatedStoryPlan} />
+        </div>
+      );
+    }
+    
+    if (phase === '4') {
+        return (
+          <div className="flex flex-col lg:flex-row gap-8 w-full">
+            <div className="flex-grow space-y-6">
+              <h3 className="text-2xl font-bold">FASE 4: Estructura, Conflicto y Final</h3>
+              <MultiSelectGrid title="Estructura Narrativa" helpText="Elige la estructura base de tu historia. 'Tres Actos' es la más común." categories={{ "Estructuras": narrativeStructures }} selectedItems={storyData.narrativeStructure} onToggle={toggleNarrativeStructure} maxSelection={3} />
+              <MultiSelectGrid title="Gancho Inicial (Hook)" helpText="¿Cómo captarás la atención en los primeros 3 segundos?" categories={hookTypes} selectedItems={storyData.hook} onToggle={toggleHook} maxSelection={5} />
+              <MultiSelectGrid title="Conflicto Principal" helpText="¿Cuál es el motor de tu historia? ¿A qué se enfrentan los personajes?" categories={conflictTypes} selectedItems={storyData.conflict} onToggle={toggleConflict} maxSelection={10} />
+              <MultiSelectGrid title="Tipo de Final" helpText="¿Cómo quieres que termine la historia?" categories={endingTypes} selectedItems={storyData.ending} onToggle={toggleEnding} maxSelection={5} />
+               <div className="flex justify-between mt-4">
+                  <button onClick={() => goToPhase('3')} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded">Atrás</button>
+                  <button onClick={() => goToPhase('5')} className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded">▶️ Generar Plan de Historia</button>
+              </div>
+            </div>
+            <ProgressTracker phase={phase} data={storyData} plan={generatedStoryPlan} />
+          </div>
         );
     }
     
-    return (
-      <div className="w-full max-w-3xl mx-auto space-y-6">
-        {phase === '1' && (
-            <div className="animate-fade-in">
-                 <h3 className="text-2xl font-bold text-center mb-4">FASE 1: El Concepto</h3>
-                 <p className="text-gray-400 text-center mb-6">Empieza con tu idea. ¿De qué trata tu historia? Sé breve pero específico.</p>
-                <textarea
-                    value={storyData.concept}
-                    onChange={(e) => updateData('concept', e.target.value)}
-                    placeholder="Ej: Un astronauta varado en Marte que debe cultivar patatas para sobrevivir."
-                    rows={4}
-                    className="w-full bg-gray-800 border border-gray-600 rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
-                />
-                 <h4 className="font-semibold mt-4 mb-2">Opcional: Sube un guion o contexto</h4>
-                <input type="file" accept=".pdf,.txt,.md" onChange={(e) => updateData('storyPDF', e.target.files?.[0] || null)} className="w-full text-sm" />
-                 <h4 className="font-semibold mt-4 mb-2">Opcional: Sube imágenes de referencia visual</h4>
-                 <input type="file" accept="image/*" multiple onChange={(e) => updateData('contextImages', Array.from(e.target.files || []))} className="w-full text-sm" />
+    if (phase === '3') {
+        return (
+          <div className="flex flex-col lg:flex-row gap-8 w-full">
+            <div className="flex-grow space-y-6">
+              <h3 className="text-2xl font-bold">FASE 3: Personajes</h3>
+              <p className="text-gray-400">Define hasta 5 personajes clave. La IA generará prompts visuales basados en sus descripciones. Puedes subir imágenes de referencia para guiar a la IA.</p>
+              <div className="space-y-4">
+                {storyData.characters.map((char, index) => (
+                   <div key={char.id} className="bg-gray-900/50 border border-gray-700/80 rounded-lg p-4 flex flex-col md:flex-row gap-4 relative">
+                       <div className="flex-shrink-0 w-full md:w-32 flex flex-col items-center">
+                           <label htmlFor={`char-img-${char.id}`} className="w-32 h-32 bg-gray-800 rounded-lg flex items-center justify-center cursor-pointer border-2 border-dashed border-gray-600 hover:border-blue-500">
+                               {char.imagePreviewUrl ? <img src={char.imagePreviewUrl} alt={char.name} className="w-full h-full object-cover rounded-lg" /> : <UploadIcon className="w-10 h-10 text-gray-500" />}
+                           </label>
+                           <input id={`char-img-${char.id}`} type="file" accept="image/*" className="hidden" onChange={e => updateCharacter(char.id, 'image', e.target.files?.[0])} />
+                           {char.image && <button onClick={() => updateCharacter(char.id, 'image', null)} className="text-xs text-red-400 hover:underline mt-1">Quitar imagen</button>}
+                       </div>
+                       <div className="flex-grow space-y-2">
+                           <input type="text" placeholder={`Nombre Personaje ${index + 1}`} value={char.name} onChange={e => updateCharacter(char.id, 'name', e.target.value)} className="w-full bg-gray-800 border border-gray-600 rounded p-2" />
+                           <textarea placeholder="Descripción (apariencia, personalidad, rol en la historia...)" value={char.description} onChange={e => updateCharacter(char.id, 'description', e.target.value)} rows={3} className="w-full bg-gray-800 border border-gray-600 rounded p-2 resize-none" />
+                       </div>
+                       {storyData.characters.length > 1 && (
+                            <button onClick={() => removeCharacter(char.id)} className="absolute top-2 right-2 text-gray-500 hover:text-red-400"><XCircleIcon className="w-6 h-6"/></button>
+                       )}
+                   </div>
+                ))}
+              </div>
+              {storyData.characters.length < 5 && <button onClick={addCharacter} className="bg-white/10 hover:bg-white/20 text-white font-bold py-2 px-4 rounded w-full">Añadir Personaje</button>}
+              <div className="flex justify-between mt-4">
+                  <button onClick={() => goToPhase('2')} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded">Atrás</button>
+                  <button onClick={() => goToPhase('4')} className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded">Siguiente</button>
+              </div>
             </div>
-        )}
-        {phase === '2' && (
-            <div className="animate-fade-in space-y-6">
+            <ProgressTracker phase={phase} data={storyData} plan={generatedStoryPlan} />
+          </div>
+        );
+    }
+    
+    if (phase === '2') {
+        return (
+          <div className="flex flex-col lg:flex-row gap-8 w-full">
+            <div className="flex-grow space-y-6">
+                <h3 className="text-2xl font-bold">FASE 2: Estilo Visual y Energía</h3>
+                <MultiSelectGrid title="Estilos Visuales" helpText="Elige hasta 5 estilos. La IA los combinará para crear un look único." categories={visualStyles} selectedItems={storyData.visualStyles} onToggle={toggleVisualStyle} maxSelection={5} />
+                <MultiSelectGrid title="Estilos Narrativos / Géneros" helpText="Define el tono y el género de tu historia. Máximo 3." categories={narrativeStyles} selectedItems={storyData.narrativeStyles} onToggle={toggleNarrativeStyle} maxSelection={3} />
                 <div>
-                     <h3 className="text-2xl font-bold text-center mb-4">FASE 2: Estilo y Energía</h3>
-                     <p className="text-gray-400 text-center mb-6">Elige el formato, los estilos y el nivel de energía para tu historia.</p>
-                     <label className="font-semibold mb-2 block">Formato de Salida</label>
-                    <select
-                        value={storyData.format}
-                        onChange={(e) => updateData('format', e.target.value)}
-                        className="w-full bg-gray-800 border border-gray-600 rounded-lg p-3"
-                    >
-                        {Object.entries(outputFormats).map(([groupName, formats]) => (
-                            <optgroup label={groupName} key={groupName}>
-                                {formats.map(f => <option key={f.value} value={f.value}>{f.name}</option>)}
+                    <label htmlFor="energy" className="block font-semibold mb-2">Nivel de Energía (1-10)</label>
+                    <p className="text-sm text-gray-400 mb-3">Define el ritmo. 1 es lento y contemplativo, 10 es frenético y de alta acción.</p>
+                    <input id="energy" type="range" min="1" max="10" value={storyData.energyLevel} onChange={e => updateData('energyLevel', parseInt(e.target.value))} className="w-full" />
+                </div>
+                <div className="flex justify-between mt-4">
+                    <button onClick={() => goToPhase('1')} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded">Atrás</button>
+                    <button onClick={() => goToPhase('3')} className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded">Siguiente</button>
+                </div>
+            </div>
+            <ProgressTracker phase={phase} data={storyData} plan={generatedStoryPlan} />
+          </div>
+        );
+    }
+
+    // Phase 1: Concept
+    return (
+        <div className="flex flex-col lg:flex-row gap-8 w-full">
+            <div className="flex-grow space-y-6">
+                <h3 className="text-2xl font-bold">FASE 1: Concepto Principal</h3>
+                <div>
+                    <label htmlFor="concept" className="block font-semibold mb-2">Describe tu idea:</label>
+                    <textarea id="concept" value={storyData.concept} onChange={e => updateData('concept', e.target.value)} rows={5} className="w-full bg-gray-800 border border-gray-600 rounded p-2" placeholder="Ej: Un cortometraje de ciencia ficción sobre un robot que descubre la música en un mundo post-apocalíptico..."></textarea>
+                </div>
+                <div>
+                    <label htmlFor="format" className="block font-semibold mb-2">Formato de Salida:</label>
+                    <select id="format" value={storyData.format} onChange={e => updateData('format', e.target.value)} className="w-full bg-gray-800 border border-gray-600 rounded p-2">
+                        {Object.entries(outputFormats).map(([group, options]) => (
+                            <optgroup label={group} key={group}>
+                                {options.map(opt => <option key={opt.value} value={opt.value}>{opt.name}</option>)}
                             </optgroup>
                         ))}
                     </select>
-                     <p className="text-xs text-gray-500 mt-1">{outputFormats[Object.keys(outputFormats).find(k => outputFormats[k as keyof typeof outputFormats].some(f => f.value === storyData.format)) || 'Video (Redes Sociales)'].find(f => f.value === storyData.format)?.description}</p>
                 </div>
-                 <div>
-                    <MultiSelectGrid
-                        title="Estilos Narrativos"
-                        categories={narrativeStyles}
-                        selectedItems={storyData.narrativeStyles}
-                        onToggle={toggleNarrativeStyle}
-                        maxSelection={3}
-                        helpText="Define el género y el tono de tu historia."
-                    />
+                <div className="space-y-2">
+                    <label className="block font-semibold">Contexto Adicional (Opcional):</label>
+                    <div className="flex items-center gap-4">
+                        <label htmlFor="pdf-upload" className="flex-1 cursor-pointer bg-white/10 hover:bg-white/20 text-white font-bold py-2 px-4 rounded text-center">
+                            <DocumentIcon className="w-5 h-5 inline-block mr-2" />
+                            {storyData.storyPDF ? `Cargado: ${storyData.storyPDF.name}` : 'Subir Guion/Documento (.pdf)'}
+                        </label>
+                        <input id="pdf-upload" type="file" accept=".pdf" className="hidden" onChange={e => updateData('storyPDF', e.target.files?.[0])} />
+                        
+                        <label htmlFor="img-upload" className="flex-1 cursor-pointer bg-white/10 hover:bg-white/20 text-white font-bold py-2 px-4 rounded text-center">
+                           <UploadIcon className="w-5 h-5 inline-block mr-2" />
+                            Subir Imágenes de Referencia
+                        </label>
+                        <input id="img-upload" type="file" accept="image/*" multiple className="hidden" onChange={handleContextImageChange} />
+                    </div>
                 </div>
-                 <div>
-                    <MultiSelectGrid
-                        title="Estilos Visuales"
-                        categories={visualStyles}
-                        selectedItems={storyData.visualStyles}
-                        onToggle={toggleVisualStyle}
-                        maxSelection={5}
-                        helpText="Define la estética visual de tu proyecto."
-                    />
-                </div>
-                <div>
-                    <label className="font-semibold mb-2 block">Nivel de Energía (1-10)</label>
-                    <p className="text-sm text-gray-400 mb-3">Define el ritmo. 1 es lento y contemplativo, 10 es rápido y frenético.</p>
-                    <input
-                        type="range"
-                        min="1" max="10"
-                        value={storyData.energyLevel}
-                        onChange={(e) => updateData('energyLevel', parseInt(e.target.value))}
-                        className="w-full"
-                    />
-                </div>
-            </div>
-        )}
-        {phase === '3' && (
-            <div className="animate-fade-in">
-                <h3 className="text-2xl font-bold text-center mb-4">FASE 3: Personajes</h3>
-                <p className="text-gray-400 text-center mb-6">Define a los personajes principales. Sube imágenes de referencia para guiar a la IA y lograr consistencia visual.</p>
-                <div className="space-y-4">
-                    {storyData.characters.map((char, index) => (
-                        <div key={char.id} className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 flex gap-4">
-                            <div className="flex-grow space-y-2">
-                                <input
-                                    type="text"
-                                    placeholder={`Nombre del Personaje ${index + 1}`}
-                                    value={char.name}
-                                    onChange={(e) => updateCharacter(char.id, 'name', e.target.value)}
-                                    className="w-full bg-gray-900 border border-gray-600 rounded p-2"
-                                />
-                                <textarea
-                                    placeholder={`Descripción del Personaje ${index + 1} (apariencia, personalidad)`}
-                                    value={char.description}
-                                    onChange={(e) => updateCharacter(char.id, 'description', e.target.value)}
-                                    rows={3}
-                                    className="w-full bg-gray-900 border border-gray-600 rounded p-2"
-                                />
+                {contextImages.length > 0 && (
+                    <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+                        {contextImages.map(img => (
+                            <div key={img.id} className="relative">
+                                <img src={img.previewUrl} alt="context" className="w-full h-24 object-cover rounded"/>
+                                <button onClick={() => removeContextImage(img.id)} className="absolute top-1 right-1 bg-black/50 rounded-full text-white"><XCircleIcon className="w-5 h-5"/></button>
                             </div>
-                            <div className="w-32 flex-shrink-0">
-                                <label className="cursor-pointer">
-                                     <div className="w-full h-32 bg-gray-900 rounded border-2 border-dashed border-gray-600 flex items-center justify-center text-center text-xs text-gray-400 hover:bg-gray-800 hover:border-blue-500">
-                                        {char.imagePreviewUrl ? <img src={char.imagePreviewUrl} alt="preview" className="w-full h-full object-cover"/> : 'Subir Imagen de Referencia'}
-                                    </div>
-                                    <input type="file" accept="image/*" className="hidden" onChange={(e) => updateCharacter(char.id, 'image', e.target.files?.[0] || null)}/>
-                                </label>
-                                {char.image && <button onClick={() => updateCharacter(char.id, 'image', null)} className="w-full text-xs text-red-400 hover:underline mt-1">Quitar</button>}
-                            </div>
-                            {storyData.characters.length > 1 && (
-                                <button onClick={() => removeCharacter(char.id)} className="self-start text-red-400"><XCircleIcon className="w-6 h-6"/></button>
-                            )}
-                        </div>
-                    ))}
+                        ))}
+                    </div>
+                )}
+
+                <div className="text-right mt-4">
+                    <button onClick={() => goToPhase('2')} className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded">Siguiente</button>
                 </div>
-                {storyData.characters.length < 5 && <button onClick={addCharacter} className="mt-4 w-full bg-white/10 p-2 rounded hover:bg-white/20">Añadir Personaje</button>}
+                 {/* DEV TOOLS */}
+                <details className="mt-8 bg-gray-900/50 p-2 rounded-lg border border-gray-700/50">
+                    <summary className="cursor-pointer text-sm text-gray-400">Herramientas de Desarrollador</summary>
+                    <div className="p-2">
+                        <APIStatusPanel />
+                    </div>
+                </details>
+
             </div>
-        )}
-        {phase === '4' && (
-            <div className="animate-fade-in space-y-4">
-                 <h3 className="text-2xl font-bold text-center mb-4">FASE 4: Estructura y Trama</h3>
-                 <p className="text-gray-400 text-center mb-6">Define los pilares de tu historia. ¿Cómo empieza, qué la impulsa y cómo termina?</p>
-                <div>
-                     <MultiSelectGrid
-                        title="Estructura Narrativa"
-                        categories={{ "Estructuras": narrativeStructures }}
-                        selectedItems={storyData.narrativeStructure}
-                        onToggle={toggleNarrativeStructure}
-                        maxSelection={3}
-                        helpText="El esqueleto de tu historia."
-                    />
-                </div>
-                 <div>
-                    <MultiSelectGrid
-                        title="Gancho Inicial (Hook)"
-                        categories={hookTypes}
-                        selectedItems={storyData.hook}
-                        onToggle={toggleHook}
-                        maxSelection={5}
-                        helpText="¿Cómo capturarás la atención en los primeros 3 segundos?"
-                    />
-                </div>
-                 <div>
-                    <MultiSelectGrid
-                        title="Conflicto Central"
-                        categories={conflictTypes}
-                        selectedItems={storyData.conflict}
-                        onToggle={toggleConflict}
-                        maxSelection={10}
-                        helpText="El motor de tu historia. ¿A qué se enfrentan los personajes?"
-                    />
-                </div>
-                <div>
-                    <MultiSelectGrid
-                        title="Tipo de Final"
-                        categories={endingTypes}
-                        selectedItems={storyData.ending}
-                        onToggle={toggleEnding}
-                        maxSelection={5}
-                        helpText="¿Cómo quieres que se sienta la audiencia al final?"
-                    />
-                </div>
-            </div>
-        )}
-        {error && !isLoading && <p className="text-center text-red-400 bg-red-500/10 p-3 rounded-lg border border-red-500/20">{error}</p>}
-        {parseFloat(phase) < 5 &&
-            <div className="pt-6 border-t border-gray-700">
-                <button
-                    onClick={handleNextPhase}
-                    disabled={isLoading}
-                    className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-500 transition-colors disabled:bg-blue-800 disabled:cursor-not-allowed"
-                >
-                   {isLoading ? 'Generando...' : (phase === '4' ? 'Generar Plan de Historia (JSON)' : 'Siguiente Fase')}
-                </button>
-            </div>
-        }
-      </div>
+            <ProgressTracker phase={phase} data={storyData} plan={generatedStoryPlan} />
+        </div>
     );
   };
 
-  const currentPhaseNum = parseFloat(phase);
 
   return (
-    <div className="w-full max-w-7xl mx-auto animate-fade-in">
-        <GeminiWebLogin />
-        <div className="flex flex-col lg:flex-row gap-8">
-            <ProgressTracker phase={phase} data={storyData} plan={generatedStoryPlan} />
-            <div className="flex-grow bg-gray-800/50 border border-gray-700/80 rounded-lg p-6 min-h-[50vh] flex flex-col justify-center">
-                {renderPhase()}
+    <div className="w-full max-w-7xl mx-auto flex flex-col items-center gap-4 animate-fade-in">
+        <div className="w-full flex justify-between items-center">
+            <button onClick={onExit} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded">← Volver al Inicio</button>
+            <div className="flex gap-2">
+                {/* Future global buttons can go here */}
             </div>
         </div>
-        <div className="mt-8">
-            <button onClick={() => setShowDevTools(!showDevTools)} className="text-sm text-gray-500 hover:text-white">
-                {showDevTools ? 'Ocultar' : 'Mostrar'} Herramientas de Desarrollador
-            </button>
-            {showDevTools && (
-                <div className="mt-2 grid grid-cols-1 gap-4 animate-fade-in">
-                   <APIStatusPanel />
-                </div>
-            )}
+
+        <details className="w-full bg-gray-900/50 border border-gray-700/80 rounded-lg open:pb-4 transition-all" open>
+            <summary className="p-4 cursor-pointer font-bold text-lg text-gray-200 hover:bg-white/5 list-inside">
+                🚀 Conexión de Generación Ilimitada (Opcional vía Extensión)
+            </summary>
+            <div className="px-4">
+                <p className="text-sm text-gray-400 mb-4">
+                    Conecta la extensión de Chrome para habilitar la generación de imágenes ilimitada y gratuita a través de la API web de Gemini. Esto anulará el uso de las claves de API oficiales y evitará los límites de cuota.
+                </p>
+                <GeminiWebLogin />
+            </div>
+        </details>
+
+        <div className="w-full flex-grow">
+            {renderContent()}
         </div>
     </div>
   );

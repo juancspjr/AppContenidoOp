@@ -3,290 +3,249 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { geminiWebService } from '@/services/geminiWebService';
 
-const MANUAL_COOKIE_INPUT_KEY = 'gemini_web_manual_cookie_input';
+interface LogEntry {
+    id: string;
+    timestamp: number;
+    level: 'info' | 'success' | 'warning' | 'error';
+    message: string;
+    details?: any;
+}
+
+interface ExtensionState {
+    isInstalled: boolean;
+    isReady: boolean;
+    isConnecting: boolean;
+    isConnected: boolean;
+    cookiesData: {
+        cookieString: string;
+        totalCookies: number;
+        hasCriticalCookies: boolean;
+        status: 'ready' | 'incomplete' | 'error';
+        timestamp: number;
+    } | null;
+    logs: LogEntry[];
+    error: string | null;
+}
 
 const GeminiWebLogin: React.FC = () => {
-    const [isInitialized, setIsInitialized] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
-    const [status, setStatus] = useState<'checking' | 'login_required' | 'connecting' | 'ready' | 'error'>('checking');
-    const [errorMessage, setErrorMessage] = useState<string>('');
-    const [cookieInput, setCookieInput] = useState('');
-    const [errorDetails, setErrorDetails] = useState<{
-        needsCaptcha?: boolean;
-        needsReauth?: boolean;
-        message?: string;
-    }>({});
-    
-    // State for Extension Integration
-    const [extensionReady, setExtensionReady] = useState(false);
-    const [extensionCookiesData, setExtensionCookiesData] = useState<{ totalCookies: number; status: string; cookieString: string } | null>(null);
-    
-    const parsedCookieString = useMemo(() => {
-        const input = cookieInput.trim();
-        if (!input) return null;
+    const [state, setState] = useState<ExtensionState>({
+        isInstalled: false,
+        isReady: false,
+        isConnecting: false,
+        isConnected: false,
+        cookiesData: null,
+        logs: [],
+        error: null,
+    });
+    const logContainerRef = useRef<HTMLDivElement>(null);
+    // FIX: Replaced Node.js-specific `NodeJS.Timeout` with `ReturnType<typeof setTimeout>`
+    // to ensure type compatibility in a browser environment.
+    const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-        let potentialCookieString = '';
-
-        try {
-            const parsed = JSON.parse(input);
-            if (Array.isArray(parsed) && parsed.length > 0 && 'name' in parsed[0] && 'value' in parsed[0]) {
-                potentialCookieString = parsed.map(cookie => `${cookie.name}=${cookie.value}`).join('; ');
+    const addLog = useCallback((level: LogEntry['level'], message: string, details?: any) => {
+        setState(prevState => {
+            const newLog: LogEntry = {
+                id: crypto.randomUUID(),
+                timestamp: Date.now(),
+                level,
+                message,
+                details,
+            };
+            const updatedLogs = [...prevState.logs, newLog];
+            if (updatedLogs.length > 100) {
+                updatedLogs.shift();
             }
-        } catch (e) {
-            // Not a JSON array
-        }
-
-        if (!potentialCookieString && input.includes('\t')) {
-            potentialCookieString = input.split('\n')
-                .filter(line => !line.startsWith('#') && line.trim() !== '')
-                .map(line => {
-                    const parts = line.split('\t');
-                    return parts.length >= 7 ? `${parts[5]}=${parts[6]}` : null;
-                })
-                .filter(Boolean)
-                .join('; ');
-        }
-
-        if (!potentialCookieString) {
-            potentialCookieString = input;
-        }
-        
-        const cookies: { [key: string]: string } = {};
-        potentialCookieString.split(';').forEach(cookie => {
-            const parts = cookie.match(/([^=]+)=(.*)/);
-            if (parts && parts.length === 3) {
-                cookies[parts[1].trim()] = parts[2].trim();
-            }
+            return { ...prevState, logs: updatedLogs };
         });
-
-        const hasPsid = Object.keys(cookies).some(key => key.startsWith('__Secure-') && key.endsWith('PSID') && !key.includes('PSIDTS') && !key.includes('PSIDCC'));
-        const hasPsidTs = Object.keys(cookies).some(key => key.startsWith('__Secure-') && key.endsWith('PSIDTS'));
-
-        if (hasPsid && hasPsidTs) {
-            return potentialCookieString;
-        }
-
-        return null;
-    }, [cookieInput]);
-
-
-    const handleConnectWithCookieString = useCallback(async (validCookieString: string) => {
-        setIsLoading(true);
-        setStatus('connecting');
-        setErrorMessage('');
-        setErrorDetails({});
-        try {
-            const success = await geminiWebService.initialize(validCookieString);
-            if (success) {
-                setIsInitialized(true);
-                setStatus('ready');
-                alert(`✅ ¡CONEXIÓN EXITOSA!\n\n🌐 Gemini Web conectado correctamente\n✨ Generación ilimitada de imágenes activada`);
-            } else {
-                throw new Error('La inicialización falló por una razón desconocida.');
-            }
-        } catch (error: any) {
-            setStatus('error');
-            const message = error.message || 'Error desconocido al conectar';
-            setErrorMessage(message);
-            if (message.includes('CAPTCHA')) setErrorDetails({ needsCaptcha: true, message });
-            else if (message.includes('expirado') || message.includes('logúeate')) setErrorDetails({ needsReauth: true, message });
-            else setErrorDetails({});
-        } finally {
-            setIsLoading(false);
-        }
     }, []);
 
-    useEffect(() => {
-        const initializeService = async () => {
-            setStatus('checking');
-            setIsLoading(true);
-            setErrorMessage('');
-            setErrorDetails({});
-            
-            try {
-                const success = await geminiWebService.loadSavedCookies();
-                if (success) {
-                    setIsInitialized(true);
-                    setStatus('ready');
-                } else {
-                    setStatus('login_required');
-                    const savedInput = localStorage.getItem(MANUAL_COOKIE_INPUT_KEY);
-                    if (savedInput) setCookieInput(savedInput);
-                }
-            } catch (error: any) {
-                localStorage.removeItem('gemini_web_cookies');
-                setStatus('error');
-                const message = error.message || 'Error al verificar sesión guardada.';
-                setErrorMessage(message);
-                if (message.includes('CAPTCHA')) setErrorDetails({ needsCaptcha: true, message });
-                else if (message.includes('expirado') || message.includes('logúeate')) setErrorDetails({ needsReauth: true, message });
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        initializeService();
-        
-        const handleMessage = (event: MessageEvent) => {
-            if (event.data.type === 'STORY_BUILDER_EXTENSION_READY') {
-                setExtensionReady(true);
-            }
-            if (event.data.type === 'STORY_BUILDER_COOKIES_RESPONSE') {
-                if (event.data.success) {
-                    setExtensionCookiesData(event.data.data);
-                    if (event.data.data.cookieString) {
-                        handleConnectWithCookieString(event.data.data.cookieString);
-                    } else {
-                        setErrorMessage("La extensión no pudo extraer las cookies necesarias.");
-                        setStatus('error');
-                    }
-                } else {
-                    setErrorMessage(`Error desde la extensión: ${event.data.error}`);
-                    setStatus('error');
-                }
-                setIsLoading(false);
-            }
-        };
-        
-        window.addEventListener('message', handleMessage);
-        return () => window.removeEventListener('message', handleMessage);
-    }, [handleConnectWithCookieString]);
+    const handleConnectionError = useCallback((errorMessage: string, details?: any) => {
+        setState(prev => ({
+            ...prev,
+            isConnecting: false,
+            isConnected: false,
+            error: errorMessage,
+        }));
+        addLog('error', `Error en la conexión: ${errorMessage}`, details);
+        geminiWebService.initialize('').catch(() => {}); // Reset service
+    }, [addLog]);
 
-    const requestCookiesFromExtension = () => {
-      if (!extensionReady) {
-        alert('⚠️ Extensión no detectada. Asegúrate de tenerla instalada y refresca la página.');
-        return;
-      }
-      setIsLoading(true);
-      setStatus('connecting');
-      window.postMessage({type: 'STORY_BUILDER_REQUEST_COOKIES'}, '*');
-    };
-    
-    const handleConnect = async () => {
-        if (!parsedCookieString) {
-            setErrorMessage("El formato de las cookies no es válido o faltan cookies esenciales.");
+    const handleCookiesReceived = useCallback(async (data: ExtensionState['cookiesData']) => {
+        if (connectionTimeoutRef.current) {
+            clearTimeout(connectionTimeoutRef.current);
+            connectionTimeoutRef.current = null;
+        }
+
+        setState(prev => ({ ...prev, cookiesData: data, isConnecting: true }));
+        addLog('success', `Cookies recibidas: ${data?.totalCookies} total.`, { critical: data?.hasCriticalCookies, status: data?.status });
+
+        if (data?.status !== 'ready' || !data.cookieString) {
+            handleConnectionError('Las cookies recibidas son incompletas o inválidas.');
             return;
         }
-        localStorage.setItem(MANUAL_COOKIE_INPUT_KEY, cookieInput);
-        await handleConnectWithCookieString(parsedCookieString);
-    };
-    
-    const handleDisconnect = () => {
-        localStorage.removeItem('gemini_web_cookies');
-        localStorage.removeItem(MANUAL_COOKIE_INPUT_KEY);
-        setIsInitialized(false);
-        setStatus('login_required');
-        setCookieInput('');
-    };
-    
-    const getStatusDisplay = () => {
-        switch (status) {
-            case 'checking': return { icon: '🔍', text: 'Verificando sesión...', color: 'text-blue-400' };
-            case 'login_required': return { icon: '🔐', text: 'Conexión requerida', color: 'text-yellow-400' };
-            case 'connecting': return { icon: '🔄', text: 'Conectando a Gemini Web...', color: 'text-blue-400' };
-            case 'ready': return { icon: '✅', text: 'Gemini Web conectado', color: 'text-green-400' };
-            case 'error': return { icon: '❌', text: 'Error de conexión', color: 'text-red-400' };
-            default: return { icon: '❓', text: 'Estado desconocido', color: 'text-gray-400' };
+
+        try {
+            addLog('info', 'Inicializando geminiWebService con cookies...');
+            await geminiWebService.initialize(data.cookieString);
+            setState(prev => ({ ...prev, isConnecting: false, isConnected: true, error: null }));
+            addLog('success', '¡Conexión exitosa con Gemini Web!');
+            alert('🎉 ¡Conectado con Gemini Web exitosamente!');
+        } catch (error: any) {
+            handleConnectionError(error.message, error);
+        }
+    }, [addLog, handleConnectionError]);
+
+    useEffect(() => {
+        addLog('info', 'Componente GeminiWebLogin iniciado.');
+
+        const handleMessage = (event: MessageEvent) => {
+            if (event.origin !== window.location.origin && event.source !== window) return;
+
+            if (event.data.type === 'STORY_BUILDER_EXTENSION_READY') {
+                setState(prev => ({ ...prev, isInstalled: true, isReady: true }));
+                addLog('success', 'Extensión detectada y lista para conectar.');
+            }
+
+            if (event.data.type === 'STORY_BUILDER_COOKIES_RESPONSE') {
+                if (event.data.success) {
+                    handleCookiesReceived(event.data.data);
+                } else {
+                    handleConnectionError(event.data.error || 'La extensión reportó un error desconocido.');
+                }
+            }
+        };
+
+        window.addEventListener('message', handleMessage);
+
+        // Check if extension is already there
+        setTimeout(() => {
+            if (!state.isInstalled) {
+                addLog('warning', 'Extensión no detectada. Asegúrate de que está instalada y activa.');
+            }
+        }, 2000);
+
+
+        return () => window.removeEventListener('message', handleMessage);
+    }, [addLog, handleCookiesReceived, handleConnectionError, state.isInstalled]);
+
+    useEffect(() => {
+        if (logContainerRef.current) {
+            logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+        }
+    }, [state.logs]);
+
+    const connectWithExtension = () => {
+        if (!state.isReady) {
+            addLog('error', 'Intento de conexión sin que la extensión esté lista.');
+            return;
+        }
+        setState(prev => ({ ...prev, isConnecting: true, error: null }));
+        addLog('info', 'Solicitando cookies de la extensión...');
+
+        try {
+            window.postMessage({ type: 'STORY_BUILDER_REQUEST_COOKIES' }, '*');
+
+            connectionTimeoutRef.current = setTimeout(() => {
+                setState(prev => {
+                    if (prev.isConnecting && !prev.isConnected) {
+                        addLog('error', 'Timeout: No se recibió respuesta de la extensión en 10 segundos.');
+                        return { ...prev, isConnecting: false, error: 'La extensión no respondió a tiempo.' };
+                    }
+                    return prev;
+                });
+            }, 10000);
+        } catch (error) {
+            handleConnectionError('Error al enviar el mensaje a la extensión.', error);
         }
     };
+
+    const validateConnection = async () => {
+        const status = geminiWebService.getStatus();
+        addLog('info', 'Validando estado de conexión...', status);
+        setState(prev => ({...prev, isConnected: status.initialized}));
+    };
     
-    const statusDisplay = getStatusDisplay();
-    
-    return (
-        <div className="bg-gradient-to-r from-purple-900/20 to-blue-900/20 border border-purple-700/50 rounded-lg p-4 mb-4">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                    <span className="text-2xl">{statusDisplay.icon}</span>
-                    <div>
-                        <h3 className="font-bold text-white">🌐 Gemini Web Unlimited</h3>
-                        <p className={`text-sm ${statusDisplay.color}`}>{statusDisplay.text}</p>
-                    </div>
-                </div>
-                {isInitialized && (
-                    <button onClick={handleDisconnect} className="px-4 py-2 rounded-lg text-sm bg-gray-600 hover:bg-gray-500 text-white">
-                        🔌 Desconectar
-                    </button>
+    const clearLogs = () => setState(prev => ({ ...prev, logs: [] }));
+
+    const getStatusInfo = () => {
+        if (!state.isInstalled) return { icon: '🔴', text: 'Extensión no detectada', color: 'text-red-400' };
+        if (state.isConnected) return { icon: '🟢', text: 'Conectado exitosamente', color: 'text-green-400' };
+        if (state.isReady) return { icon: '🟡', text: 'Extensión lista para conectar', color: 'text-yellow-400' };
+        return { icon: '❓', text: 'Estado desconocido', color: 'text-gray-400' };
+    };
+
+    const statusInfo = getStatusInfo();
+
+    const LogLine: React.FC<{ log: LogEntry }> = ({ log }) => {
+        const levelColors = {
+            info: 'text-blue-400',
+            success: 'text-green-400',
+            warning: 'text-yellow-400',
+            error: 'text-red-400',
+        };
+        return (
+            <div className="font-mono text-xs mb-1 last:mb-0">
+                <span className="text-gray-500">{new Date(log.timestamp).toLocaleTimeString()}</span>
+                <span className={`font-bold mx-2 ${levelColors[log.level]}`}>{log.level.toUpperCase()}</span>
+                <span className="text-gray-300">{log.message}</span>
+                {log.details && (
+                     <details className="mt-1 ml-4 text-gray-400">
+                        <summary className="cursor-pointer text-xs">Detalles</summary>
+                        <pre className="text-xs bg-black/50 p-1 rounded whitespace-pre-wrap">
+                            {JSON.stringify(log.details, null, 2)}
+                        </pre>
+                    </details>
                 )}
             </div>
+        );
+    };
 
-             {!isInitialized && status !== 'checking' && (
-                <div className="mt-4 border-t border-purple-700/50 pt-4 space-y-4 animate-fade-in">
-                    {extensionReady ? (
-                        <div>
-                            <button 
-                                onClick={requestCookiesFromExtension}
-                                disabled={isLoading}
-                                className="w-full bg-gradient-to-r from-green-600 to-teal-500 text-white font-bold py-3 rounded-lg hover:from-green-500 hover:to-teal-400 transition-all shadow-lg disabled:opacity-50"
-                            >
-                                🔐 Conectar con Extensión (Recomendado)
-                            </button>
-                            {extensionCookiesData && (
-                                <p className="text-xs text-green-400 mt-2 text-center">
-                                    ✅ {extensionCookiesData.totalCookies} cookies encontradas - Status: {extensionCookiesData.status}
-                                </p>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="text-center p-2 border border-dashed border-yellow-500/50 rounded-lg text-xs text-yellow-300">
-                            <p>💡 Instala nuestra extensión de Chrome para una conexión automática y segura.</p>
-                        </div>
-                    )}
+    return (
+        <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 mb-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Left Panel: Connection Control */}
+                <div className="flex flex-col gap-4">
+                    <button
+                        onClick={connectWithExtension}
+                        disabled={!state.isReady || state.isConnecting || state.isConnected}
+                        className="w-full bg-gradient-to-r from-green-600 to-teal-500 text-white font-bold py-4 rounded-lg hover:from-green-500 hover:to-teal-400 transition-all shadow-lg disabled:from-gray-600 disabled:to-gray-500 disabled:cursor-not-allowed"
+                    >
+                        {state.isConnecting ? 'Conectando...' : state.isConnected ? 'Conectado' : '🔐 Conectar con Extensión'}
+                    </button>
+                    <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4 flex-grow flex flex-col justify-between">
+                       <div>
+                            <div className="flex items-center gap-3 mb-3">
+                                <span className="text-2xl">{statusInfo.icon}</span>
+                                <p className={`font-semibold ${statusInfo.color}`}>{statusInfo.text}</p>
+                            </div>
+                            <div className="text-sm space-y-2 text-gray-300">
+                                <p><strong>Estado:</strong> {state.isConnected ? "Conectado" : "No conectado"}</p>
+                                <p><strong>Cookies detectadas:</strong> {state.cookiesData?.totalCookies ?? 'N/A'}</p>
+                                <p><strong>Última conexión:</strong> {state.cookiesData?.timestamp ? new Date(state.cookiesData.timestamp).toLocaleString() : 'N/A'}</p>
+                            </div>
+                       </div>
+                        <button onClick={validateConnection} className="w-full mt-4 bg-white/10 text-white text-sm py-2 rounded-lg hover:bg-white/20">
+                            🔄 Refrescar Estado
+                        </button>
+                    </div>
+                </div>
 
-                    <details className="text-xs text-gray-400">
-                        <summary className="cursor-pointer hover:text-white text-center">O conectar manualmente...</summary>
-                        <div className="mt-3 pt-3 border-t border-gray-700 space-y-2">
-                            <label htmlFor="cookie-input" className="block text-sm font-bold text-gray-200">Pega aquí tus cookies de Gemini:</label>
-                            <textarea
-                                id="cookie-input"
-                                value={cookieInput}
-                                onChange={(e) => setCookieInput(e.target.value)}
-                                placeholder="Pega el array JSON, el texto Netscape o el string de cookies aquí..."
-                                rows={4}
-                                className="w-full bg-gray-900/70 border border-gray-600 rounded-md p-2 font-mono text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none resize-y"
-                                disabled={isLoading}
-                            />
-                            <button
-                                onClick={handleConnect}
-                                disabled={isLoading || !parsedCookieString}
-                                className="w-full px-6 py-2 rounded-lg font-bold transition-all bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white shadow-lg disabled:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                {isLoading && status === 'connecting' ? 'Conectando...' : '🔗 Conectar Manualmente'}
-                            </button>
-                        </div>
-                    </details>
+                {/* Right Panel: Logs */}
+                <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4 flex flex-col">
+                    <div className="flex justify-between items-center mb-2">
+                        <h4 className="font-bold text-gray-200">📝 Logs del Sistema</h4>
+                        <button onClick={clearLogs} className="text-xs bg-red-800/50 text-red-300 px-2 py-1 rounded hover:bg-red-700/50">
+                            🗑️ Limpiar
+                        </button>
+                    </div>
+                    <div ref={logContainerRef} className="h-[250px] bg-black/50 rounded p-2 overflow-y-auto">
+                        {state.logs.map(log => <LogLine key={log.id} log={log} />)}
+                    </div>
                 </div>
-            )}
-            
-            {errorMessage && (
-                 <div className="mt-3 text-xs text-red-300 bg-red-900/20 rounded p-2">
-                    <strong>Error:</strong> {errorMessage}
-                </div>
-            )}
-
-            {status === 'error' && errorDetails.needsCaptcha && (
-                <div className="mt-3 text-xs text-orange-300 bg-orange-900/20 rounded p-3">
-                    <strong>🔧 CÓMO RESOLVER CAPTCHA:</strong><br/>
-                    1. Abre <a href="https://gemini.google.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline">gemini.google.com</a> en una nueva pestaña.<br/>
-                    2. Resuelve cualquier CAPTCHA que aparezca y asegúrate de que la página cargue.<br/>
-                    3. Vuelve aquí y conéctate nuevamente.
-                </div>
-            )}
-
-            {status === 'error' && errorDetails.needsReauth && (
-                <div className="mt-3 text-xs text-yellow-300 bg-yellow-900/20 rounded p-3">
-                    <strong>🔑 SESIÓN EXPIRADA:</strong><br/>
-                    1. Ve a <a href="https://gemini.google.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline">gemini.google.com</a> e inicia sesión.<br/>
-                    2. Vuelve aquí y conéctate otra vez.
-                </div>
-            )}
-
-            {status === 'ready' && (
-                <div className="mt-3 text-xs text-green-300 bg-green-900/20 rounded p-2">
-                    ✨ <strong>¡Sistema activo!</strong> Generación ilimitada de imágenes habilitada.
-                </div>
-            )}
+            </div>
         </div>
     );
 };
