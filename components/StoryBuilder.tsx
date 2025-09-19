@@ -18,7 +18,6 @@ import { imageBlobCache } from '@/services/imageBlobCache';
 import { projectPersistenceService } from '@/services/projectPersistenceService';
 import { assetDBService } from '@/services/assetDBService';
 import APIStatusPanel from '@/components/story-builder/APIStatusPanel';
-import GeminiWebLogin from '@/components/story-builder/GeminiWebLogin';
 
 
 interface StoryBuilderProps {
@@ -850,18 +849,6 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ onExit, importedProject }) 
                 {/* Future global buttons can go here */}
             </div>
         </div>
-
-        <details className="w-full bg-gray-900/50 border border-gray-700/80 rounded-lg open:pb-4 transition-all" open>
-            <summary className="p-4 cursor-pointer font-bold text-lg text-gray-200 hover:bg-white/5 list-inside">
-                🚀 Conexión de Generación Ilimitada (Opcional vía Extensión)
-            </summary>
-            <div className="px-4">
-                <p className="text-sm text-gray-400 mb-4">
-                    Conecta la extensión de Chrome para habilitar la generación de imágenes ilimitada y gratuita a través de la API web de Gemini. Esto anulará el uso de las claves de API oficiales y evitará los límites de cuota.
-                </p>
-                <GeminiWebLogin />
-            </div>
-        </details>
 
         <div className="w-full flex-grow">
             {renderContent()}

@@ -11,7 +11,8 @@ import type { StoryData, StoryMasterplan, CharacterData, ProgressUpdate, FinalAs
 import { imageBlobCache } from './imageBlobCache';
 import { assetDBService } from './assetDBService';
 import { assetRegistry } from './assetRegistry';
-import { geminiWebService } from '@/services/geminiWebService';
+// FIX: Changed to a default import as `geminiWebService.ts` provides a default export.
+import geminiWebService from '@/services/geminiWebService';
 
 // FIX: Add a browser-compatible way to convert ArrayBuffer to Base64, as Buffer is a Node.js API.
 const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
@@ -538,15 +539,67 @@ export interface Critique {
 }
 \`\`\`
 
+Here is an example of the required JSON structure. Ensure your output follows this format exactly, paying close attention to closing brackets and commas between keys in the 'enrichedElements' object:
+\`\`\`json
+{
+  "narrativeStrengths": ["Example strength 1.", "Example strength 2."],
+  "weaknesses": [
+    { "point": "Example weakness.", "suggestion": "Example suggestion." }
+  ],
+  "viralPotential": 8.5,
+  "improvementStrategies": [
+    { "title": "Example Strategy", "description": "Example description." }
+  ],
+  "enrichedElements": {
+    "characters": [
+      {
+        "name": "Character Name",
+        "enhancements": ["Enhancement 1.", "Enhancement 2.", "Enhancement 3.", "Enhancement 4.", "Enhancement 5.", "Enhancement 6."]
+      }
+    ],
+    "actions": [
+      {
+        "type": "Action Type",
+        "enhancements": ["Enhancement 1.", "Enhancement 2.", "Enhancement 3.", "Enhancement 4.", "Enhancement 5.", "Enhancement 6."]
+      }
+    ],
+    "environments": [
+      {
+        "name": "Environment Name",
+        "enhancements": ["Enhancement 1.", "Enhancement 2.", "Enhancement 3.", "Enhancement 4.", "Enhancement 5.", "Enhancement 6."]
+      }
+    ],
+    "narratives": [
+      {
+        "beat": "Narrative Beat",
+        "enhancements": ["Enhancement 1.", "Enhancement 2.", "Enhancement 3.", "Enhancement 4.", "Enhancement 5.", "Enhancement 6."]
+      }
+    ],
+    "visuals": [
+      {
+        "element": "Visual Element",
+        "enhancements": ["Enhancement 1.", "Enhancement 2.", "Enhancement 3.", "Enhancement 4.", "Enhancement 5.", "Enhancement 6."]
+      }
+    ],
+    "technicals": [
+      {
+        "spec": "Technical Spec",
+        "enhancements": ["Enhancement 1.", "Enhancement 2.", "Enhancement 3.", "Enhancement 4.", "Enhancement 5.", "Enhancement 6."]
+      }
+    ]
+  }
+}
+\`\`\`
+
 Constraint Checklist & Confidence Score:
 1. Is the output a single JSON object? (Yes/No)
-2. Does the JSON object perfectly match the Critique interface? (Yes/No)
+2. Does the JSON object perfectly match the Critique interface and the example structure? (Yes/No)
 3. Does 'enrichedElements' contain all six categories? (Yes/No)
 4. Does EACH category within 'enrichedElements' contain AT LEAST 6 distinct enhancement suggestions? (Yes/No)
 5. Is 'viralPotential' a number between 0 and 10? (Yes/No)
 Confidence Score (1-5): 5
 
-**CRITICAL INSTRUCTION:** For each category inside 'enrichedElements' (characters, actions, environments, narratives, visuals, technicals), you MUST provide a minimum of SIX (6) distinct and creative enhancement suggestions. Do not provide fewer than six for any category.
+**CRITICAL INSTRUCTION:** For each category inside 'enrichedElements' (characters, actions, environments, narratives, visuals, technicals), you MUST provide a minimum of SIX (6) distinct and creative enhancement suggestions. Do not provide fewer than six for any category. Ensure the final JSON is syntactically correct with no invalid trailing commas and that all arrays and objects are properly closed as shown in the example.
 
 Story Plan:
 ${JSON.stringify(plan)}
@@ -791,7 +844,7 @@ export async function generateImageWithFallback(
                     });
                 }
                 
-                const image = await geminiWebService.generateImage(enhancedPrompt, referenceBase64);
+                const image = await (geminiWebService as any).generateImage(enhancedPrompt, referenceBase64);
                 
                 console.log("%c✅ ÉXITO: Imagen generada con Gemini Web", "color: cyan; font-weight: bold;");
                 return image;

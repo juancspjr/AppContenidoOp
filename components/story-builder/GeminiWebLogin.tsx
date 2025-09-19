@@ -4,7 +4,8 @@
 */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { geminiWebService } from '@/services/geminiWebService';
+// FIX: Changed to a default import as `geminiWebService.ts` provides a default export.
+import geminiWebService from '@/services/geminiWebService';
 
 const GeminiWebLogin: React.FC = () => {
     // 4. ASEGURAR que existen estos estados:
@@ -91,16 +92,6 @@ const GeminiWebLogin: React.FC = () => {
         }, 10000);
     };
 
-    const getStatusInfo = () => {
-        if (!extensionReady) return { icon: '🔴', text: 'Extensión no detectada', color: 'text-red-400' };
-        if (isConnected) return { icon: '🟢', text: 'Conectado exitosamente', color: 'text-green-400' };
-        if (isConnecting) return { icon: '🔵', text: 'Conectando...', color: 'text-blue-400' };
-        if (extensionReady) return { icon: '🟡', text: 'Extensión lista para conectar', color: 'text-yellow-400' };
-        return { icon: '❓', text: 'Estado desconocido', color: 'text-gray-400' };
-    };
-
-    const statusInfo = getStatusInfo();
-
     return (
         <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 mb-4">
              <div className="flex flex-col gap-4">
@@ -112,9 +103,22 @@ const GeminiWebLogin: React.FC = () => {
                     {isConnecting ? 'Conectando...' : isConnected ? 'Conectado' : '🔐 Conectar con Extensión'}
                 </button>
                 <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4 flex-grow">
-                    <div className="flex items-center gap-3 mb-3">
-                        <span className="text-2xl">{statusInfo.icon}</span>
-                        <p className={`font-semibold ${statusInfo.color}`}>{statusInfo.text}</p>
+                    <div className="flex items-center space-x-3 mb-3">
+                        <div className={`w-3 h-3 rounded-full animate-pulse ${
+                          isConnected ? 'bg-green-500' : 
+                          isConnecting ? 'bg-blue-500' : 
+                          extensionReady ? 'bg-yellow-500' : 'bg-red-500'
+                        }`}></div>
+                        <span className={`font-semibold ${
+                          isConnected ? 'text-green-400' : 
+                          isConnecting ? 'text-blue-400' : 
+                          extensionReady ? 'text-yellow-400' : 'text-red-400'
+                        }`}>
+                          {isConnected ? '🟢 Conectado exitosamente' : 
+                           isConnecting ? '🔵 Conectando...' :
+                           extensionReady ? '🟡 Extensión lista para conectar' : 
+                           '🔴 Extensión no detectada'}
+                        </span>
                     </div>
                      {error && (
                         <div className="bg-red-900/30 border border-red-500/50 text-red-300 text-sm p-3 rounded-md">

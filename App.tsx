@@ -21,6 +21,7 @@ import StartScreen from '@/components/StartScreen';
 import StoryBuilder from '@/components/StoryBuilder';
 import LogPanel from '@/components/LogPanel';
 import type { StoryMasterplan, ExportedProject } from '@/components/story-builder/types';
+import ExtensionConnector from '@/components/ExtensionConnector';
 // FIX: Removed obsolete import for `apiKeyManager` and its associated `ApiKeyStatus` component.
 // API key management is now handled by a simulated backend service (`geminiService.ts`) for security,
 // making client-side status tracking unnecessary.
@@ -106,6 +107,29 @@ const App: React.FC = () => {
   // Story builder state
   const [importedProject, setImportedProject] = useState<StoryMasterplan | ExportedProject | null>(null);
 
+  // Extension connector state
+  const [showExtensionConnector, setShowExtensionConnector] = useState(false);
+
+  // FIX: Moved `addLog` definition before `handleExtensionConnection` to resolve a "used before declaration" error.
+  const addLog = useCallback((message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setLogs(prev => [...prev, `${timestamp}: ${message}`]);
+  }, []);
+
+  // Función para manejar conexión exitosa de extensión
+  const handleExtensionConnection = useCallback(async (cookieString: string) => {
+    try {
+      // Aquí importas dinámicamente geminiWebService
+      const { initializeGeminiWeb } = await import('@/services/geminiWebService');
+      await initializeGeminiWeb(cookieString);
+      addLog('🎉 Conexión exitosa con Gemini Web a través de extensión Chrome');
+      setShowExtensionConnector(false); // Ocultar el connector tras éxito
+    } catch (error: any) {
+      console.error('❌ Error conectando con Gemini Web:', error);
+      addLog(`❌ Error de conexión con extensión: ${error.message}`);
+    }
+  }, [addLog]);
+
 
   const imgRef = useRef<HTMLImageElement>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -123,11 +147,6 @@ const App: React.FC = () => {
 
   const isPhotoshootMode = !!photoshootResults;
   
-  const addLog = useCallback((message: string) => {
-    const timestamp = new Date().toLocaleTimeString();
-    setLogs(prev => [...prev, `${timestamp}: ${message}`]);
-  }, []);
-
   useEffect(() => {
     let activeUrl: string | null = null;
     
@@ -1025,6 +1044,24 @@ const App: React.FC = () => {
             </div>
         </div>
         
+        {/* Extension Connector */}
+        {showExtensionConnector && (
+          <div className="w-full mb-4">
+            <ExtensionConnector 
+              onConnectionSuccess={handleExtensionConnection}
+              onClose={() => setShowExtensionConnector(false)}
+            />
+          </div>
+        )}
+
+        <div className="w-full flex justify-end mb-2">
+          <button
+            onClick={() => setShowExtensionConnector(!showExtensionConnector)}
+            className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+          >
+            {showExtensionConnector ? '🔽 Ocultar Extensión' : '🔗 Conectar Extensión Chrome'}
+          </button>
+        </div>
         <div className="w-full bg-gray-800/80 border border-gray-700/80 rounded-lg p-2 flex items-center justify-center gap-2 backdrop-blur-sm">
             {(Object.keys(tabTooltips) as Tab[]).map(tab => (
                  <button
