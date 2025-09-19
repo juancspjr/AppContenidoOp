@@ -1,112 +1,140 @@
-// REEMPLAZAR TODO EL CONTENIDO CON:
+/**
+ * @license
+ * SPDX-License-identifier: Apache-2.0
+*/
 
-interface GeminiWebConfig {
-  cookies: string;
-  initialized: boolean;
+// ============================================================================
+// 🤖 SERVICIO DE FALLBACK DE GEMINI WEB (PARA GENERACIÓN ILIMITADA)
+// ============================================================================
+import { stealthFetch } from './stealthFetcher';
+import { logger } from '../utils/logger';
+
+interface UploadResult {
+    id: string;
+    filename: string;
 }
 
 class GeminiWebService {
-  private config: GeminiWebConfig = {
-    cookies: '',
-    initialized: false
-  };
+    private cookieString: string | null = null;
+    private initialized = false;
 
-  /**
-   * Inicializa el servicio con cookies de la extensión Chrome
-   */
-  async initialize(cookieString: string): Promise<void> {
-    if (!cookieString || cookieString.trim() === '') {
-      throw new Error('Cookie string no puede estar vacío');
+    public isInitialized(): boolean {
+        return this.initialized;
     }
 
-    // Validar que contiene cookies críticas de Google
-    const criticalCookies = ['__Secure-1PSID', 'APISID', 'SAPISID'];
-    const hasRequired = criticalCookies.some(name => 
-      cookieString.includes(`${name}=`)
-    );
-
-    if (!hasRequired) {
-      throw new Error('Las cookies no contienen tokens de autenticación de Google requeridos');
+    public async initialize(cookies: string): Promise<void> {
+        if (!cookies) {
+            throw new Error("Las cookies de autenticación son requeridas para inicializar GeminiWebService.");
+        }
+        this.cookieString = cookies;
+        this.initialized = true;
+        logger.log('SUCCESS', 'GeminiWebService', 'Servicio inicializado exitosamente con cookies.');
     }
 
-    this.config.cookies = cookieString;
-    this.config.initialized = true;
-
-    console.log('✅ GeminiWebService inicializado con cookies de extensión');
-  }
-
-  /**
-   * Verifica si el servicio está inicializado
-   */
-  isInitialized(): boolean {
-    return this.config.initialized;
-  }
-
-  /**
-   * Obtiene las cookies configuradas
-   */
-  getCookies(): string {
-    if (!this.config.initialized) {
-      throw new Error('GeminiWebService no está inicializado. Conecta la extensión primero.');
-    }
-    return this.config.cookies;
-  }
-
-  /**
-   * Realiza una petición a Gemini Web usando las cookies de la extensión
-   */
-  async makeGeminiWebRequest(endpoint: string, data: any): Promise<Response> {
-    if (!this.config.initialized) {
-      throw new Error('GeminiWebService no está inicializado. Conecta la extensión primero.');
+    private deinitialize() {
+        logger.log('WARNING', 'GeminiWebService', 'Des-inicializando servicio. Se requiere reconexión.');
+        this.cookieString = null;
+        this.initialized = false;
     }
 
-    const headers = {
-      'Cookie': this.config.cookies,
-      'Content-Type': 'application/json',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Referer': 'https://gemini.google.com/',
-      'Origin': 'https://gemini.google.com'
-    };
-
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(data),
-      credentials: 'include'
-    });
-
-    if (!response.ok) {
-      throw new Error(`Gemini Web request failed: ${response.status} ${response.statusText}`);
+    private checkInitialized(): void {
+        if (!this.initialized || !this.cookieString) {
+            throw new Error("Servicio Gemini Web no inicializado. Conéctate a través de la extensión primero.");
+        }
+    }
+    
+    public async healthCheck(): Promise<boolean> {
+        if (!this.initialized) return false;
+        try {
+            // A lightweight check: try to access the main Gemini page.
+            // A 200 OK response indicates the cookies are still valid for navigation.
+            const response = await stealthFetch("https://gemini.google.com/", {
+                method: 'GET',
+                headers: { 'Cookie': this.cookieString! },
+                redirect: 'follow'
+            });
+            if (!response.ok || response.redirected) {
+                logger.log('WARNING', 'GeminiWebService', `Health check fallido con estado: ${response.status}`);
+                this.deinitialize();
+                return false;
+            }
+            return true;
+        } catch (error) {
+            logger.log('ERROR', 'GeminiWebService', 'Health check falló con una excepción.', error);
+            this.deinitialize();
+            return false;
+        }
     }
 
-    return response;
-  }
 
-  /**
-   * Reinicia el servicio (limpia cookies)
-   */
-  reset(): void {
-    this.config = {
-      cookies: '',
-      initialized: false
-    };
-    console.log('🔄 GeminiWebService reiniciado');
-  }
+    private async uploadFile(file: File): Promise<UploadResult> {
+        this.checkInitialized();
+        const UPLOAD_URL = "https://gemini.google.com/_/upload/photos";
+
+        const formData = new FormData();
+        formData.append('file', file, file.name);
+
+        const response = await stealthFetch(UPLOAD_URL, {
+            method: 'POST',
+            headers: { 'Cookie': this.cookieString! },
+            body: formData,
+        });
+
+        if (!response.ok) {
+            if (response.status === 401 || response.status === 403) {
+                this.deinitialize();
+                throw new Error("Error de autenticación subiendo archivo. Las cookies pueden haber expirado.");
+            }
+            throw new Error(`Error en la subida de archivo: ${response.status} ${response.statusText}`);
+        }
+        
+        const responseText = await response.text();
+        try {
+            const jsonStr = `[${responseText.split('\n')[1].substring(2)}]`;
+            const parsed = JSON.parse(jsonStr);
+            return { id: parsed[0], filename: parsed[1] };
+        } catch (e) {
+            throw new Error("Fallo al parsear la respuesta de la subida de archivo.");
+        }
+    }
+    
+    public async generateImage(prompt: string, referenceFiles: File[] = []): Promise<Blob> {
+        this.checkInitialized();
+        const GENERATE_URL = "https://gemini.google.com/upload/imghp";
+        
+        let finalPrompt = prompt;
+        const uploadedFiles = [];
+
+        for (const file of referenceFiles) {
+            const result = await this.uploadFile(file);
+            uploadedFiles.push(result);
+        }
+        
+        const fileReferences = uploadedFiles.map(f => `[f_img/${f.id}] ${f.filename}`).join(' ');
+        finalPrompt = `${fileReferences} ${prompt}`.trim();
+
+        const params = new URLSearchParams({
+            'prompt': finalPrompt,
+            'hl': 'es',
+            'bl': 'boq_gemini_20240522.01_p1'
+        });
+        
+        const response = await stealthFetch(`${GENERATE_URL}?${params.toString()}`, {
+            method: 'GET',
+            headers: { 'Cookie': this.cookieString! },
+        });
+
+        if (!response.ok) {
+            if (response.status === 401 || response.status === 403) {
+                this.deinitialize();
+                throw new Error("Error de autenticación generando imagen. Las cookies pueden haber expirado.");
+            }
+            throw new Error(`Error en la generación de imagen: ${response.status} ${response.statusText}`);
+        }
+
+        return response.blob();
+    }
 }
 
-// Instancia singleton
 const geminiWebService = new GeminiWebService();
-
-// Función de conveniencia para inicializar
-export const initializeGeminiWeb = (cookieString: string) => {
-  return geminiWebService.initialize(cookieString);
-};
-
-// Exportar instancia por defecto
 export default geminiWebService;
-
-// Verificar status
-export const isGeminiWebReady = () => geminiWebService.isInitialized();
-
-// Obtener cookies
-export const getGeminiWebCookies = () => geminiWebService.getCookies();

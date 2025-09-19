@@ -3,16 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import React, { useState, useRef, useEffect } from 'react';
-import { UploadIcon, MagicWandIcon, PaletteIcon, SunIcon, BookOpenIcon, DownloadIcon, XCircleIcon } from '@/components/icons';
-import type { StoryMasterplan, ExportedProject } from '@/components/story-builder/types';
-import { projectPersistenceService } from '@/services/projectPersistenceService';
-import { assetDBService } from '@/services/assetDBService';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { UploadIcon, MagicWandIcon, PaletteIcon, SunIcon, BookOpenIcon, DownloadIcon, XCircleIcon } from './icons';
+import type { ExportedProject } from './story-builder/types';
+import { projectPersistenceService } from '../services/projectPersistenceService';
+import { logger } from '../utils/logger';
 
 interface StartScreenProps {
   onStartPhotoEditor: (files: FileList | null) => void;
   onStartStoryBuilder: () => void;
-  onProjectImport: (project: StoryMasterplan | ExportedProject) => void;
+  onProjectImport: (project: ExportedProject) => void;
 }
 
 const StartScreen: React.FC<StartScreenProps> = ({ onStartPhotoEditor, onStartStoryBuilder, onProjectImport }) => {
@@ -23,7 +23,6 @@ const StartScreen: React.FC<StartScreenProps> = ({ onStartPhotoEditor, onStartSt
   useEffect(() => {
     setHasLocalSave(projectPersistenceService.hasSavedProject());
   }, []);
-
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onStartPhotoEditor(e.target.files);
@@ -39,18 +38,19 @@ const StartScreen: React.FC<StartScreenProps> = ({ onStartPhotoEditor, onStartSt
       const reader = new FileReader();
       reader.onload = (event) => {
         try {
-          const projectData = JSON.parse(event.target?.result as string) as ExportedProject | StoryMasterplan;
-          
-          if (projectData && 'plan' in projectData && 'assets' in projectData) {
-            onProjectImport(projectData);
-          } else if (projectData && 'metadata' in projectData) {
-            onProjectImport(projectData);
+          const projectData = JSON.parse(event.target?.result as string) as ExportedProject;
+          if (projectData && (projectData.storyPlan || projectData.plan)) { // Legacy support for 'plan'
+             const finalProject: ExportedProject = {
+               ...projectData,
+               storyPlan: projectData.storyPlan || projectData.plan,
+             };
+             onProjectImport(finalProject);
           } else {
-             throw new Error("Estructura de archivo de proyecto inválida.");
+             throw new Error("Invalid project file structure.");
           }
         } catch (error) {
-          console.error("Fallo al analizar el archivo del proyecto:", error);
-          alert("El archivo del proyecto no es válido o está corrupto.");
+          logger.log('ERROR', 'StartScreen', 'Failed to parse project file', error);
+          alert("The project file is invalid or corrupt.");
         }
       };
       reader.readAsText(file);
@@ -58,31 +58,31 @@ const StartScreen: React.FC<StartScreenProps> = ({ onStartPhotoEditor, onStartSt
     if(e.target) e.target.value = '';
   };
   
-  const handleLoadLocalProject = () => {
+  const handleLoadLocalProject = useCallback(() => {
     const loadedProject = projectPersistenceService.loadProject();
     if (loadedProject) {
+      logger.log('INFO', 'StartScreen', 'Loading project from local save.');
       onProjectImport(loadedProject);
     } else {
-      alert("No se pudo cargar el proyecto guardado. Puede que esté corrupto o haya sido borrado.");
+      alert("Could not load the saved project. It might be corrupt or was cleared.");
       projectPersistenceService.clearSavedProject();
       setHasLocalSave(false);
     }
-  };
+  }, [onProjectImport]);
 
-  const handleClearLocalProject = async () => {
-      if (confirm("¿Estás seguro de que quieres borrar el proyecto guardado localmente? Esta acción no se puede deshacer.")) {
+  const handleClearLocalProject = useCallback(() => {
+      if (window.confirm("Are you sure you want to delete the locally saved project? This action cannot be undone.")) {
           try {
             projectPersistenceService.clearSavedProject();
-            await assetDBService.clearAllAssets();
             setHasLocalSave(false);
-            alert("Proyecto local borrado.");
+            logger.log('INFO', 'StartScreen', 'Local project cleared by user.');
+            alert("Local project deleted.");
           } catch (err) {
-            console.error("Fallo al borrar el proyecto local:", err);
-            alert("Error al borrar el proyecto local.");
+            logger.log('ERROR', 'StartScreen', 'Failed to clear local project', err);
+            alert("Error deleting local project.");
           }
       }
-  };
-
+  }, []);
 
   return (
     <div 
@@ -122,7 +122,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onStartPhotoEditor, onStartSt
         </div>
         
         {hasLocalSave && (
-          <div className="mt-4 p-4 bg-green-900/30 border border-green-500/30 rounded-lg flex flex-col sm:flex-row items-center gap-4">
+          <div className="mt-4 p-4 bg-green-900/30 border border-green-500/30 rounded-lg flex flex-col sm:flex-row items-center gap-4 animate-fade-in">
               <div className="text-left">
                   <h3 className="font-bold text-green-300">¡Tienes un proyecto guardado!</h3>
                   <p className="text-sm text-green-400/80">Continúa donde lo dejaste.</p>
@@ -170,5 +170,4 @@ const StartScreen: React.FC<StartScreenProps> = ({ onStartPhotoEditor, onStartSt
   );
 };
 
-// FIX: Added default export to resolve module import error.
 export default StartScreen;

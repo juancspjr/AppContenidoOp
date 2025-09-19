@@ -4,7 +4,7 @@
 */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { BrushIcon, EraserIcon, ClearIcon, PhotoIcon, XCircleIcon, SparkleIcon } from '@/components/icons';
+import { BrushIcon, EraserIcon, ClearIcon, PhotoIcon, XCircleIcon, SparkleIcon } from './icons';
 
 interface MagicEditPanelProps {
   prompt: string;

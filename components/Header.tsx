@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import React from 'react';
-import { SparkleIcon } from '@/components/icons';
+import { SparkleIcon } from './icons';
 
 const Header: React.FC = () => {
   return (

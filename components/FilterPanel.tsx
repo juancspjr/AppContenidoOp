@@ -4,8 +4,8 @@
 */
 
 import React, { useState } from 'react';
-import { getAIFilterRecommendations } from '@/services/geminiService';
-import { SparkleIcon } from '@/components/icons';
+import { getAIFilterRecommendations } from '../services/geminiService';
+import { SparkleIcon } from './icons';
 
 interface FilterPanelProps {
   onApplyFilter: (prompt: string) => void;

@@ -3,21 +3,23 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import type { ExportedProject } from '@/components/story-builder/types';
+import type { ExportedProject } from '../components/story-builder/types';
+import { logger } from '../utils/logger';
 
-const STORAGE_KEY = 'pixshop_saved_story_project';
+const STORAGE_KEY = 'pixshop_saved_story_project_v2';
 
 class ProjectPersistenceService {
     public saveProject(project: ExportedProject): void {
         try {
             const jsonString = JSON.stringify(project);
             localStorage.setItem(STORAGE_KEY, jsonString);
+            logger.log('DEBUG', 'PersistenceService', `Project saved. Size: ${(jsonString.length / 1024).toFixed(2)} KB`);
         } catch (error) {
-            console.error("Error guardando el proyecto en localStorage:", error);
+            logger.log('ERROR', 'PersistenceService', "Error saving project to localStorage", error);
             if (error instanceof DOMException && (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
-                throw new Error("No se pudo guardar la metadata del proyecto. El almacenamiento local está lleno. Intenta limpiar el caché de tu navegador.");
+                throw new Error("Could not save project metadata. Local storage is full. Try clearing your browser cache.");
             }
-            throw new Error("Ocurrió un error desconocido al guardar la metadata del proyecto.");
+            throw new Error("An unknown error occurred while saving project metadata.");
         }
     }
 
@@ -28,14 +30,15 @@ class ProjectPersistenceService {
         }
         try {
             const project = JSON.parse(jsonString) as ExportedProject;
-            // Basic validation
-            if (project && project.plan && project.assets) {
-                return project;
+            // Migration for old format
+            if(project.plan && !project.storyPlan) {
+                project.storyPlan = project.plan;
+                delete project.plan;
             }
-            return null;
+            return project;
         } catch (error) {
-            console.error("Error cargando el proyecto desde localStorage:", error);
-            this.clearSavedProject(); // Clear corrupted data
+            logger.log('ERROR', 'PersistenceService', "Error parsing project from localStorage", error);
+            this.clearSavedProject();
             return null;
         }
     }
@@ -46,6 +49,7 @@ class ProjectPersistenceService {
 
     public clearSavedProject(): void {
         localStorage.removeItem(STORAGE_KEY);
+        logger.log('INFO', 'PersistenceService', 'Saved project cleared from localStorage.');
     }
 }
 

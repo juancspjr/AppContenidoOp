@@ -5,9 +5,9 @@
 
 import React, { useState, useMemo } from 'react';
 // FIX: Imported `AIRecommendation` from its defining module to resolve the export error.
-import { getAIRecommendations } from '@/services/geminiService';
-import type { AIRecommendation } from '@/components/story-builder/types';
-import { SparkleIcon } from '@/components/icons';
+import { getAIRecommendations } from '../services/geminiService';
+import type { AIRecommendation } from './story-builder/types';
+import { SparkleIcon } from './icons';
 
 interface AdjustmentPanelProps {
   onApplyAdjustment: (prompt: string) => void;
