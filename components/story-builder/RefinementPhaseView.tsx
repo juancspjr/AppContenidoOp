@@ -4,8 +4,8 @@
 */
 
 import React from 'react';
-import type { StoryMasterplan, Documentation } from '@/components/story-builder/types';
-import { DocumentIcon } from '@/components/icons';
+import type { StoryMasterplan, Documentation } from './types';
+import { DocumentIcon } from '../icons';
 
 interface RefinementPhaseViewProps {
     storyPlan: StoryMasterplan | null;

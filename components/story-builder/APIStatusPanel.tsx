@@ -8,9 +8,9 @@
 // ============================================================================
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { resetAllAPIs, resetSpecificAPI } from '@/services/geminiService';
-import { PersistentAPIKeyManager } from '@/services/apiKeyBlacklist';
-import type { APIKeyStatus } from '@/services/apiKeyBlacklist';
+import { resetAllAPIs, resetSpecificAPI } from '../../services/geminiService';
+import { PersistentAPIKeyManager } from '../../services/apiKeyBlacklist';
+import type { APIKeyStatus } from '../../services/apiKeyBlacklist';
 
 const APIStatusPanel: React.FC = () => {
     const [apis, setApis] = useState<APIKeyStatus[]>([]);

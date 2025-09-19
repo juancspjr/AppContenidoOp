@@ -4,8 +4,8 @@
 */
 
 import React from 'react';
-import type { Critique } from '@/components/story-builder/types';
-import Spinner from '@/components/Spinner';
+import type { Critique } from './types';
+import Spinner from '../Spinner';
 
 interface EvaluationPhaseViewProps {
     critique: Critique | null;

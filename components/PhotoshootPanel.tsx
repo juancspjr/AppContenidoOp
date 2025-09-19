@@ -4,7 +4,7 @@
 */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { PhotoIcon, XCircleIcon } from '@/components/icons';
+import { PhotoIcon, XCircleIcon } from './icons';
 
 interface PhotoshootPanelProps {
   onGenerate: (scenePrompt: string, numImages: number, sceneImage: File | null) => void;

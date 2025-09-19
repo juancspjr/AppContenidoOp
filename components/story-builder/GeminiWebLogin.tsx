@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 // FIX: Changed to a default import as `geminiWebService.ts` provides a default export.
-import geminiWebService from '@/services/geminiWebService';
+import geminiWebService from '../../services/geminiWebService';
 
 const GeminiWebLogin: React.FC = () => {
     // 4. ASEGURAR que existen estos estados:

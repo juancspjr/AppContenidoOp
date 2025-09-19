@@ -4,10 +4,10 @@
 */
 
 import React, { useState, useEffect } from 'react';
-import type { StoryMasterplan, FinalAssets, ProgressUpdate } from '@/components/story-builder/types';
-import Spinner from '@/components/Spinner';
-import { DownloadIcon } from '@/components/icons';
-import { imageBlobCache } from '@/services/imageBlobCache';
+import type { StoryMasterplan, FinalAssets, ProgressUpdate } from './types';
+import Spinner from '../Spinner';
+import { DownloadIcon } from '../icons';
+import { imageBlobCache } from '../../services/imageBlobCache';
 
 interface AssetGenerationViewProps {
     isLoading: boolean;
