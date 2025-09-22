@@ -5,10 +5,13 @@
 
 import React, { useEffect, useState } from 'react';
 import { BookOpenIcon, XCircleIcon } from './icons';
-import { projectPersistenceService } from '../../services/projectPersistenceService';
-import { logger } from '../../utils/logger';
+// FIX: Corrected relative import paths for services, hooks, and utilities to align with the project's root directory structure.
+import { projectPersistenceService } from '../services/projectPersistenceService';
+import { logger } from '../utils/logger';
+// FIX: Corrected relative import path.
 import type { ExportedProject } from './story-builder/types';
-import { useStoryBuilderStateMachine } from '../../hooks/useStoryBuilderStateMachine';
+// FIX: Corrected relative import path.
+import { useStoryBuilderStateMachine } from '../hooks/useStoryBuilderStateMachine';
 
 import PhaseStepper from './story-builder/PhaseStepper';
 import Spinner from './Spinner';
@@ -24,9 +27,10 @@ import RefinementPhaseView from './story-builder/RefinementPhaseView';
 import ReferenceAssetView from './story-builder/ReferenceAssetView';
 import AssetGenerationView from './story-builder/AssetGenerationView';
 import APIStatusPanel from './story-builder/APIStatusPanel';
+import APIKeyValidator from './story-builder/APIKeyValidator';
 import GeminiWebLogin from './story-builder/GeminiWebLogin';
 import HealthStatusBanner from './story-builder/HealthStatusBanner';
-import geminiWebService from '../../services/geminiWebService';
+import geminiWebService from '../services/geminiWebService';
 
 interface StoryBuilderProps {
   existingProject?: ExportedProject;
@@ -169,6 +173,7 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ existingProject, onExit }) 
                     <summary className="cursor-pointer hover:text-white">Paneles de Control (Debug)</summary>
                     <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
                         <APIStatusPanel />
+                        <APIKeyValidator />
                         <GeminiWebLogin />
                     </div>
                 </details>

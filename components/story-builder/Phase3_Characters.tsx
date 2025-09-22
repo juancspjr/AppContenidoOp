@@ -159,7 +159,7 @@ const Phase3_Characters: React.FC<Phase3_CharactersProps> = ({ onComplete, initi
     }
     
     // FIX: This now calls the centralized action from the state machine hook.
-    const handleAssistNewCharacter = async () => {
+    const handleAssistNewCharacterClick = async () => {
         setIsAssistingNew(true);
         try {
             const result = await onAssistNewCharacter(newChar);
@@ -195,7 +195,7 @@ const Phase3_Characters: React.FC<Phase3_CharactersProps> = ({ onComplete, initi
             <div className={`bg-gray-900/50 p-4 rounded-lg border border-gray-700 space-y-4 ${isAtLimit ? 'opacity-50 pointer-events-none' : ''}`}>
                 <div className="flex justify-between items-center">
                     <h3 className="font-semibold text-lg">{isAtLimit ? "Límite de Personajes Alcanzado" : "Añadir Nuevo Agente Narrativo"}</h3>
-                     <button onClick={handleAssistNewCharacter} disabled={isAssistingNew} className="flex items-center gap-2 bg-yellow-600 text-white font-bold py-2 px-3 rounded-lg text-sm hover:bg-yellow-500 transition-colors disabled:bg-yellow-800">
+                     <button onClick={handleAssistNewCharacterClick} disabled={isAssistingNew} className="flex items-center gap-2 bg-yellow-600 text-white font-bold py-2 px-3 rounded-lg text-sm hover:bg-yellow-500 transition-colors disabled:bg-yellow-800">
                         {isAssistingNew ? <Spinner className="w-4 h-4" /> : <SparkleIcon className="w-4 h-4" />}
                         {isAssistingNew ? 'Creando...' : 'Asistencia IA'}
                      </button>

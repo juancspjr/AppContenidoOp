@@ -4,6 +4,7 @@
 */
 
 import React, { useState } from 'react';
+// FIX: Corrected relative import path.
 import { getAIFilterRecommendations } from '../services/geminiService';
 import { SparkleIcon } from './icons';
 

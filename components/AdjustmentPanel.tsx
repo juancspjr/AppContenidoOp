@@ -4,8 +4,9 @@
 */
 
 import React, { useState, useMemo } from 'react';
-// FIX: Imported `AIRecommendation` from its defining module to resolve the export error.
+// FIX: Corrected relative import path.
 import { getAIRecommendations } from '../services/geminiService';
+// FIX: Corrected relative import path.
 import type { AIRecommendation } from './story-builder/types';
 import { SparkleIcon } from './icons';
 

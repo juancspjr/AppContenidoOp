@@ -4,6 +4,7 @@
 */
 
 import React, { useState, useEffect } from 'react';
+// FIX: Corrected relative import path.
 import type { StoryMasterplan, FinalAssets, ProgressUpdate } from './types';
 import Spinner from '../Spinner';
 import { DownloadIcon, ExportIcon } from '../icons';
@@ -205,9 +206,11 @@ const AssetGenerationView: React.FC<AssetGenerationViewProps> = ({
     }
 
     const renderSceneProgress = () => {
+        // FIX: Cast Object.values to ProgressUpdate[] to ensure correct type inference for downstream operations.
+        const allProgressUpdates = Object.values(progress) as ProgressUpdate[];
         return scenes.map(scene => {
             const sceneId = `scene_${scene.scene_number}`;
-            const sceneProgress = Object.values(progress).filter(p => p.sceneId === sceneId);
+            const sceneProgress = allProgressUpdates.filter(p => p.sceneId === sceneId);
             const subPromptUpdate = sceneProgress.find(p => p.stage === 'sub_prompts');
             const videoUpdates = sceneProgress.filter(p => p.stage === 'videos').sort((a,b) => (a.segment || 0) - (b.segment || 0));
 

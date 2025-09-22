@@ -188,6 +188,32 @@ class PersistentAPIKeyManager {
             permanentlyBlocked: statusList.filter(s => s.status === 'permanently_blocked').length,
         };
     }
+    
+    public static forceQuotaErrorOnNextAvailable(allKeys: any[]): string | null {
+        const available = this.getAvailableAPIs(allKeys);
+        if (available.length === 0) {
+            logger.log('WARNING', 'APIKeyManager', 'No hay APIs disponibles para forzar un error.');
+            return null;
+        }
+        
+        const keyToFail = available[0];
+        const statusMap = this.loadAPIStatus();
+        const now = Date.now();
+        
+        const status: APIKeyStatus = {
+            id: keyToFail.id,
+            projectName: keyToFail.projectName,
+            status: 'quota_exhausted',
+            lastError: 'Forced by validator for testing rotation.',
+            exhaustedAt: now,
+            failureCount: 1,
+        };
+        
+        statusMap.set(keyToFail.id, status);
+        this.saveAPIStatus(statusMap);
+        logger.log('INFO', 'APIKeyManager', `Fallo de cuota forzado en la API: ${keyToFail.projectName}`);
+        return keyToFail.projectName;
+    }
 }
 
 export { PersistentAPIKeyManager };

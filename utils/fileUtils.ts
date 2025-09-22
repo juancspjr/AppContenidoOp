@@ -8,7 +8,8 @@
  * @param file The file to convert.
  * @returns A promise that resolves with the base64 string.
  */
-async function fileToBase64(file: File): Promise<string> {
+// FIX: Export fileToBase64 to be used in other services.
+export async function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
