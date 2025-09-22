@@ -6,8 +6,12 @@
 import React, { useState, useEffect } from 'react';
 import type { StoryMasterplan, FinalAssets, ProgressUpdate } from './types';
 import Spinner from '../Spinner';
-import { DownloadIcon } from '../icons';
-import { imageBlobCache } from '../../services/imageBlobCache';
+import { DownloadIcon, ExportIcon } from '../icons';
+import { assetDBService } from '../../services/assetDBService';
+import { projectPersistenceService } from '../../services/projectPersistenceService';
+import { logger } from '../../utils/logger';
+// FIX: Import the formatApiError utility to handle and display user-friendly error messages.
+import { formatApiError } from '../../utils/errorUtils';
 
 interface AssetGenerationViewProps {
     isLoading: boolean;
@@ -17,6 +21,7 @@ interface AssetGenerationViewProps {
     storyPlan: StoryMasterplan | null;
     onRegenerate: () => void;
     onGoToPhase: (phase: number) => void;
+    onExit: () => void;
 }
 
 const ProgressItem: React.FC<{ update: ProgressUpdate | undefined, label: string }> = ({ update, label }) => {
@@ -47,14 +52,29 @@ const ProgressItem: React.FC<{ update: ProgressUpdate | undefined, label: string
 
 const VideoPlayer: React.FC<{ assetId: string, downloadName: string }> = ({ assetId, downloadName }) => {
     const [videoUrl, setVideoUrl] = useState<string>('');
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         let url = '';
-        const blob = imageBlobCache.get(assetId);
-        if (blob) {
-            url = URL.createObjectURL(blob);
-            setVideoUrl(url);
-        }
+        const loadVideo = async () => {
+            setIsLoading(true);
+            try {
+                const blob = await assetDBService.loadAsset(assetId);
+                if (blob) {
+                    url = URL.createObjectURL(blob);
+                    setVideoUrl(url);
+                } else {
+                    logger.log('WARNING', 'VideoPlayer', `Blob not found for assetId: ${assetId}`);
+                }
+            } catch (err) {
+                 logger.log('ERROR', 'VideoPlayer', `Failed to load blob for assetId: ${assetId}`, err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadVideo();
+
         return () => {
             if (url) {
                 URL.revokeObjectURL(url);
@@ -62,8 +82,12 @@ const VideoPlayer: React.FC<{ assetId: string, downloadName: string }> = ({ asse
         };
     }, [assetId]);
 
-    if (!videoUrl) {
+    if (isLoading) {
         return <div className="w-full rounded-lg bg-black aspect-video flex items-center justify-center"><Spinner className="w-10 h-10 animate-spin text-white" /></div>;
+    }
+
+    if (!videoUrl) {
+         return <div className="w-full rounded-lg bg-black aspect-video flex items-center justify-center text-red-400 text-sm">Video no encontrado</div>;
     }
 
     return (
@@ -86,7 +110,21 @@ const AssetGenerationView: React.FC<AssetGenerationViewProps> = ({
     storyPlan,
     onRegenerate,
     onGoToPhase,
+    onExit
 }) => {
+    const [isExporting, setIsExporting] = useState(false);
+
+    const handleExport = async () => {
+        setIsExporting(true);
+        try {
+            await projectPersistenceService.exportProjectWithAssets();
+        } catch(e) {
+            const friendlyError = formatApiError(e);
+            alert(`Error al exportar el proyecto: ${friendlyError}`);
+        } finally {
+            setIsExporting(false);
+        }
+    };
 
     const scenes = storyPlan?.story_structure?.narrative_arc?.flatMap(act => act?.scenes || []).filter(Boolean) || [];
 
@@ -121,7 +159,7 @@ const AssetGenerationView: React.FC<AssetGenerationViewProps> = ({
                 <p className="text-gray-400 mb-6">Tus videos han sido generados por segmentos para asegurar la máxima calidad y coherencia. Descárgalos y únelos en tu editor de video favorito.</p>
                 
                 <h4 className="text-lg font-semibold mb-2">Videos por Escena</h4>
-                <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
                     {scenes.map(scene => {
                         const sceneId = `scene_${scene.scene_number}`;
                         const sceneVideos = assets.videoAssets.filter(a => a.sceneId === sceneId).sort((a,b) => a.segment - b.segment);
@@ -145,6 +183,22 @@ const AssetGenerationView: React.FC<AssetGenerationViewProps> = ({
                             </div>
                         )
                     })}
+                </div>
+                 <div className="pt-6 border-t border-gray-700 mt-6 flex flex-col sm:flex-row gap-4">
+                    <button 
+                        onClick={handleExport}
+                        disabled={isExporting}
+                        className="w-full sm:w-auto flex-grow bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-500 transition-colors flex items-center justify-center gap-2 disabled:bg-blue-800"
+                    >
+                        <ExportIcon className="w-5 h-5"/>
+                        {isExporting ? 'Exportando...' : 'Exportar Proyecto y Activos (.zip)'}
+                    </button>
+                    <button 
+                        onClick={onExit}
+                        className="w-full sm:w-auto flex-grow bg-gray-600 text-white font-bold py-3 rounded-lg hover:bg-gray-500 transition-colors"
+                    >
+                        Finalizar y Salir
+                    </button>
                 </div>
             </div>
         );

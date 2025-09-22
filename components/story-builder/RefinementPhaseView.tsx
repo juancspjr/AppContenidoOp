@@ -10,10 +10,10 @@ import { DocumentIcon } from '../icons';
 interface RefinementPhaseViewProps {
     storyPlan: StoryMasterplan | null;
     documentation: Documentation | null;
-    onStartReferenceGeneration: () => void;
+    onStartHookMatrixGeneration: () => void;
 }
 
-const RefinementPhaseView: React.FC<RefinementPhaseViewProps> = ({ storyPlan, documentation, onStartReferenceGeneration }) => {
+const RefinementPhaseView: React.FC<RefinementPhaseViewProps> = ({ storyPlan, documentation, onStartHookMatrixGeneration }) => {
 
     const handleDownload = (content: string, filename: string, mimeType = 'text/plain') => {
         if (!content) return;
@@ -44,8 +44,8 @@ const RefinementPhaseView: React.FC<RefinementPhaseViewProps> = ({ storyPlan, do
     
     return (
         <div className="animate-fade-in">
-            <h3 className="text-2xl font-bold mb-2 text-green-400">Fase 6.2: Documentación y Refinamiento</h3>
-            <p className="text-gray-400 mb-6">La documentación de producción para tu plan de historia ha sido generada. Revisa los documentos, exporta tu proyecto para guardarlo, y cuando estés listo, continúa a la generación de activos de referencia.</p>
+            <h3 className="text-2xl font-bold mb-2 text-green-400">Fase 6.2: Documentación de Producción</h3>
+            <p className="text-gray-400 mb-6">La documentación de producción para tu plan de historia ha sido generada. El siguiente paso es crear una matriz de ganchos virales para maximizar el impacto de tu historia.</p>
 
             <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
                 <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700 flex flex-col sm:flex-row items-center gap-4">
@@ -90,10 +90,10 @@ const RefinementPhaseView: React.FC<RefinementPhaseViewProps> = ({ storyPlan, do
                     📁 Exportar Proyecto (.json)
                 </button>
                 <button 
-                    onClick={onStartReferenceGeneration} 
+                    onClick={onStartHookMatrixGeneration} 
                     className="w-full sm:w-auto flex-grow bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-500 transition-colors"
                 >
-                    ▶️ Generar Activos de Referencia
+                    ▶️ Generar Matriz de Ganchos Virales
                 </button>
             </div>
         </div>

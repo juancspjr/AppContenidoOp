@@ -8,10 +8,7 @@ import StartScreen from './components/StartScreen';
 import EditorCanvas from './components/EditorCanvas';
 import StoryBuilder from './components/StoryBuilder';
 import type { StoryMasterplan, ExportedProject } from './components/story-builder/types';
-import { assetDBService } from './services/assetDBService';
 import { projectPersistenceService } from './services/projectPersistenceService';
-import HealthStatusBanner from './components/story-builder/HealthStatusBanner';
-import ExtensionConnector from './components/ExtensionConnector';
 import { logger } from './utils/logger';
 
 type AppState = 
@@ -22,8 +19,6 @@ type AppState =
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>({ view: 'start' });
-  const [isExtensionConnected, setIsExtensionConnected] = useState(false);
-  const [showConnector, setShowConnector] = useState(false);
 
   const handleStartPhotoEditor = useCallback((files: FileList | null) => {
     if (files && files.length > 0) {
@@ -59,28 +54,8 @@ const App: React.FC = () => {
       }
   }, [appState.view]);
   
-  const handleConnectionSuccess = (cookieString: string) => {
-    logger.log('SUCCESS', 'App', 'Extension connection successful.');
-    setIsExtensionConnected(true);
-    setShowConnector(false);
-  };
-
   return (
     <div className="bg-gray-900 text-white min-h-screen font-sans">
-      <HealthStatusBanner 
-        isConnectionHealthy={isExtensionConnected} 
-        onReconnect={() => setShowConnector(true)}
-      />
-
-      {showConnector && (
-         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
-            <ExtensionConnector 
-                onConnectionSuccess={handleConnectionSuccess}
-                onClose={() => setShowConnector(false)}
-            />
-         </div>
-      )}
-
       {appState.view === 'start' && (
         <div className="flex items-center justify-center min-h-screen">
             <StartScreen 
@@ -97,9 +72,6 @@ const App: React.FC = () => {
         <StoryBuilder 
           existingProject={appState.project} 
           onExit={handleExitToStart}
-          isExtensionConnected={isExtensionConnected}
-          setIsExtensionConnected={setIsExtensionConnected}
-          openConnector={() => setShowConnector(true)}
         />
       )}
     </div>

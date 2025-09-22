@@ -7,10 +7,9 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      // FIX: Set alias '@' to resolve to the project's `src` directory.
-      // This aligns with standard project structures and resolves module loading errors.
-      // FIX: Replaced `process.cwd()` with `import.meta.url` to resolve a TypeScript type error and use modern ESM standards.
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // FIX: Set alias '@' to resolve to the project's root directory.
+      // The project does not use a `src` directory, so this aligns with the actual structure.
+      '@': fileURLToPath(new URL('.', import.meta.url)),
     },
   },
 })

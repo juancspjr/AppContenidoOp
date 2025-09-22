@@ -209,5 +209,3 @@ export const ExtensionConnector: React.FC<ExtensionConnectorProps> = ({
     </div>
   );
 };
-
-export default ExtensionConnector;

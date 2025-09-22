@@ -6,10 +6,10 @@
 // ============================================================================
 // 📁 services/apiKeyBlacklist.ts - NUEVO ARCHIVO
 // ============================================================================
+import { logger } from '../utils/logger';
 
 export interface APIKeyStatus {
     id: string;
-    api_key: string;
     projectName: string;
     status: 'active' | 'quota_exhausted' | 'daily_limit' | 'permanently_blocked';
     lastError?: string;
@@ -20,52 +20,37 @@ export interface APIKeyStatus {
 }
 
 class PersistentAPIKeyManager {
-    private static readonly STORAGE_KEY = 'gemini_api_blacklist';
-    private static readonly MAX_FAILURES = 2; // Después de 2 fallos, bloquear permanently
-    
-    // CARGAR ESTADO DESDE LOCALSTORAGE
+    private static readonly STORAGE_KEY = 'gemini_api_blacklist_v2';
+    private static readonly MAX_FAILURES = 3; // Bloquear permanentemente después de 3 fallos de cuota consecutivos
+
     public static loadAPIStatus(): Map<string, APIKeyStatus> {
         try {
             const stored = localStorage.getItem(this.STORAGE_KEY);
             if (!stored) return new Map();
             
             const parsed = JSON.parse(stored);
-            const statusMap = new Map<string, APIKeyStatus>();
-            
-            Object.entries(parsed).forEach(([keyId, status]) => {
-                statusMap.set(keyId, status as APIKeyStatus);
-            });
-            
-            return statusMap;
+            return new Map(Object.entries(parsed));
         } catch (error) {
-            console.error('❌ Error cargando estado de APIs:', error);
+            logger.log('ERROR', 'APIKeyManager', 'Error cargando estado de APIs desde localStorage', error);
             return new Map();
         }
     }
     
-    // GUARDAR ESTADO EN LOCALSTORAGE
     public static saveAPIStatus(statusMap: Map<string, APIKeyStatus>): void {
         try {
-            const obj: Record<string, APIKeyStatus> = {};
-            statusMap.forEach((status, keyId) => {
-                obj[keyId] = status;
-            });
-            
-            localStorage.setItem(this.STORAGE_KEY, JSON.stringify(obj, null, 2));
-            console.log(`💾 Estado de APIs guardado: ${statusMap.size} claves monitoreadas`);
+            const obj = Object.fromEntries(statusMap);
+            localStorage.setItem(this.STORAGE_KEY, JSON.stringify(obj));
         } catch (error) {
-            console.error('❌ Error guardando estado de APIs:', error);
+            logger.log('ERROR', 'APIKeyManager', 'Error guardando estado de APIs en localStorage', error);
         }
     }
     
-    // MARCAR API COMO AGOTADA PERMANENTEMENTE
-    static markAsExhausted(keyId: string, keyData: any, errorMessage: string): void {
+    public static markAsExhausted(keyId: string, keyData: any, errorMessage: string): void {
         const statusMap = this.loadAPIStatus();
         const now = Date.now();
         
         const currentStatus: APIKeyStatus = statusMap.get(keyId) || {
             id: keyId,
-            api_key: keyData.api_key,
             projectName: keyData.projectName,
             status: 'active',
             failureCount: 0
@@ -75,18 +60,17 @@ class PersistentAPIKeyManager {
         currentStatus.lastError = errorMessage;
         currentStatus.exhaustedAt = now;
         
-        // SI ES ERROR DE QUOTA, MARCAR COMO AGOTADA
-        if (errorMessage.includes('quota') || errorMessage.includes('RESOURCE_EXHAUSTED') || errorMessage.includes('429')) {
+        if (errorMessage.toLowerCase().includes('quota') || errorMessage.includes('429') || errorMessage.includes('resource_exhausted')) {
             if (currentStatus.failureCount >= this.MAX_FAILURES) {
                 currentStatus.status = 'permanently_blocked';
-                console.log(`🚫 API ${keyData.projectName} BLOQUEADA PERMANENTEMENTE (${currentStatus.failureCount} fallos)`);
-            } else if (errorMessage.includes('daily')) {
+                logger.log('ERROR', 'APIKeyManager', `API ${keyData.projectName} BLOQUEADA PERMANENTEMENTE tras ${currentStatus.failureCount} fallos.`);
+            } else if (errorMessage.toLowerCase().includes('daily')) {
                 currentStatus.status = 'daily_limit';
                 currentStatus.resetAt = this.getNextResetTime();
-                console.log(`⏰ API ${keyData.projectName} agotada hasta medianoche PST`);
+                logger.log('WARNING', 'APIKeyManager', `API ${keyData.projectName} con límite diario. Se reintentará después de ${new Date(currentStatus.resetAt).toLocaleTimeString()}.`);
             } else {
                 currentStatus.status = 'quota_exhausted';
-                console.log(`❌ API ${keyData.projectName} marcada como agotada (fallo ${currentStatus.failureCount})`);
+                logger.log('WARNING', 'APIKeyManager', `API ${keyData.projectName} marcada como agotada (fallo ${currentStatus.failureCount}).`);
             }
         }
         
@@ -94,149 +78,115 @@ class PersistentAPIKeyManager {
         this.saveAPIStatus(statusMap);
     }
     
-    // OBTENER APIS DISPONIBLES (NO AGOTADAS)
-    static getAvailableAPIs(allKeys: any[]): any[] {
+    public static getAvailableAPIs(allKeys: any[]): any[] {
         const statusMap = this.loadAPIStatus();
         const now = Date.now();
         
-        return allKeys.filter(key => {
+        const available = allKeys.filter(key => {
             const status = statusMap.get(key.id);
+            if (!status) return true; // Si no hay estado, está disponible
             
-            // SI NO HAY ESTADO, ESTÁ DISPONIBLE
-            if (!status) return true;
-            
-            // SI ESTÁ BLOQUEADA PERMANENTEMENTE, NO USAR
-            if (status.status === 'permanently_blocked') {
-                console.log(`🚫 Saltando API ${key.projectName}: bloqueada permanentemente`);
+            if (status.status === 'permanently_blocked' || status.status === 'quota_exhausted') {
                 return false;
             }
             
-            // SI ESTÁ AGOTADA POR QUOTA, NO USAR
-            if (status.status === 'quota_exhausted') {
-                console.log(`❌ Saltando API ${key.projectName}: quota agotada`);
-                return false;
-            }
-            
-            // SI ESTÁ AGOTADA POR LÍMITE DIARIO, VERIFICAR SI YA SE RESETEÓ
             if (status.status === 'daily_limit') {
                 if (status.resetAt && now < status.resetAt) {
-                    console.log(`⏰ Saltando API ${key.projectName}: límite diario hasta ${new Date(status.resetAt).toLocaleString()}`);
                     return false;
                 } else {
-                    // RESETEAR STATUS SI YA PASÓ LA MEDIANOCHE
-                    console.log(`🔄 API ${key.projectName} reseteada - límite diario renovado`);
+                    // El tiempo de reseteo ha pasado, la reactivamos
                     status.status = 'active';
                     status.failureCount = 0;
+                    status.lastError = 'Reseteado automáticamente.';
                     statusMap.set(key.id, status);
                     this.saveAPIStatus(statusMap);
                     return true;
                 }
             }
             
-            return true;
+            return true; // Active
         });
+        logger.log('DEBUG', 'APIKeyManager', `Disponibles ${available.length}/${allKeys.length} APIs.`);
+        return available;
     }
     
-    // MARCAR API COMO EXITOSA (RESETEAR CONTADORES)
-    static markAsSuccessful(keyId: string, keyData: any): void {
+    public static markAsSuccessful(keyId: string, keyData: any): void {
         const statusMap = this.loadAPIStatus();
         const now = Date.now();
         
         const status: APIKeyStatus = statusMap.get(keyId) || {
             id: keyId,
-            api_key: keyData.api_key,
             projectName: keyData.projectName,
             status: 'active',
             failureCount: 0
         };
         
-        // RESETEAR SI ERA TEMPORAL
-        if (status.status === 'quota_exhausted' || status.status === 'daily_limit') {
-            status.status = 'active';
-            status.failureCount = 0;
-            console.log(`✅ API ${keyData.projectName} reactivada después de éxito`);
+        if (status.status !== 'active') {
+            logger.log('SUCCESS', 'APIKeyManager', `API ${keyData.projectName} reactivada tras una llamada exitosa.`);
         }
-        
+
+        status.status = 'active';
+        status.failureCount = 0;
         status.lastUsedAt = now;
+        status.lastError = undefined;
+        
         statusMap.set(keyId, status);
         this.saveAPIStatus(statusMap);
     }
     
-    // OBTENER SIGUIENTE HORA DE RESET (MEDIANOCHE PST)
     private static getNextResetTime(): number {
         const now = new Date();
-        const pst = new Date(now.toLocaleString("en-US", {timeZone: "America/Los_Angeles"}));
-        const nextMidnight = new Date(pst);
-        nextMidnight.setDate(pst.getDate() + 1);
-        nextMidnight.setHours(0, 5, 0, 0); // 00:05 PST para dar margen
+        // Google's daily quotas often reset at midnight PST.
+        const pstDate = new Date(now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+        const nextMidnightPST = new Date(pstDate);
+        nextMidnightPST.setDate(pstDate.getDate() + 1);
+        nextMidnightPST.setHours(0, 5, 0, 0); // Set to 00:05 PST to be safe
         
-        return nextMidnight.getTime();
+        // This returns the timestamp in the user's local timezone that corresponds to midnight PST.
+        return new Date(nextMidnightPST.toLocaleString("en-US", { timeZone: "America/Los_Angeles" })).getTime();
     }
     
-    // OBTENER ESTADÍSTICAS
-    static getStats(): {
-        total: number;
-        active: number;
-        quotaExhausted: number;
-        dailyLimit: number;
-        permanentlyBlocked: number;
-    } {
+    public static resetAllAPIs(): void {
+        localStorage.removeItem(this.STORAGE_KEY);
+        logger.log('INFO', 'APIKeyManager', 'TODOS los estados de API han sido reseteados.');
+    }
+    
+    public static resetSpecificAPI(projectName: string): void {
         const statusMap = this.loadAPIStatus();
-        let activeKeysCount = 0;
+        let keyIdToReset: string | null = null;
         
-        // We need to count the total keys from the source, and then categorize from statusMap
-        const allKeys = new Set(Array.from(statusMap.values()).map(s => s.id));
-        
-        const stats = {
-            total: allKeys.size,
-            active: 0,
-            quotaExhausted: 0,
-            dailyLimit: 0,
-            permanentlyBlocked: 0
-        };
-        
-        statusMap.forEach(status => {
-            switch (status.status) {
-                case 'active':
-                    stats.active++;
-                    break;
-                case 'quota_exhausted':
-                    stats.quotaExhausted++;
-                    break;
-                case 'daily_limit':
-                    stats.dailyLimit++;
-                    break;
-                case 'permanently_blocked':
-                    stats.permanentlyBlocked++;
-                    break;
+        statusMap.forEach((status, keyId) => {
+            if (status.projectName === projectName) {
+                keyIdToReset = keyId;
             }
         });
         
-        // Keys that are not in the status map are considered active.
-        // This is a proxy since we don't have the full key list here.
-        // A better approach would pass the full key list to getStats.
-        // For now, this is a reasonable approximation.
-        // Let's assume the rotator provides the full list context.
-        const knownKeys = statusMap.size;
-        
-        return stats;
+        if (keyIdToReset) {
+            statusMap.delete(keyIdToReset);
+            this.saveAPIStatus(statusMap);
+            logger.log('INFO', 'APIKeyManager', `API ${projectName} ha sido reseteada.`);
+        }
     }
-    
-    // RESETEAR TODAS LAS APIS (EMERGENCIA)
-    static resetAllAPIs(): void {
-        localStorage.removeItem(this.STORAGE_KEY);
-        console.log('🔄 TODAS LAS APIs RESETEADAS - Estado limpio');
-    }
-    
-    // LISTAR ESTADO DE TODAS LAS APIS
-    static listAPIStatus(): APIKeyStatus[] {
+
+    public static listAPIStatus(allKeys: any[]): APIKeyStatus[] {
         const statusMap = this.loadAPIStatus();
-        return Array.from(statusMap.values()).sort((a, b) => {
-            // Ordenar por estado: activas primero, luego por proyecto
-            if (a.status === 'active' && b.status !== 'active') return -1;
-            if (b.status === 'active' && a.status !== 'active') return 1;
-            return a.projectName.localeCompare(b.projectName);
+        return allKeys.map(key => statusMap.get(key.id) || {
+            id: key.id,
+            projectName: key.projectName,
+            status: 'active',
+            failureCount: 0
         });
+    }
+
+    public static getStats(allKeys: any[]): { total: number; active: number; quotaExhausted: number; dailyLimit: number; permanentlyBlocked: number; } {
+        const statusList = this.listAPIStatus(allKeys);
+        return {
+            total: allKeys.length,
+            active: statusList.filter(s => s.status === 'active').length,
+            quotaExhausted: statusList.filter(s => s.status === 'quota_exhausted').length,
+            dailyLimit: statusList.filter(s => s.status === 'daily_limit').length,
+            permanentlyBlocked: statusList.filter(s => s.status === 'permanently_blocked').length,
+        };
     }
 }
 
