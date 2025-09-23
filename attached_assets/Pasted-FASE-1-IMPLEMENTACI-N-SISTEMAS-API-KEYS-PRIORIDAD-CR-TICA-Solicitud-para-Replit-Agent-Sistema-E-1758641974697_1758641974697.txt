@@ -1,0 +1,250 @@
+FASE 1: IMPLEMENTACIÓN SISTEMAS API KEYS - PRIORIDAD CRÍTICA
+Solicitud para Replit Agent - Sistema Estructurado
+🎯 PROTOCOLO STRUCTURE APLICADO
+📋 MENSAJE PARA REPLIT AGENT
+text
+FASE 1 CRÍTICA - SISTEMA DE API KEYS INTELIGENTE
+
+Necesito implementar mejoras sistemáticas manteniendo EXACTAMENTE la estructura existente del proyecto AppContenidoOp.
+
+CONTEXT:
+- Aplicación React/TypeScript funcional en puerto 5000
+- StoryBuilder con 8 fases operativas (NO TOCAR)
+- Editor de fotos con herramientas avanzadas
+- Hook Matrix con 5 categorías especializadas (PRESERVAR)
+
+PROBLEMAS IDENTIFICADOS:
+❌ 4 errores LSP críticos en services/geminiService.ts
+❌ Sistema de API keys básico necesita rotación inteligente 100+
+❌ EditorCanvas incompleto (solo placeholder)
+❌ Falta gestión de tokens optimizada
+
+OBJETIVO FASE 1:
+Implementar sistema de rotación de API keys inteligente SIN cambios radicales en la experiencia de usuario.
+🔧 PLAN STRUCTURE DETALLADO
+S - STABILIZE (NO CAMBIAR NUNCA)
+json
+{
+  "componentes_criticos_preservar": {
+    "storybuilder": {
+      "phases": "Phase1.tsx hasta Phase8.tsx - INTACTOS",
+      "state_machine": "useStoryBuilderStateMachine - SIN MODIFICAR", 
+      "hook_matrix": "5 categorías especializadas funcionando",
+      "persistence": "projectPersistenceService.ts - PRESERVAR"
+    },
+    "navegacion": {
+      "startscreen": "StartScreen.tsx - MISMA INTERFAZ",
+      "flujos": "Editor/Story flows - MANTENER EXACTOS",
+      "componentes": "PhaseStepper, ProjectList - NO TOCAR"
+    },
+    "tipos_existentes": {
+      "interfaces": "story-builder/types.ts - PRESERVAR TODAS",
+      "enums": "ProjectType, StoryPhase - MANTENER",
+      "types": "StoryProject, PhaseData - NO MODIFICAR"
+    }
+  }
+}
+T - TARGET (Objetivos Específicos Fase 1)
+json
+{
+  "correcciones_criticas_fase1": {
+    "api_key_management": {
+      "objetivo": "Sistema rotación inteligente 100+ API keys",
+      "archivos_nuevos": [
+        "services/api-management/APIKeyManager.ts",
+        "services/api-management/RotationService.ts", 
+        "services/api-management/HealthMonitor.ts",
+        "services/api-management/ModelSelector.ts"
+      ],
+      "integracion": "Extender geminiService.ts SIN cambiar interfaz pública",
+      "resultado": "Rotación automática con failover inteligente"
+    },
+    "lsp_errors_fix": {
+      "objetivo": "Corregir 4 errores LSP en geminiService.ts",
+      "problema": "Incompatibilidad tipos con @google/genai",
+      "archivos": ["services/geminiService.ts"],
+      "resultado": "0 errores LSP, tipos alineados, funcionalidad intacta"
+    }
+  }
+}
+R - REFACTOR (Incremental Sin Breaking Changes)
+json
+{
+  "orden_implementacion_fase1": {
+    "paso_1": {
+      "accion": "Crear estructura services/api-management/",
+      "validacion": "Sin afectar imports existentes",
+      "tiempo": "5 minutos"
+    },
+    "paso_2": {
+      "accion": "Implementar APIKeyManager base",
+      "validacion": "Interface compatible con geminiService actual",
+      "tiempo": "10 minutos"
+    },
+    "paso_3": {
+      "accion": "Integrar rotación en geminiService.ts",
+      "validacion": "StoryBuilder sigue funcionando igual",
+      "tiempo": "10 minutos"
+    },
+    "paso_4": {
+      "accion": "Corregir errores LSP de tipos",
+      "validacion": "Compilación exitosa, funcionalidad preservada",
+      "tiempo": "10 minutos"
+    },
+    "paso_5": {
+      "accion": "Testing completo sistema",
+      "validacion": "App funciona idéntico que antes",
+      "tiempo": "5 minutos"
+    }
+  }
+}
+🏗️ ARQUITECTURA TÉCNICA FASE 1
+Estructura de Archivos a Crear
+text
+services/
+├── api-management/           # NUEVA CARPETA
+│   ├── APIKeyManager.ts     # Gestor central 100+ keys
+│   ├── RotationService.ts   # Rotación circular inteligente
+│   ├── HealthMonitor.ts     # Monitor estado en tiempo real
+│   ├── ModelSelector.ts     # Selección gemini-pro/flash/lite
+│   └── types.ts            # Tipos para gestión APIs
+├── geminiService.ts         # MODIFICAR (preservar interfaz)
+└── utils/                   # EXISTENTE - NO TOCAR
+Sistema de Rotación Inteligente
+typescript
+// APIKeyManager.ts - NUEVA IMPLEMENTACIÓN
+interface APIKeyConfig {
+  pool_size: "100+_keys";
+  rotation_strategy: "circular_with_health_check";
+  models_supported: ["gemini-pro", "gemini-flash", "gemini-flash-lite"];
+  failover: "automatic_with_recovery";
+  monitoring: "real_time_quota_tracking";
+}
+
+// Integración con geminiService.ts existente
+// PRESERVAR esta interfaz exacta:
+export interface GeminiServiceInterface {
+  generateContent(prompt: string): Promise<string>;
+  generateImages(prompt: string): Promise<string[]>;
+  // ... resto de métodos SIN CAMBIAR
+}
+🔄 PROTOCOLO DE VALIDACIÓN FASE 1
+Checkpoints Obligatorios
+json
+{
+  "checkpoint_1": {
+    "pregunta": "¿La aplicación inicia igual que antes?",
+    "validacion": "StartScreen muestra mismos proyectos",
+    "accion_si_falla": "ROLLBACK inmediato"
+  },
+  "checkpoint_2": {
+    "pregunta": "¿StoryBuilder funciona idéntico?",
+    "validacion": "8 fases navegan sin cambios",
+    "accion_si_falla": "ROLLBACK inmediato"
+  },
+  "checkpoint_3": {
+    "pregunta": "¿Errores LSP están corregidos?",
+    "validacion": "0 errores en VSCode",
+    "accion_si_falla": "Revisar tipos específicos"
+  },
+  "checkpoint_4": {
+    "pregunta": "¿Sistema API keys funciona?",
+    "validacion": "Generación de contenido sin errores",
+    "accion_si_falla": "Verificar configuración de keys"
+  },
+  "checkpoint_5": {
+    "pregunta": "¿Performance es igual o mejor?",
+    "validacion": "Tiempo respuesta similar o menor",
+    "accion_si_falla": "Optimizar rotación"
+  }
+}
+📊 IMPLEMENTACIÓN PASO A PASO
+PASO 1: Crear Base API Management
+typescript
+// services/api-management/APIKeyManager.ts
+export class APIKeyManager {
+  private keys: string[] = [];
+  private currentIndex: number = 0;
+  private healthMonitor: HealthMonitor;
+  
+  // COMPATIBLE con interfaz existente geminiService
+  async getAvailableKey(): Promise<string> {
+    // Lógica rotación inteligente
+  }
+  
+  // Preservar compatibilidad total
+  async rotateKey(): Promise<void> {
+    // Rotación automática
+  }
+}
+PASO 2: Integrar Sin Breaking Changes
+typescript
+// services/geminiService.ts - MODIFICACIÓN CUIDADOSA
+import { APIKeyManager } from './api-management/APIKeyManager';
+
+// PRESERVAR interfaz pública exacta
+export class GeminiService {
+  private apiKeyManager = new APIKeyManager();
+  
+  // MANTENER EXACTAMENTE estos métodos públicos:
+  async generateContent(prompt: string): Promise<string> {
+    const apiKey = await this.apiKeyManager.getAvailableKey();
+    // resto de lógica SIN CAMBIAR
+  }
+  
+  // ... todos los demás métodos PRESERVADOS
+}
+⚡ CONFIGURACIÓN RECOMENDADA REPLIT
+json
+{
+  "autonomy_level": "MEDIUM",
+  "app_testing": "ENABLED",
+  "max_checkpoints": "5 para Fase 1",
+  "validation_mode": "STRICT"
+}
+🎯 RESULTADO ESPERADO FASE 1
+Funcionalidades Nuevas
+✅ Sistema rotación 100+ API keys automático
+
+✅ Monitoreo salud de keys en tiempo real
+
+✅ Failover inteligente entre modelos
+
+✅ 0 errores LSP en todo el proyecto
+
+Preservado 100%
+✅ Experiencia usuario idéntica
+
+✅ StoryBuilder 8 fases funcionando
+
+✅ Hook Matrix operativo
+
+✅ Navegación y UI sin cambios
+
+✅ Persistencia de proyectos intacta
+
+💡 INSTRUCCIONES FINALES PARA REPLIT
+COMENZAR CON:
+
+text
+Analiza el archivo services/geminiService.ts y muéstrame:
+1. Los 4 errores LSP específicos encontrados
+2. La interfaz pública actual que DEBO PRESERVAR
+3. El plan exacto de corrección SIN breaking changes
+
+Solo después de tu análisis, procederemos con la implementación paso a paso.
+
+REGLA CRÍTICA: Si en cualquier momento detectas que un cambio puede afectar la navegación o experiencia de usuario, PAUSAR y consultarme antes de continuar.
+📋 CHECKLIST PRE-IMPLEMENTACIÓN
+ Entender que NO debo cambiar la experiencia de usuario
+
+ Preservar interfaz pública de geminiService
+
+ Mantener StoryBuilder funcionando idéntico
+
+ Crear sistema API management como EXTENSIÓN
+
+ Validar en cada paso que app funciona igual
+
+ Reportar si encuentro problemas estructurales
+
