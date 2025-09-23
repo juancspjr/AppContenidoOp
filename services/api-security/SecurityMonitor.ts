@@ -10,7 +10,7 @@
 // Previene suspensiones y bloqueos por abuso detectado
 // ============================================================================
 
-import { logger } from '../utils/logger';
+import { logger } from '../../utils/logger';
 
 interface KeySecurityProfile {
     keyId: string;

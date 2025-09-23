@@ -20,7 +20,8 @@ export default defineConfig({
       process.env.GOOGLE_API_KEY3,
       process.env.GOOGLE_API_KEY4,
       process.env.GOOGLE_API_KEY5,
-      process.env.GOOGLE_API_KEY6
+      process.env.GOOGLE_API_KEY6,
+      process.env.GOOGLE_API_KEY07
     ].filter(key => key && key.trim() !== ''))
   },
   resolve: {

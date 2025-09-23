@@ -11,7 +11,7 @@
 // ============================================================================
 
 import { GoogleGenAI } from "@google/genai";
-import { logger } from '../utils/logger';
+import { logger } from '../../utils/logger';
 
 interface APITestResult {
     isValid: boolean;
