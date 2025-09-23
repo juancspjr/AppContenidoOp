@@ -5,6 +5,11 @@ import { fileURLToPath, URL } from 'node:url'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  server: {
+    host: '0.0.0.0',
+    port: 5000,
+    strictPort: true,
+  },
   resolve: {
     alias: {
       // FIX: Set alias '@' to resolve to the project's root directory.
