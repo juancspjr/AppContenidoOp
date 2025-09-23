@@ -1,0 +1,260 @@
+FASE 0: PREPARACIÓN DEL ENTORNO WEB INICIAL
+Solicitud Crítica para Replit Agent - Configuración de Base
+🎯 PROTOCOLO DE INICIO PARA ENTORNO WEB SEGURO
+🚨 MENSAJE INICIAL PRIORITARIO PARA REPLIT
+text
+FASE 0 CRÍTICA - PREPARACIÓN ENTORNO WEB INICIAL
+
+Necesito configurar correctamente el entorno web antes de implementar mejoras, debido a restricciones de seguridad de Google que pueden afectar la migración y funcionalidad del sistema.
+
+CONTEXTO SITUACIONAL:
+- Aplicación React/TypeScript en desarrollo
+- Posibles problemas de migración con APIs Google/Gemini
+- Restricciones de seguridad que pueden dañar configuración
+- Necesidad de ambiente estable antes de mejoras
+
+OBJETIVO FASE 0:
+Establecer entorno web funcional y seguro, verificando compatibilidad con APIs Gemini y resolviendo conflictos de migración ANTES de implementar mejoras estructurales.
+🔧 PROTOCOLO STRUCTURE PARA ENTORNO WEB
+S - STABILIZE (Verificar Estado Actual)
+json
+{
+  "verificaciones_criticas_entorno": {
+    "aplicacion_base": {
+      "puerto": "5000 - verificar disponibilidad",
+      "compilacion": "npm run dev - debe iniciar sin errores",
+      "navegacion": "StartScreen debe cargar correctamente",
+      "rutas": "Todas las rutas deben responder"
+    },
+    "configuracion_google": {
+      "api_keys": "Verificar autenticación con Gemini",
+      "cors": "Verificar políticas CORS configuradas",
+      "dominios": "Verificar dominios autorizados",
+      "quotas": "Verificar límites disponibles"
+    },
+    "dependencias": {
+      "node_modules": "Verificar integridad de dependencias",
+      "package_json": "Verificar versiones compatibles", 
+      "typescript": "Verificar configuración TSConfig",
+      "vite_react": "Verificar build tool funcionando"
+    }
+  }
+}
+T - TARGET (Objetivos Específicos Fase 0)
+json
+{
+  "objetivos_entorno_web": {
+    "estabilidad_base": {
+      "objetivo": "Aplicación iniciando sin errores críticos",
+      "validacion": "Carga completa en navegador",
+      "checkpoint": "StartScreen visible y navegable"
+    },
+    "conectividad_apis": {
+      "objetivo": "Conexión funcional con Gemini APIs", 
+      "validacion": "Test de generación exitoso",
+      "checkpoint": "Respuesta de API sin error 403/401"
+    },
+    "configuracion_segura": {
+      "objetivo": "Variables de entorno configuradas correctamente",
+      "validacion": "API keys accesibles desde código",
+      "checkpoint": "Sin exposición de secrets en cliente"
+    },
+    "compatibilidad_migracion": {
+      "objetivo": "Resolver conflictos de migración Google",
+      "validacion": "Sin errores relacionados a OAuth/Security",
+      "checkpoint": "Políticas de seguridad compatibles"
+    }
+  }
+}
+R - REFACTOR (Preparación Incremental)
+json
+{
+  "pasos_configuracion_entorno": {
+    "paso_1": {
+      "accion": "Verificar estado actual de la aplicación",
+      "tiempo": "2 minutos",
+      "validacion": "App inicia correctamente"
+    },
+    "paso_2": {
+      "accion": "Diagnosticar errores de migración Google",
+      "tiempo": "3 minutos",
+      "validacion": "Identificar restricciones específicas"
+    },
+    "paso_3": {
+      "accion": "Configurar variables de entorno seguras",
+      "tiempo": "3 minutos", 
+      "validacion": "API keys funcionando"
+    },
+    "paso_4": {
+      "accion": "Resolver conflictos CORS y dominios",
+      "tiempo": "5 minutos",
+      "validacion": "Conexiones API exitosas"
+    },
+    "paso_5": {
+      "accion": "Testing completo de funcionalidad básica",
+      "tiempo": "2 minutos",
+      "validacion": "Sistema base operativo"
+    }
+  }
+}
+🌐 CONFIGURACIÓN ESPECÍFICA ENTORNO WEB
+Verificaciones de Migración Google
+bash
+# Comandos de diagnóstico recomendados
+npm run dev  # Verificar inicio sin errores
+curl -X GET "localhost:5000"  # Verificar servidor responde
+npm audit  # Verificar dependencias seguras
+npm ls @google/genai  # Verificar versión API Google
+Variables de Entorno Seguras
+text
+# Configuración recomendada para Replit Secrets
+GOOGLE_API_KEYS=key1,key2,key3...  # Lista separada por comas
+GEMINI_MODELS=gemini-pro,gemini-flash,gemini-flash-lite
+ENVIRONMENT=development
+NODE_ENV=development
+CORS_ORIGIN=*.replit.dev,*.replit.co
+Configuración CORS Anti-Restricciones
+javascript
+// Configuración CORS recomendada para evitar bloqueos Google
+const corsOptions = {
+  origin: [
+    'https://*.replit.dev', 
+    'https://*.replit.co',
+    'http://localhost:5000'
+  ],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: false  // Evitar problemas cookies/auth
+};
+🔍 DIAGNÓSTICO DE PROBLEMAS MIGRACION GOOGLE
+Problemas Comunes Detectables
+json
+{
+  "restricciones_google_posibles": {
+    "oauth_domain_verification": {
+      "error": "Domain not authorized",
+      "solucion": "Configurar dominio Replit en Google Console"
+    },
+    "api_key_restrictions": {
+      "error": "API key restricted by IP/domain",
+      "solucion": "Remover restricciones o agregar *.replit.dev"
+    },
+    "quota_exceeded_early": {
+      "error": "Quota exceeded unexpectedly",
+      "solucion": "Verificar quotas en Google AI Studio"
+    },
+    "cors_preflight_failure": {
+      "error": "CORS preflight failed",
+      "solucion": "Configurar headers apropiados"
+    }
+  }
+}
+⚡ VALIDACIONES CHECKPOINT POR PASO
+Checkpoint 1: Estado Base
+bash
+# Validaciones automáticas
+- [ ] npm run dev inicia sin errores
+- [ ] Puerto 5000 accesible
+- [ ] StartScreen carga completamente
+- [ ] Console sin errores críticos
+Checkpoint 2: APIs Google
+bash
+# Tests de conectividad
+- [ ] geminiService responde a test call
+- [ ] No errores 401/403 en network tab
+- [ ] API keys válidas y activas
+- [ ] Quotas disponibles verificadas
+Checkpoint 3: Seguridad
+bash
+# Validaciones seguridad
+- [ ] API keys NO expuestas en cliente
+- [ ] Variables entorno cargadas correctamente
+- [ ] CORS configurado apropiadamente  
+- [ ] Sin warnings de seguridad en console
+Checkpoint 4: Migración
+bash
+# Verificación específica migración
+- [ ] Sin conflictos OAuth
+- [ ] Dominios autorizados en Google Console
+- [ ] Políticas seguridad compatibles
+- [ ] Sin errores relacionados a migración
+Checkpoint 5: Funcionalidad
+bash
+# Testing funcional básico
+- [ ] StoryBuilder navega entre fases
+- [ ] Editor muestra interfaz (aunque incompleto)
+- [ ] Generación de contenido funciona
+- [ ] Persistencia de proyectos activa
+🎯 INSTRUCCIONES ESPECÍFICAS PARA REPLIT
+Mensaje para iniciar diagnóstico:
+
+text
+ANÁLISIS INICIAL REQUERIDO:
+
+1. Ejecuta `npm run dev` y reporta cualquier error de inicio
+2. Verifica que la aplicación carga en puerto 5000
+3. Inspecciona Network tab para errores API (especialmente 401/403/CORS)
+4. Revisa Console para warnings de migración/seguridad Google
+5. Testa una llamada básica a geminiService
+
+SOLO después de este análisis, procede con correcciones incrementales.
+
+REGLA CRÍTICA: Si detectas problemas de autorización/migración Google, PAUSA inmediatamente y reporta antes de hacer cambios.
+📊 PROTOCOLO DE DECISIÓN POST-DIAGNÓSTICO
+SI TODO ESTÁ BIEN:
+✅ Continuar con FASE 1 (Sistema API Keys)
+
+✅ Aplicar mejoras estructurales planificadas
+
+✅ Proceder con autonomía MEDIUM
+
+SI HAY PROBLEMAS MENORES:
+🔧 Corregir configuración CORS/dominios
+
+🔧 Ajustar variables de entorno
+
+🔧 Continuar con precaución
+
+SI HAY PROBLEMAS CRÍTICOS:
+🚨 PAUSA inmediata
+
+🚨 Reportar problemas específicos
+
+🚨 Solicitar input antes de continuar
+
+🚨 Considerar rollback si es necesario
+
+💡 RESULTADO ESPERADO FASE 0
+Estado Final Deseado:
+✅ Aplicación web carga sin errores
+
+✅ APIs Google/Gemini completamente funcionales
+
+✅ Variables de entorno seguras y accesibles
+
+✅ Sin conflictos de migración o seguridad
+
+✅ Base sólida para implementar mejoras
+
+Documentación Generada:
+✅ Reporte de estado actual del entorno
+
+✅ Lista de problemas encontrados y resueltos
+
+✅ Configuración final de variables/CORS
+
+✅ Validación completa de conectividad APIs
+
+🚀 MENSAJE FINAL PARA REPLIT AGENT
+text
+Ejecuta FASE 0 con máxima precaución:
+
+1. DIAGNÓSTICA antes de cambiar
+2. REPORTA problemas encontrados  
+3. CORRIGE incrementalmente
+4. VALIDA cada paso
+5. CONFIRMA estado final
+
+Objetivo: Base web sólida y segura para futuras mejoras.
+
+¿Estás listo para iniciar diagnóstico del entorno web?
