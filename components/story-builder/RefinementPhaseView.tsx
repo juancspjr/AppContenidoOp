@@ -5,7 +5,8 @@
 
 import React from 'react';
 import type { StoryMasterplan, Documentation } from './types';
-import { DocumentIcon } from '../icons';
+import { DocumentIcon, ExportIcon } from '../icons';
+import Spinner from '../Spinner';
 
 interface RefinementPhaseViewProps {
     storyPlan: StoryMasterplan | null;
@@ -36,48 +37,49 @@ const RefinementPhaseView: React.FC<RefinementPhaseViewProps> = ({ storyPlan, do
 
     if (!storyPlan || !documentation) {
         return (
-            <div className="text-center">
-                <p>Cargando documentos de refinamiento...</p>
+            <div className="text-center py-8">
+                <Spinner />
+                <p className="text-gray-400 mt-4">Cargando documentos de pre-producción...</p>
             </div>
         );
     }
     
     return (
-        <div className="animate-fade-in">
-            <h3 className="text-2xl font-bold mb-2 text-green-400">Fase 6.2: Documentación de Producción</h3>
-            <p className="text-gray-400 mb-6">La documentación de producción para tu plan de historia ha sido generada. El siguiente paso es crear una matriz de ganchos virales para maximizar el impacto de tu historia.</p>
+        <div className="animate-fade-in space-y-6">
+            <h2 className="text-2xl font-bold text-green-400">Fase 6.2: Mesa de Pre-Producción</h2>
+            <p className="text-gray-400">Los "jefes de departamento" de la IA han preparado los planos de tu proyecto. Revísalos y descárgalos. Cuando estés listo, da la luz verde para empezar a crear los activos visuales.</p>
 
             <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
                 <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700 flex flex-col sm:flex-row items-center gap-4">
-                    <DocumentIcon className="w-8 h-8 text-yellow-400 flex-shrink-0" />
+                    <DocumentIcon className="w-10 h-10 text-yellow-400 flex-shrink-0" />
                     <div className="flex-grow text-center sm:text-left">
                         <h4 className="font-bold text-yellow-300">Guía de Producción para IA</h4>
-                        <p className="text-sm text-gray-400">El documento técnico con prompts detallados para la IA.</p>
+                        <p className="text-sm text-gray-400">El manual técnico con los prompts visuales detallados, especificaciones y notas de producción para cada escena.</p>
                     </div>
                     <button onClick={() => handleDownload(documentation.aiProductionGuide, 'AI_Production_Guide.md')} className="w-full sm:w-auto bg-yellow-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-500 transition-colors">
-                        Descargar
+                        Descargar Guía
                     </button>
                 </div>
                 
                 <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700 flex flex-col sm:flex-row items-center gap-4">
-                    <DocumentIcon className="w-8 h-8 text-blue-400 flex-shrink-0" />
+                    <DocumentIcon className="w-10 h-10 text-blue-400 flex-shrink-0" />
                     <div className="flex-grow text-center sm:text-left">
-                        <h4 className="font-bold">Guía del Director</h4>
-                        <p className="text-sm text-gray-400">El documento maestro de tu proyecto.</p>
+                        <h4 className="font-bold text-blue-300">Biblia del Director</h4>
+                        <p className="text-sm text-gray-400">La visión artística. Explica la filosofía, la dirección de personajes, el ritmo y las técnicas narrativas.</p>
                     </div>
                     <button onClick={() => handleDownload(documentation.directorsBible, 'Directors_Bible.md')} className="w-full sm:w-auto bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-500 transition-colors">
-                        Descargar
+                        Descargar Biblia
                     </button>
                 </div>
 
                 <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700 flex flex-col sm:flex-row items-center gap-4">
-                     <DocumentIcon className="w-8 h-8 text-blue-400 flex-shrink-0" />
+                     <DocumentIcon className="w-10 h-10 text-teal-400 flex-shrink-0" />
                     <div className="flex-grow text-center sm:text-left">
-                        <h4 className="font-bold">Guía de Estilo Visual</h4>
-                        <p className="text-sm text-gray-400">Dirección visual, paleta de colores, cinematografía y diseño.</p>
+                        <h4 className="font-bold text-teal-300">Guía de Estilo Visual</h4>
+                        <p className="text-sm text-gray-400">El manual de identidad visual. Define la cinematografía, la paleta de colores, la iluminación y el diseño de producción.</p>
                     </div>
-                    <button onClick={() => handleDownload(documentation.visualStyleGuide, 'Visual_Style_Guide.md')} className="w-full sm:w-auto bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-500 transition-colors">
-                        Descargar
+                    <button onClick={() => handleDownload(documentation.visualStyleGuide, 'Visual_Style_Guide.md')} className="w-full sm:w-auto bg-teal-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-teal-500 transition-colors">
+                        Descargar Guía
                     </button>
                 </div>
             </div>
@@ -85,15 +87,16 @@ const RefinementPhaseView: React.FC<RefinementPhaseViewProps> = ({ storyPlan, do
             <div className="pt-6 border-t border-gray-700 mt-6 flex flex-col sm:flex-row gap-4">
                 <button 
                     onClick={handleExportProject} 
-                    className="w-full sm:w-auto flex-grow bg-gray-600 text-white font-bold py-3 rounded-lg hover:bg-gray-500 transition-colors"
+                    className="w-full sm:w-auto flex-grow bg-gray-600 text-white font-bold py-3 rounded-lg hover:bg-gray-500 transition-colors flex items-center justify-center gap-2"
                 >
-                    📁 Exportar Proyecto (.json)
+                    <ExportIcon className="w-5 h-5"/>
+                    Exportar Plan Maestro (.json)
                 </button>
                 <button 
                     onClick={onStartHookMatrixGeneration} 
                     className="w-full sm:w-auto flex-grow bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-500 transition-colors"
                 >
-                    ▶️ Generar Matriz de Ganchos Virales
+                    Generar Activos de Referencia ➡️
                 </button>
             </div>
         </div>

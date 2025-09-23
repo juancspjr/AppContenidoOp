@@ -7,7 +7,8 @@ import React, { useState, useCallback } from 'react';
 import StartScreen from './components/StartScreen';
 import EditorCanvas from './components/EditorCanvas';
 import StoryBuilder from './components/StoryBuilder';
-import type { StoryMasterplan, ExportedProject } from './components/story-builder/types';
+// FIX: Corrected project type to `ExportedProject` to ensure type consistency.
+import type { ExportedProject } from './components/story-builder/types';
 import { projectPersistenceService } from './services/projectPersistenceService';
 import { logger } from './utils/logger';
 

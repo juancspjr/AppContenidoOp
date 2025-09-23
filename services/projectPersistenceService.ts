@@ -113,7 +113,7 @@ class ProjectPersistenceService {
         const referenceAssets = project.referenceAssets;
         if (referenceAssets) {
             const refFolder = zip.folder('generated_reference_assets');
-            const allRefs = [...referenceAssets.characters, ...referenceAssets.environments, ...referenceAssets.elements];
+            const allRefs = [...referenceAssets.characters, ...referenceAssets.environments, ...referenceAssets.elements, ...referenceAssets.sceneFrames];
             for (const asset of allRefs) {
                 assetPromises.push(
                     assetDBService.loadAsset(asset.assetId).then(blob => {
@@ -125,15 +125,17 @@ class ProjectPersistenceService {
             }
         }
 
-        // Add final video assets
+        // Add final assets (videos, animated images, etc.)
         const finalAssets = project.finalAssets;
-        if (finalAssets) {
-            const finalFolder = zip.folder('final_videos');
-            for (const asset of finalAssets.videoAssets) {
+        if (finalAssets && finalAssets.assets) {
+            const finalFolder = zip.folder('final_production_assets');
+            for (const asset of finalAssets.assets) {
                  assetPromises.push(
                     assetDBService.loadAsset(asset.assetId).then(blob => {
                         if (blob) {
-                            finalFolder?.file(`S${asset.sceneId.split('_')[1]}_P${asset.segment}.mp4`, blob);
+                            const sceneNum = asset.sceneId.split('_')[1] || 'unknown';
+                            const extension = asset.type === 'video' ? 'mp4' : 'png';
+                            finalFolder?.file(`${asset.type}_S${sceneNum}.${extension}`, blob);
                         }
                     })
                 );

@@ -23,31 +23,37 @@ const StyleCategory: React.FC<{
     selected: string[];
     onChange: (value: string) => void;
     required?: boolean;
-}> = ({ label, options, selected, onChange, required }) => (
-    <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
-        <h3 className="text-lg font-semibold text-gray-200 mb-3">{label}{required && <span className="text-red-400">*</span>}</h3>
-        <div className="flex flex-wrap gap-2">
-            {options.map(opt => {
-                const isSelected = selected.includes(opt.name);
-                return (
-                    <button
-                        key={opt.name}
-                        title={opt.description}
-                        onClick={() => onChange(opt.name)}
-                        className={`px-3 py-1.5 text-sm rounded-full border transition-all duration-200 transform active:scale-95 ${
-                            isSelected 
-                            ? 'bg-blue-500 border-blue-400 text-white shadow-md shadow-blue-500/20' 
-                            : 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600 hover:border-gray-500'
-                        }`}
-                    >
-                        {isSelected && '✓ '}
-                        {opt.name}
-                    </button>
-                );
-            })}
+}> = ({ label, options, selected, onChange, required }) => {
+    const isMaxReached = selected.length >= 4;
+
+    return (
+        <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-200 mb-3">{label}{required && <span className="text-red-400">*</span>}</h3>
+            <div className="flex flex-wrap gap-2">
+                {options.map(opt => {
+                    const isSelected = selected.includes(opt.name);
+                    const isDisabled = isMaxReached && !isSelected;
+                    return (
+                        <button
+                            key={opt.name}
+                            title={opt.description}
+                            onClick={() => onChange(opt.name)}
+                            disabled={isDisabled}
+                            className={`px-3 py-1.5 text-sm rounded-full border transition-all duration-200 transform active:scale-95 ${
+                                isSelected 
+                                ? 'bg-blue-500 border-blue-400 text-white shadow-md shadow-blue-500/20' 
+                                : 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600 hover:border-gray-500'
+                            } ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                            {isSelected && '✓ '}
+                            {opt.name}
+                        </button>
+                    );
+                })}
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 
 const Phase2_Style: React.FC<Phase2_StyleProps> = ({ onComplete, initialData, onBack, onSuggest, isSuggesting, areKeysConfigured }) => {
@@ -67,10 +73,10 @@ const Phase2_Style: React.FC<Phase2_StyleProps> = ({ onComplete, initialData, on
             if (isSelected) {
                 newValues = currentValues.filter(item => item !== value);
             } else {
-                if (currentValues.length < 3) {
+                if (currentValues.length < 4) {
                     newValues = [...currentValues, value];
                 } else {
-                    alert("Puedes seleccionar hasta 3 opciones por categoría.");
+                    // This case should not be reached if UI is disabled correctly, but is a safe fallback.
                     newValues = currentValues;
                 }
             }
@@ -79,13 +85,23 @@ const Phase2_Style: React.FC<Phase2_StyleProps> = ({ onComplete, initialData, on
         });
     };
     
+    const handleEnergyLevelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setStyle(prev => ({ ...prev, energyLevel: parseInt(e.target.value, 10) }));
+    };
+    
     const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         setStyle(prev => ({...prev, styleNotes: e.target.value}));
     };
 
-    const canProceed = style.outputFormat && style.outputFormat.length > 0 &&
-                       style.narrativeStyle && style.narrativeStyle.length > 0 &&
-                       style.visualStyle && style.visualStyle.length > 0;
+    const canProceed = !!(
+        style.outputFormat?.length &&
+        style.narrativeStyle?.length &&
+        style.visualStyle?.length &&
+        style.narrativeStructure?.length &&
+        style.hook?.length &&
+        style.conflict?.length &&
+        style.ending?.length
+    );
 
     const flattenOptions = (obj: Record<string, {name: string, description: string}[]>) => Object.values(obj).flat();
 
@@ -93,10 +109,10 @@ const Phase2_Style: React.FC<Phase2_StyleProps> = ({ onComplete, initialData, on
         { key: 'outputFormat', label: 'Formato de Salida', options: flattenOptions(outputFormats), required: true },
         { key: 'narrativeStyle', label: 'Estilo Narrativo', options: flattenOptions(narrativeStyles), required: true },
         { key: 'visualStyle', label: 'Estilo Visual', options: flattenOptions(visualStyles), required: true },
-        { key: 'narrativeStructure', label: 'Estructura Narrativa (Opcional)', options: narrativeStructures },
-        { key: 'hook', label: 'Tipo de Gancho (Hook) (Opcional)', options: flattenOptions(hookTypes) },
-        { key: 'conflict', label: 'Tipo de Conflicto (Opcional)', options: flattenOptions(conflictTypes) },
-        { key: 'ending', label: 'Tipo de Final (Opcional)', options: flattenOptions(endingTypes) },
+        { key: 'narrativeStructure', label: 'Estructura Narrativa', options: narrativeStructures, required: true },
+        { key: 'hook', label: 'Tipo de Gancho (Hook)', options: flattenOptions(hookTypes), required: true },
+        { key: 'conflict', label: 'Tipo de Conflicto', options: flattenOptions(conflictTypes), required: true },
+        { key: 'ending', label: 'Tipo de Final', options: flattenOptions(endingTypes), required: true },
     ];
 
     return (
@@ -104,7 +120,7 @@ const Phase2_Style: React.FC<Phase2_StyleProps> = ({ onComplete, initialData, on
             <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                 <div>
                     <h2 className="text-2xl font-bold text-blue-300">Fase 2: Estilo y Formato</h2>
-                    <p className="text-gray-400">Define el look & feel de tu historia. Elige hasta 3 opciones por categoría o deja que la IA lo haga por ti.</p>
+                    <p className="text-gray-400">Define el look & feel de tu historia. Elige hasta 4 opciones por categoría o deja que la IA lo haga por ti.</p>
                 </div>
                 <button 
                     onClick={onSuggest}
@@ -120,7 +136,8 @@ const Phase2_Style: React.FC<Phase2_StyleProps> = ({ onComplete, initialData, on
             <div className="space-y-4">
                 {categories.map(cat => (
                     <StyleCategory
-                        key={cat.key}
+                        // FIX: Cast key to string to satisfy React's key type requirement.
+                        key={String(cat.key)}
                         label={cat.label}
                         options={cat.options}
                         selected={(style[cat.key] as string[] | undefined) || []}
@@ -128,6 +145,24 @@ const Phase2_Style: React.FC<Phase2_StyleProps> = ({ onComplete, initialData, on
                         required={cat.required}
                     />
                 ))}
+
+                <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
+                    <h3 className="text-lg font-semibold text-gray-200 mb-3">Nivel de energía (1=Calmado, 10=Caótico)</h3>
+                    <div className="flex items-center gap-4">
+                        <span className="text-sm text-gray-400">Calmado</span>
+                        <input
+                            type="range"
+                            min="1"
+                            max="10"
+                            value={style.energyLevel || 5}
+                            onChange={handleEnergyLevelChange}
+                            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                        />
+                        <span className="text-sm text-gray-400">Caótico</span>
+                        <span className="font-bold text-lg text-white w-8 text-center">{style.energyLevel || 5}</span>
+                    </div>
+                </div>
+                
                 <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
                      <h3 className="text-lg font-semibold text-gray-200 mb-3">Notas Adicionales de Estilo (Opcional)</h3>
                      <textarea

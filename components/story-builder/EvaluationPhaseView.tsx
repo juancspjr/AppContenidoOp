@@ -68,7 +68,7 @@ const EvaluationPhaseView: React.FC<EvaluationPhaseViewProps> = ({ critique, isL
         return (
             <div className="text-center py-8">
                 <Spinner className="animate-spin h-16 w-16 text-white mx-auto" />
-                <p className="text-gray-400 mt-4">Cargando evaluación estratégica...</p>
+                <p className="text-gray-400 mt-4">El Estratega de IA está analizando tu plan...</p>
             </div>
         );
     }
@@ -80,11 +80,11 @@ const EvaluationPhaseView: React.FC<EvaluationPhaseViewProps> = ({ critique, isL
     return (
         <div className="animate-fade-in">
             <h3 className="text-2xl font-bold mb-2 text-green-400">Fase 6.1: Evaluación y Estrategia</h3>
-            <p className="text-gray-400 mb-6">Un agente de IA ha analizado tu plan y ha preparado un diagnóstico para optimizarlo para tu formato de salida. Revisa las sugerencias y decide cómo proceder.</p>
+            <p className="text-gray-400 mb-6">Un agente de IA ha analizado tu plan y ha preparado un diagnóstico para optimizarlo. Revisa las sugerencias y decide cómo proceder.</p>
             
             <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Section title="Puntos Fuertes Narrativos" icon="👍">
+                    <Section title="Puntos Fuertes" icon="👍">
                         {Array.isArray(critique.narrativeStrengths) && critique.narrativeStrengths.length > 0 ? (
                             <ul className="list-disc list-inside ml-2">
                                 {critique.narrativeStrengths.map((s, i) => <li key={i}>{s}</li>)}
@@ -96,18 +96,18 @@ const EvaluationPhaseView: React.FC<EvaluationPhaseViewProps> = ({ critique, isL
                     <Section title="Potencial Viral" icon="📈">
                         <div className="text-center">
                             <p className={`text-5xl font-bold ${viralPotentialColor}`}>{viralPotential.toFixed(1)}<span className="text-2xl">/10</span></p>
-                            <p className="text-gray-400 mt-2">Puntuación estimada por la IA basada en el formato y el concepto.</p>
+                            <p className="text-gray-400 mt-2">Puntuación estimada por la IA.</p>
                         </div>
                     </Section>
                 </div>
 
-                <Section title="Puntos Débiles y Sugerencias" icon="⚠️">
+                <Section title="Debilidades y Sugerencias" icon="⚠️">
                     {Array.isArray(critique.weaknesses) && critique.weaknesses.length > 0 ? (
                         <ul className="space-y-3">
                             {critique.weaknesses.map((w, i) => (
                                 <li key={i} className="bg-gray-800/50 p-2 rounded-md">
                                     <p className="font-semibold text-red-400">{w?.point}</p>
-                                    <p className="text-gray-300 pl-2 border-l-2 border-red-400/30 mt-1"><strong>Sugerencia:</strong> {w?.suggestion}</p>
+                                    <p className="text-gray-300 pl-2 border-l-2 border-green-400/30 mt-1"><strong>Sugerencia:</strong> {w?.suggestion}</p>
                                 </li>
                             ))}
                         </ul>

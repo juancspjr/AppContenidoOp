@@ -53,6 +53,22 @@ body {
     }
 }
 
+/* Ken Burns effect for animated images */
+@keyframes ken-burns {
+    0% {
+        transform: scale(1) translate(0, 0);
+        transform-origin: center center;
+    }
+    100% {
+        transform: scale(1.15) translate(-2%, 2%);
+        transform-origin: center center;
+    }
+}
+.ken-burns-effect {
+    animation: ken-burns 15s ease-in-out infinite alternate;
+}
+
+
 #star-bg {
     position: fixed;
     top: 0;
@@ -165,7 +181,8 @@ body {
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.19.0",
     "path": "https://aistudiocdn.com/path@^0.12.7",
     "jszip": "https://aistudiocdn.com/jszip@^3.10.1",
-    "zod": "https://aistudiocdn.com/zod@^4.1.11"
+    "zod": "https://aistudiocdn.com/zod@^4.1.11",
+    "uuid": "https://aistudiocdn.com/uuid@^13.0.0"
   }
 }
 </script>
