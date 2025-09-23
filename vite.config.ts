@@ -9,6 +9,7 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5000,
     strictPort: true,
+    allowedHosts: true, // Permite todas las conexiones de hosts en Replit
   },
   define: {
     // Inyectar las API keys como constantes globales

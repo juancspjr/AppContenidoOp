@@ -26,8 +26,9 @@ import { projectPersistenceService } from '../services/projectPersistenceService
 import { assetDBService } from '../services/assetDBService';
 import { logger } from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
+import { GEMINI_API_KEYS } from '../config/secure_config';
 
-const areKeysConfigured = process.env.API_KEY && !process.env.API_KEY.startsWith('YOUR_API_KEY');
+const areKeysConfigured = GEMINI_API_KEYS.length > 0 && !GEMINI_API_KEYS[0]?.includes('YOUR_API_KEY');
 
 export function useStoryBuilderStateMachine(existingProject?: ExportedProject) {
     const [phase, setPhase] = useState(existingProject?.phase || 1);
