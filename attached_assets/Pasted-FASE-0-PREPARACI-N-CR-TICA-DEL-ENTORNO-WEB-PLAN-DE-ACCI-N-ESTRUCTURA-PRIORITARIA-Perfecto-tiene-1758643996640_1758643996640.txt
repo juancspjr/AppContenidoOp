@@ -1,0 +1,75 @@
+FASE 0: PREPARACIÓN CRÍTICA DEL ENTORNO WEB
+🎯 PLAN DE ACCIÓN ESTRUCTURA PRIORITARIA
+Perfecto, tienes razón al querer comenzar con la FASE 0 para establecer un entorno web sólido antes de las mejoras. Los problemas de migración con las restricciones de seguridad de Google pueden causar fallos críticos si no se abordan primero.
+
+🚨 PROTOCOLO DE INICIO INMEDIATO
+S - STABILIZE (Verificaciones Críticas)
+✅ Aplicación base: Puerto 5000, compilación, navegación StartScreen
+
+✅ Configuración Google: API keys, CORS, dominios, quotas
+
+✅ Dependencias: node_modules, package.json, TypeScript, Vite/React
+
+T - TARGET (Objetivos Fase 0)
+🎯 Estabilidad: Aplicación sin errores críticos de inicio
+
+🎯 Conectividad APIs: Gemini funcionando sin 401/403
+
+🎯 Seguridad: Variables entorno configuradas sin exposición
+
+🎯 Migración: Resolver conflictos OAuth/Security Google
+
+R - REFACTOR (Pasos Incrementales)
+Diagnóstico actual (2 min): Verificar estado app
+
+Problemas migración (3 min): Identificar restricciones Google
+
+Variables seguras (3 min): Configurar entorno Replit
+
+CORS/dominios (5 min): Resolver conectividad
+
+Testing básico (2 min): Validar funcionalidad
+
+🔍 DIAGNÓSTICO AUTOMÁTICO INCLUIDO
+Problemas Google Comunes:
+Domain not authorized: Configurar *.replit.dev en Google Console
+
+API key restrictions: Remover restricciones IP/domain
+
+CORS preflight failed: Headers apropiados
+
+OAuth conflicts: Políticas seguridad compatibles
+
+5 Checkpoints Críticos:
+npm run dev inicia sin errores
+
+APIs Gemini responden (no 401/403)
+
+Variables entorno seguras (no exposición cliente)
+
+Sin conflictos migración OAuth
+
+StoryBuilder navega correctamente
+
+💡 INSTRUCCIÓN PARA REPLIT AGENT
+Mensaje exacto para copiar:
+
+text
+ANÁLISIS INICIAL REQUERIDO:
+
+1. Ejecuta `npm run dev` y reporta cualquier error de inicio
+2. Verifica que la aplicación carga en puerto 5000  
+3. Inspecciona Network tab para errores API (especialmente 401/403/CORS)
+4. Revisa Console para warnings de migración/seguridad Google
+5. Testa una llamada básica a geminiService
+
+SOLO después de este análisis, procede con correcciones incrementales.
+
+REGLA CRÍTICA: Si detectas problemas de autorización/migración Google, PAUSA inmediatamente y reporta antes de hacer cambios.
+📊 PROTOCOLO DE DECISIÓN POST-DIAGNÓSTICO
+✅ Todo bien: Continuar FASE 1 (Sistema API Keys)
+
+🔧 Problemas menores: Corregir CORS/dominios y continuar
+
+🚨 Problemas críticos: PAUSA, reportar, solicitar input
+
