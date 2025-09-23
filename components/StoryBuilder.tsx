@@ -5,7 +5,7 @@
 
 import React from 'react';
 import type { ExportedProject } from './story-builder/types';
-import { useStoryBuilderStateMachine } from '../../hooks/useStoryBuilderStateMachine';
+import { useStoryBuilderStateMachine } from '../hooks/useStoryBuilderStateMachine';
 import PhaseStepper from './story-builder/PhaseStepper';
 import Phase1_Concept from './story-builder/Phase1_Concept';
 import Phase2_Style from './story-builder/Phase2_Style';
@@ -18,7 +18,7 @@ import RefinementPhaseView from './story-builder/RefinementPhaseView';
 import Phase6_HookMatrix from './story-builder/Phase6_HookMatrix';
 import ReferenceAssetView from './story-builder/ReferenceAssetView';
 import AssetGenerationView from './story-builder/AssetGenerationView';
-import { logger } from '../../utils/logger';
+import { logger } from '../utils/logger';
 
 interface StoryBuilderProps {
     existingProject?: ExportedProject;
