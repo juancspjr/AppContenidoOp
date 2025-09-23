@@ -5,7 +5,6 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { UploadIcon, MagicWandIcon, PaletteIcon, SunIcon, BookOpenIcon, DownloadIcon, XCircleIcon } from './icons';
-// FIX: Corrected relative import path.
 import type { ExportedProject } from './story-builder/types';
 import { projectPersistenceService } from '../services/projectPersistenceService';
 import { logger } from '../utils/logger';

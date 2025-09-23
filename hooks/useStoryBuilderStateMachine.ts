@@ -2,72 +2,84 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-
-import { useReducer, useCallback } from 'react';
-import {
-    assistConcept,
-    // FIX: Replaced non-existent 'suggestStyle' with the exported 'orchestrateStyleGeneration'.
-    orchestrateStyleGeneration,
-    assistNewCharacter,
-    assistCharacter,
-    generateStructure,
-    runCoherenceCheck,
-    applyCoherenceFixes,
-    generateMasterplan,
-    runCritique,
-    applyImprovementsToPlan,
-    generateDocumentation,
+import { useReducer, useEffect, useMemo, useCallback } from 'react';
+import type { 
+    ExportedProject,
+    InitialConcept,
+    StyleAndFormat,
+    CharacterDefinition,
+    StoryStructure,
+    StructuralCoherenceReport,
+    StoryMasterplan,
+    Critique,
+    Documentation,
+    ReferenceAssets,
+    FinalAssets,
+    ProgressUpdate,
+    HookMatrix,
+    ReferenceAsset,
+    CoherenceCheckStep,
+    CoherenceCheckItem,
+} from '../components/story-builder/types';
+import { 
+    generateStoryMasterplan,
+    critiqueStoryMasterplan,
+    applyCritiqueToMasterplan,
+    generateProductionBible,
+    generateReferenceAssets,
+    regenerateSingleReferenceAsset,
+    generateVideoAssets,
+    runStructuralCoherenceCheck,
     generateHookMatrix,
-    generateReferenceAsset,
-    generateVideoSegment,
-    fetchVideo
+    orchestrateStyleGeneration,
+    orchestrateCharacterGeneration,
+    orchestrateConceptGeneration,
+    generateOrImproveStoryStructure,
+    suggestCharacterRelationships,
+    applyCoherenceFixes,
 } from '../services/geminiService';
 import { logger } from '../utils/logger';
-import { assetDBService } from '../services/assetDBService';
-import type {
-    ExportedProject, InitialConcept, StyleAndFormat, CharacterDefinition, StoryStructure,
-    CoherenceCheckItem, StoryMasterplan, Critique, Documentation, HookMatrix,
-    ReferenceAsset, ReferenceAssets, FinalAssets, CoherenceCheckStep, StructuralCoherenceReport,
-    AIStyleSuggestion
-} from '../components/story-builder/types';
+import { formatApiError } from '../utils/errorUtils';
 
+type LocalLoadingState = {
+    concept: boolean;
+    style: boolean;
+    structure: boolean;
+    characters: Set<string>;
+};
 
 type State = ExportedProject & {
     isLoading: boolean;
     error: string | null;
-    progress: Record<string, any>;
-    localLoading: {
-        concept: boolean;
-        style: boolean;
-        characters: Set<string>;
-        structure: boolean;
-    };
-    coherenceCheckProgress: CoherenceCheckStep[] | null;
+    progress: Record<string, ProgressUpdate>;
+    localLoading: LocalLoadingState;
 };
 
 type Action =
-    | { type: 'SET_PHASE'; phase: number }
-    | { type: 'SET_LOADING'; isLoading: boolean }
-    | { type: 'SET_ERROR'; error: string | null }
-    | { type: 'SET_LOCAL_LOADING'; area: keyof State['localLoading']; value: any }
-    | { type: 'UPDATE_PROGRESS'; stage: string; data: any }
-    | { type: 'CONCEPT_COMPLETE'; data: InitialConcept }
-    | { type: 'STYLE_COMPLETE'; data: StyleAndFormat }
-    | { type: 'CHARACTERS_COMPLETE'; data: CharacterDefinition[] }
-    | { type: 'STRUCTURE_COMPLETE'; data: StoryStructure }
-    | { type: 'COHERENCE_CHECK_PROGRESS'; steps: CoherenceCheckStep[] }
-    | { type: 'COHERENCE_CHECK_COMPLETE'; report: StructuralCoherenceReport }
-    | { type: 'MASTERPLAN_COMPLETE'; plan: StoryMasterplan }
-    | { type: 'CRITIQUE_COMPLETE'; critique: Critique }
-    | { type: 'DOCUMENTATION_COMPLETE'; docs: Documentation }
-    | { type: 'HOOK_MATRIX_COMPLETE'; matrix: HookMatrix }
-    | { type: 'REFERENCE_ASSETS_INIT'; assets: ReferenceAssets }
-    | { type: 'REFERENCE_ASSET_UPDATE'; asset: ReferenceAsset }
-    | { type: 'FINAL_ASSETS_INIT'; assets: FinalAssets }
-    | { type: 'FINAL_ASSET_UPDATE'; asset: any }
-    | { type: 'UPDATE_CHARACTER'; character: CharacterDefinition }
-    | { type: 'UPDATE_ALL_STATE'; state: Partial<State> }
-    | { type: 'SET_STYLE_AND_FORMAT'; data: AIStyleSuggestion };
+  | { type: 'LOAD_PROJECT', payload: ExportedProject }
+  | { type: 'SET_PHASE', payload: number }
+  | { type: 'START_LOADING' }
+  | { type: 'STOP_LOADING' }
+  | { type: 'SET_ERROR', payload: string | null }
+  | { type: 'SET_PROGRESS', payload: ProgressUpdate }
+  | { type: 'CLEAR_PROGRESS' }
+  | { type: 'SET_LOCAL_LOADING', payload: { key: keyof LocalLoadingState, value: boolean, id?: string } }
+  | { type: 'SET_INITIAL_CONCEPT', payload: InitialConcept }
+  | { type: 'SET_STYLE_AND_FORMAT', payload: Partial<StyleAndFormat> }
+  | { type: 'SET_CHARACTERS', payload: CharacterDefinition[] }
+  | { type: 'UPDATE_CHARACTER', payload: CharacterDefinition }
+  | { type: 'SET_STORY_STRUCTURE', payload: StoryStructure }
+  | { type: 'SET_COHERENCE_REPORT', payload: StructuralCoherenceReport | null }
+  | { type: 'SET_COHERENCE_CHECK_PROGRESS', payload: CoherenceCheckStep[] | null }
+  | { type: 'UPDATE_COHERENCE_CHECK_PROGRESS', payload: CoherenceCheckStep }
+  | { type: 'SET_STORY_PLAN', payload: StoryMasterplan | null }
+  | { type: 'SET_CRITIQUE', payload: Critique | null }
+  | { type: 'SET_DOCUMENTATION', payload: Documentation | null }
+  | { type: 'SET_HOOK_MATRIX', payload: HookMatrix | null }
+  | { type: 'SET_REFERENCE_ASSETS', payload: ReferenceAssets | null }
+  | { type: 'UPDATE_SINGLE_REFERENCE_ASSET', payload: ReferenceAsset }
+  | { type: 'SET_FINAL_ASSETS', payload: FinalAssets | null }
+  | { type: 'APPLY_REFINED_DATA', payload: Partial<ExportedProject> };
 
 const initialState: State = {
     phase: 1,
@@ -77,282 +89,459 @@ const initialState: State = {
     localLoading: {
         concept: false,
         style: false,
-        characters: new Set(),
         structure: false,
+        characters: new Set(),
     },
     initialConcept: null,
     styleAndFormat: null,
     characters: [],
     storyStructure: null,
     coherenceReport: null,
+    coherenceCheckProgress: null,
     storyPlan: null,
     critique: null,
     documentation: null,
     hookMatrix: null,
     referenceAssets: null,
     finalAssets: null,
-    coherenceCheckProgress: null,
 };
 
-function reducer(state: State, action: Action): State {
+const storyBuilderReducer = (state: State, action: Action): State => {
     switch (action.type) {
-        case 'SET_PHASE': return { ...state, phase: action.phase, error: null };
-        case 'SET_LOADING': return { ...state, isLoading: action.isLoading };
-        case 'SET_ERROR': return { ...state, error: action.error, isLoading: false };
-        case 'SET_LOCAL_LOADING': return { ...state, localLoading: { ...state.localLoading, [action.area]: action.value } };
-        case 'UPDATE_PROGRESS': return { ...state, progress: { ...state.progress, [action.stage]: action.data } };
-        case 'CONCEPT_COMPLETE': return { ...state, initialConcept: action.data, phase: 2 };
-        case 'STYLE_COMPLETE': return { ...state, styleAndFormat: action.data, phase: 3 };
-        case 'CHARACTERS_COMPLETE': return { ...state, characters: action.data, phase: 4 };
-        case 'STRUCTURE_COMPLETE': return { ...state, storyStructure: action.data, phase: 4.5 };
-        case 'COHERENCE_CHECK_PROGRESS': return { ...state, coherenceCheckProgress: action.steps };
-        case 'COHERENCE_CHECK_COMPLETE': return { ...state, coherenceReport: action.report, isLoading: false };
-        case 'MASTERPLAN_COMPLETE': return { ...state, storyPlan: action.plan, isLoading: false, phase: 5.1 };
-        case 'CRITIQUE_COMPLETE': return { ...state, critique: action.critique, isLoading: false, phase: 6.1 };
-        case 'DOCUMENTATION_COMPLETE': return { ...state, documentation: action.docs, isLoading: false, phase: 6.2 };
-        case 'HOOK_MATRIX_COMPLETE': return { ...state, hookMatrix: action.matrix, isLoading: false, phase: 6.25 };
-        case 'REFERENCE_ASSETS_INIT': return { ...state, referenceAssets: action.assets };
-        case 'REFERENCE_ASSET_UPDATE':
-            if (!state.referenceAssets) return state;
-            const updateAsset = (arr: ReferenceAsset[]) => arr.map(a => a.id === action.asset.id ? action.asset : a);
+        case 'LOAD_PROJECT': return { ...state, ...action.payload, localLoading: initialState.localLoading };
+        case 'SET_PHASE':
+            // Cascading State Invalidation Logic
+            let newState: State = { ...state, phase: action.payload, error: null };
+            if (action.payload <= 4) {
+                newState = { ...newState, coherenceReport: null, coherenceCheckProgress: null, storyPlan: null, critique: null, documentation: null, referenceAssets: null, finalAssets: null, hookMatrix: null };
+            }
+            if (action.payload <= 3) newState = { ...newState, storyStructure: null };
+            if (action.payload <= 2) newState = { ...newState, characters: [] };
+            if (action.payload <= 1) newState = { ...newState, styleAndFormat: null };
+            return newState;
+        case 'START_LOADING': return { ...state, isLoading: true, error: null };
+        case 'STOP_LOADING': return { ...state, isLoading: false };
+        case 'SET_ERROR': return { ...state, error: action.payload, isLoading: false };
+        case 'SET_PROGRESS': return { ...state, progress: { ...state.progress, [action.payload.stage]: action.payload }};
+        case 'CLEAR_PROGRESS': return { ...state, progress: {} };
+        case 'SET_LOCAL_LOADING':
+            const { key, value, id } = action.payload;
+            if (key === 'characters') {
+                const newCharSet = new Set(state.localLoading.characters);
+                if (value && id) newCharSet.add(id);
+                else if (id) newCharSet.delete(id);
+                return { ...state, localLoading: { ...state.localLoading, characters: newCharSet } };
+            }
+            return { ...state, localLoading: { ...state.localLoading, [key]: value } };
+        case 'SET_INITIAL_CONCEPT': return { ...state, initialConcept: action.payload };
+        case 'SET_STYLE_AND_FORMAT': {
+            const currentStyle = state.styleAndFormat || {};
+            const newSuggestions = action.payload;
+            
+// FIX: Smartly merge AI suggestions for style notes without overwriting.
+            const aiNotes = (newSuggestions as any).styleNotesSuggestion;
+            const existingNotes = currentStyle.styleNotes || '';
+            const finalNotes = aiNotes 
+                ? `${existingNotes}\n\nSugerencia IA: ${aiNotes}`.trim()
+                : existingNotes;
+
+            const { styleNotesSuggestion, ...restOfSuggestions } = newSuggestions as any;
+
             return {
                 ...state,
-                referenceAssets: {
-                    characters: updateAsset(state.referenceAssets.characters),
-                    environments: updateAsset(state.referenceAssets.environments),
-                    elements: updateAsset(state.referenceAssets.elements),
-                }
-            };
-        case 'FINAL_ASSETS_INIT': return { ...state, finalAssets: action.assets };
-        case 'FINAL_ASSET_UPDATE':
-             if (!state.finalAssets) return state;
-            return { ...state, finalAssets: { videoAssets: [...state.finalAssets.videoAssets, action.asset] } };
-        case 'UPDATE_CHARACTER': return { ...state, characters: state.characters.map(c => c.id === action.character.id ? action.character : c) };
-        case 'UPDATE_ALL_STATE': return { ...state, ...action.state };
-        case 'SET_STYLE_AND_FORMAT': {
-            const { styleNotesSuggestion, ...restOfSuggestion } = action.data;
-            const currentUserNotes = state.styleAndFormat?.styleNotes || '';
-            
-            let combinedNotes = currentUserNotes;
-            if (styleNotesSuggestion) {
-                 combinedNotes = currentUserNotes 
-                    ? `${currentUserNotes.trim()}\n\n[Sugerencia IA]: ${styleNotesSuggestion}`
-                    : styleNotesSuggestion;
-            }
-
-            return { 
-                ...state, 
                 styleAndFormat: {
-                    ...state.styleAndFormat,
-                    ...restOfSuggestion,
-                    styleNotes: combinedNotes,
+                    ...currentStyle,
+                    ...restOfSuggestions,
+                    styleNotes: finalNotes
                 }
             };
         }
+        case 'SET_CHARACTERS': return { ...state, characters: action.payload };
+        case 'UPDATE_CHARACTER':
+            return {
+                ...state,
+                characters: state.characters.map(c => c.id === action.payload.id ? action.payload : c),
+            };
+        case 'SET_STORY_STRUCTURE': return { ...state, storyStructure: action.payload };
+        case 'SET_COHERENCE_REPORT': return { ...state, coherenceReport: action.payload };
+        case 'SET_COHERENCE_CHECK_PROGRESS': return { ...state, coherenceCheckProgress: action.payload };
+        case 'UPDATE_COHERENCE_CHECK_PROGRESS':
+            if (!state.coherenceCheckProgress) return state;
+            return {
+                ...state,
+                coherenceCheckProgress: state.coherenceCheckProgress.map(step =>
+                    step.id === action.payload.id ? { ...step, ...action.payload } : step
+                )
+            };
+        case 'SET_STORY_PLAN': return { ...state, storyPlan: action.payload };
+        case 'SET_CRITIQUE': return { ...state, critique: action.payload };
+        case 'SET_DOCUMENTATION': return { ...state, documentation: action.payload };
+        case 'SET_HOOK_MATRIX': return { ...state, hookMatrix: action.payload };
+        case 'SET_REFERENCE_ASSETS': return { ...state, referenceAssets: action.payload };
+        case 'UPDATE_SINGLE_REFERENCE_ASSET':
+            if (!state.referenceAssets) return state;
+            const updateAsset = (a: ReferenceAsset) => a.id === action.payload.id ? action.payload : a;
+            return {
+                ...state,
+                referenceAssets: {
+                    characters: state.referenceAssets.characters.map(updateAsset),
+                    environments: state.referenceAssets.environments.map(updateAsset),
+                    elements: state.referenceAssets.elements.map(updateAsset),
+                }
+            };
+        case 'SET_FINAL_ASSETS': return { ...state, finalAssets: action.payload };
+        case 'APPLY_REFINED_DATA':
+            return {
+                ...state,
+                initialConcept: action.payload.initialConcept || state.initialConcept,
+                styleAndFormat: action.payload.styleAndFormat || state.styleAndFormat,
+                characters: action.payload.characters || state.characters,
+                storyStructure: action.payload.storyStructure || state.storyStructure,
+            };
         default: return state;
     }
-}
+};
 
+export const useStoryBuilderStateMachine = (existingProject?: ExportedProject) => {
+    const [state, dispatch] = useReducer(storyBuilderReducer, initialState);
 
-export function useStoryBuilderStateMachine(existingProject?: ExportedProject) {
-    const [state, dispatch] = useReducer(reducer, { ...initialState, ...existingProject });
+    useEffect(() => {
+        if (existingProject) {
+            logger.log('INFO', 'StateMachine', 'Loading existing project.', existingProject);
+            dispatch({ type: 'LOAD_PROJECT', payload: existingProject });
+        }
+    }, [existingProject]);
 
-    const handleError = (component: string, error: unknown) => {
-        const message = error instanceof Error ? error.message : String(error);
-        logger.log('ERROR', component, message, error);
-        dispatch({ type: 'SET_ERROR', error: message });
+    const handleProgress = useCallback((update: ProgressUpdate) => {
+        dispatch({ type: 'SET_PROGRESS', payload: update });
+    }, []);
+
+    const reAnalyzeStructure = useCallback(() => {
+        if (state.storyStructure) {
+            handleStructureComplete(state.storyStructure);
+        }
+    }, [state.storyStructure]);
+    
+    // Phase completion handlers
+    const handleConceptComplete = (data: InitialConcept) => {
+        dispatch({ type: 'SET_INITIAL_CONCEPT', payload: data });
+        dispatch({ type: 'SET_PHASE', payload: 2 });
+    };
+    const handleStyleComplete = (data: StyleAndFormat) => {
+        dispatch({ type: 'SET_STYLE_AND_FORMAT', payload: data });
+        dispatch({ type: 'SET_PHASE', payload: 3 });
+    };
+    const handleCharactersComplete = (data: CharacterDefinition[]) => {
+        dispatch({ type: 'SET_CHARACTERS', payload: data });
+        dispatch({ type: 'SET_PHASE', payload: 4 });
     };
 
-    const actions = {
-        // Navigation
-        goToPhase: useCallback((phase: number) => dispatch({ type: 'SET_PHASE', phase }), []),
-        goToPhase1: useCallback(() => dispatch({ type: 'SET_PHASE', phase: 1 }), []),
-        goToPhase2: useCallback(() => dispatch({ type: 'SET_PHASE', phase: 2 }), []),
-        goToPhase3: useCallback(() => dispatch({ type: 'SET_PHASE', phase: 3 }), []),
-        goToPhase4: useCallback(() => dispatch({ type: 'SET_PHASE', phase: 4 }), []),
-
-        // Phase 1
-        handleConceptComplete: useCallback((data: InitialConcept) => dispatch({ type: 'CONCEPT_COMPLETE', data }), []),
-        assistConcept: useCallback(async (idea: string) => {
-            dispatch({ type: 'SET_LOCAL_LOADING', area: 'concept', value: true });
-            try {
-                // FIX: Corrected the call to pass only the 'idea' string, as required by the service function's signature.
-                const assisted = await assistConcept(idea);
-                dispatch({ type: 'UPDATE_ALL_STATE', state: { initialConcept: assisted } });
-            } catch (e) { handleError('assistConcept', e); }
-            finally { dispatch({ type: 'SET_LOCAL_LOADING', area: 'concept', value: false }); }
-        }, []),
-
-        // Phase 2
-        handleStyleComplete: useCallback((data: StyleAndFormat) => dispatch({ type: 'STYLE_COMPLETE', data }), []),
-        suggestStyle: useCallback(async () => {
-            if (!state.initialConcept) return;
-            dispatch({ type: 'SET_LOCAL_LOADING', area: 'style', value: true });
-            try {
-                // FIX: Corrected the function call to use 'orchestrateStyleGeneration' and pass the required arguments.
-                const suggested = await orchestrateStyleGeneration(state.initialConcept, state.styleAndFormat);
-                dispatch({ type: 'SET_STYLE_AND_FORMAT', data: suggested });
-            } catch (e) { handleError('suggestStyle', e); }
-            finally { dispatch({ type: 'SET_LOCAL_LOADING', area: 'style', value: false }); }
-        }, [state.initialConcept, state.styleAndFormat]),
-
-        // Phase 3
-        handleCharactersComplete: useCallback((data: CharacterDefinition[]) => dispatch({ type: 'CHARACTERS_COMPLETE', data }), []),
-        assistNewCharacter: useCallback(async (charData: Partial<CharacterDefinition>) => {
-            // FIX: Corrected async logic to await the 'assistNewCharacter' call.
-            // FIX: Added 'storyContext' by passing the full state to provide the AI with necessary information.
-            return await assistNewCharacter(charData);
-        }, []),
-        assistCharacter: useCallback(async (charId: string) => {
-            const character = state.characters.find(c => c.id === charId);
-            if (!character) return;
-            dispatch({ type: 'SET_LOCAL_LOADING', area: 'characters', value: new Set(state.localLoading.characters).add(charId) });
-            try {
-                const updated = await assistCharacter(character);
-                dispatch({ type: 'UPDATE_CHARACTER', character: updated });
-            } catch (e) { handleError('assistCharacter', e); }
-            finally {
-                const newSet = new Set(state.localLoading.characters);
-                newSet.delete(charId);
-                dispatch({ type: 'SET_LOCAL_LOADING', area: 'characters', value: newSet });
-            }
-        }, [state.characters, state.localLoading.characters]),
-
-        // Phase 4
-        handleStructureComplete: useCallback(async (data: StoryStructure) => {
-            dispatch({ type: 'STRUCTURE_COMPLETE', data });
-            dispatch({ type: 'SET_LOADING', isLoading: true });
-            try {
-                // This now kicks off the coherence check agent in the parent component
-                const report = await runCoherenceCheck(data);
-                dispatch({ type: 'COHERENCE_CHECK_COMPLETE', report });
-            } catch (e) {
-                handleError('runCoherenceCheck', e);
-            }
-        }, []),
-        generateStructure: useCallback(async () => {
-            if (!state.initialConcept || !state.styleAndFormat || !state.characters) return;
-            dispatch({ type: 'SET_LOCAL_LOADING', area: 'structure', value: true });
-            try {
-                const structure = await generateStructure(state.initialConcept, state.styleAndFormat, state.characters);
-                dispatch({ type: 'UPDATE_ALL_STATE', state: { storyStructure: structure } });
-            } catch (e) { handleError('generateStructure', e); }
-            finally { dispatch({ type: 'SET_LOCAL_LOADING', area: 'structure', value: false }); }
-        }, [state.initialConcept, state.styleAndFormat, state.characters]),
+    const handleStructureComplete = async (structure: StoryStructure) => {
+        dispatch({ type: 'SET_STORY_STRUCTURE', payload: structure });
         
-        // Phase 4.5
-        applyCoherenceFixesAndProceed: useCallback(async (fixes: CoherenceCheckItem[]) => {
-            if (!state.storyStructure) return;
-            dispatch({ type: 'SET_LOADING', isLoading: true });
-            try {
-                const updatedStructure = await applyCoherenceFixes(state.storyStructure, fixes);
-                dispatch({ type: 'UPDATE_ALL_STATE', state: { storyStructure: updatedStructure } });
-                actions.runMasterplanGeneration();
-            } catch (e) { handleError('applyCoherenceFixes', e); }
-        }, [state.storyStructure]),
+        const initialProgress: CoherenceCheckStep[] = [
+            { id: 'concept', label: 'Analizando Concepto General', status: 'pending' },
+            { id: 'consistency', label: 'Verificando Consistencia', status: 'pending' },
+            { id: 'pacing', label: 'Evaluando Ritmo y Estructura', status: 'pending' },
+            { id: 'arcs', label: 'Analizando Arcos de Personajes', status: 'pending' },
+        ];
+        dispatch({ type: 'SET_COHERENCE_CHECK_PROGRESS', payload: initialProgress });
+        dispatch({ type: 'START_LOADING' });
+        dispatch({ type: 'SET_PHASE', payload: 4.5 });
 
-        reAnalyzeStructure: useCallback(async () => {
-            if (!state.storyStructure) return;
-             dispatch({ type: 'SET_LOADING', isLoading: true });
-            try {
-                const report = await runCoherenceCheck(state.storyStructure);
-                dispatch({ type: 'COHERENCE_CHECK_COMPLETE', report });
-            } catch (e) {
-                handleError('reAnalyzeStructure', e);
+        try {
+            const userInput = { 
+                initialConcept: state.initialConcept, 
+                styleAndFormat: state.styleAndFormat, 
+                characters: state.characters, 
+                storyStructure: structure 
+            };
+            const handleCoherenceProgress = (update: CoherenceCheckStep) => {
+                dispatch({ type: 'UPDATE_COHERENCE_CHECK_PROGRESS', payload: update });
+            };
+
+            const report = await runStructuralCoherenceCheck(userInput, handleCoherenceProgress);
+            dispatch({ type: 'SET_COHERENCE_REPORT', payload: report });
+
+        } catch(e) {
+            const friendlyError = formatApiError(e);
+            dispatch({ type: 'SET_ERROR', payload: `Falló el análisis de coherencia: ${friendlyError}` });
+        } finally {
+            dispatch({ type: 'STOP_LOADING' });
+        }
+    };
+    
+    // Core AI generation functions
+    const runMasterplanGeneration = async () => {
+        dispatch({ type: 'START_LOADING' });
+        dispatch({ type: 'SET_PHASE', payload: 5 });
+        try {
+            if (!state.initialConcept || !state.styleAndFormat) {
+                throw new Error("Faltan datos de concepto o estilo para generar el plan.");
             }
-        }, [state.storyStructure]),
-
-        runMasterplanGeneration: useCallback(async () => {
-            if (!state.initialConcept || !state.styleAndFormat || !state.characters || !state.storyStructure) return;
-            dispatch({ type: 'SET_PHASE', phase: 5 });
-            dispatch({ type: 'SET_LOADING', isLoading: true });
-            try {
-                const plan = await generateMasterplan(state.initialConcept, state.styleAndFormat, state.characters, state.storyStructure);
-                dispatch({ type: 'MASTERPLAN_COMPLETE', plan });
-            } catch (e) { handleError('generateMasterplan', e); }
-        }, [state.initialConcept, state.styleAndFormat, state.characters, state.storyStructure]),
-
-        updateStoryPlan: useCallback((plan: StoryMasterplan) => {
-            dispatch({ type: 'MASTERPLAN_COMPLETE', plan });
-            dispatch({ type: 'SET_PHASE', phase: 5.1 });
-        }, []),
-
-        runCritiqueOnly: useCallback(async () => {
-            if (!state.storyPlan) return;
-            dispatch({ type: 'SET_LOADING', isLoading: true });
-            try {
-                const critique = await runCritique(state.storyPlan);
-                dispatch({ type: 'CRITIQUE_COMPLETE', critique });
-            } catch (e) { handleError('runCritique', e); }
-        }, [state.storyPlan]),
-
-        applyImprovements: useCallback(async () => {
-            if (!state.storyPlan || !state.critique) return;
-            dispatch({ type: 'SET_LOADING', isLoading: true });
-            try {
-                const improvedPlan = await applyImprovementsToPlan(state.storyPlan, state.critique);
-                dispatch({ type: 'MASTERPLAN_COMPLETE', plan: improvedPlan });
-            } catch (e) { handleError('applyImprovements', e); }
-        }, [state.storyPlan, state.critique]),
-        
-        continueToDocumentation: useCallback(async () => {
-            if (!state.storyPlan) return;
-            dispatch({ type: 'SET_LOADING', isLoading: true });
-            try {
-                const docs = await generateDocumentation(state.storyPlan);
-                dispatch({ type: 'DOCUMENTATION_COMPLETE', docs });
-            } catch (e) { handleError('generateDocumentation', e); }
-        }, [state.storyPlan]),
-        
-        generateHookMatrix: useCallback(async () => {
-            if (!state.storyPlan) return;
-            dispatch({ type: 'SET_LOADING', isLoading: true });
-            try {
-                const matrix = await generateHookMatrix(state.storyPlan);
-                dispatch({ type: 'HOOK_MATRIX_COMPLETE', matrix });
-            } catch (e) { handleError('generateHookMatrix', e); }
-        }, [state.storyPlan]),
-
-        startReferenceGeneration: useCallback(async () => {
-            if (!state.storyPlan) return;
-            dispatch({ type: 'SET_PHASE', phase: 6.3 });
-            dispatch({ type: 'SET_LOADING', isLoading: true });
+            const userInput = { initialConcept: state.initialConcept, styleAndFormat: state.styleAndFormat, characters: state.characters, storyStructure: state.storyStructure };
+            handleProgress({ stage: 'masterplan', status: 'in_progress', message: 'Generando plan maestro de la historia...' });
             
-            const assetsToGenerate: ReferenceAsset[] = [];
-            // ... logic to create assetsToGenerate from storyPlan
+            const plan = await generateStoryMasterplan(userInput);
+            dispatch({ type: 'SET_STORY_PLAN', payload: plan });
             
-            // dispatch({ type: 'REFERENCE_ASSETS_INIT', assets: { characters: [], environments: [], elements: [] } });
-            
-            for (const asset of assetsToGenerate) {
-                try {
-                    // dispatch({ type: 'REFERENCE_ASSET_UPDATE', asset: { ...asset, generationStatus: 'generating' } });
-                    const blob = await generateReferenceAsset(asset, state.storyPlan);
-                    await assetDBService.saveAsset(asset.assetId, blob);
-                    // dispatch({ type: 'REFERENCE_ASSET_UPDATE', asset: { ...asset, generationStatus: 'complete' } });
-                } catch (e) {
-                    // dispatch({ type: 'REFERENCE_ASSET_UPDATE', asset: { ...asset, generationStatus: 'error' } });
-                    handleError(`generateReferenceAsset:${asset.name}`, e);
-                }
-            }
-            dispatch({ type: 'SET_LOADING', isLoading: false });
-        }, [state.storyPlan]),
+            handleProgress({ stage: 'masterplan', status: 'complete', message: 'Plan maestro generado.' });
+            dispatch({ type: 'SET_PHASE', payload: 5.1 });
 
-        regenerateSingleAsset: useCallback(async (asset: ReferenceAsset) => {
-            if (!state.storyPlan) return;
-            // ... similar logic to startReferenceGeneration for a single asset
-        }, [state.storyPlan]),
-
-        startVideoGeneration: useCallback(async () => {
-            if (!state.storyPlan || !state.referenceAssets) return;
-            dispatch({ type: 'SET_PHASE', phase: 6.4 });
-            dispatch({ type: 'SET_LOADING', isLoading: true });
-
-            // ... Complex logic for sequential video generation
-            
-            dispatch({ type: 'SET_LOADING', isLoading: false });
-        }, [state.storyPlan, state.referenceAssets]),
-
+        } catch(e) {
+            const friendlyError = formatApiError(e);
+            dispatch({ type: 'SET_ERROR', payload: `Falló la generación del plan maestro: ${friendlyError}` });
+            dispatch({ type: 'SET_PHASE', payload: 4 }); 
+        } finally {
+            dispatch({ type: 'STOP_LOADING' });
+        }
     };
 
+    const runCritiqueOnly = async () => {
+        if (!state.storyPlan) return;
+        dispatch({ type: 'START_LOADING' });
+        dispatch({ type: 'SET_CRITIQUE', payload: null });
+        dispatch({ type: 'CLEAR_PROGRESS' });
+        dispatch({ type: 'SET_PHASE', payload: 6.1 });
+        try {
+            handleProgress({ stage: 'critique', status: 'in_progress', message: 'Generando crítica estratégica...' });
+            const initialCritique = await critiqueStoryMasterplan(state.storyPlan);
+            dispatch({ type: 'SET_CRITIQUE', payload: initialCritique });
+            handleProgress({ stage: 'critique', status: 'complete', message: 'Crítica completada.' });
+        } catch(e) {
+            const friendlyError = formatApiError(e);
+            dispatch({ type: 'SET_ERROR', payload: `Falló la fase de crítica: ${friendlyError}` });
+            handleProgress({ stage: 'critique', status: 'error', message: friendlyError });
+        } finally {
+            dispatch({ type: 'STOP_LOADING' });
+        }
+    };
+
+    const continueToDocumentation = async () => {
+        if (!state.storyPlan) return;
+        dispatch({ type: 'START_LOADING' });
+        dispatch({ type: 'CLEAR_PROGRESS' });
+        dispatch({ type: 'SET_PHASE', payload: 6.2 });
+        try {
+            handleProgress({ stage: 'documentation', status: 'in_progress', message: 'Generando documentos de producción...' });
+            const docs = await generateProductionBible(state.storyPlan);
+            dispatch({ type: 'SET_DOCUMENTATION', payload: docs });
+            handleProgress({ stage: 'documentation', status: 'complete', message: 'Documentos generados.' });
+        } catch (e) {
+            const friendlyError = formatApiError(e);
+            dispatch({ type: 'SET_ERROR', payload: `Falló la fase de documentación: ${friendlyError}` });
+            handleProgress({ stage: 'documentation', status: 'error', message: friendlyError });
+        } finally {
+            dispatch({ type: 'STOP_LOADING' });
+        }
+    };
+
+    const applyImprovements = async () => {
+        if (!state.storyPlan) return;
+        dispatch({ type: 'START_LOADING' });
+        handleProgress({ stage: 'apply_critique', status: 'in_progress', message: 'Aplicando mejoras...' });
+        try {
+            const improvedPlan = await applyCritiqueToMasterplan(state.storyPlan);
+            dispatch({ type: 'SET_STORY_PLAN', payload: improvedPlan });
+            dispatch({ type: 'SET_CRITIQUE', payload: null });
+            handleProgress({ stage: 'apply_critique', status: 'complete', message: 'Plan mejorado.' });
+            await continueToDocumentation(); // Automatically continue after applying
+        } catch (e) {
+            const friendlyError = formatApiError(e);
+            dispatch({ type: 'SET_ERROR', payload: `Fallo al aplicar las mejoras: ${friendlyError}` });
+            handleProgress({ stage: 'apply_critique', status: 'error', message: friendlyError });
+        } finally {
+            dispatch({ type: 'STOP_LOADING' });
+        }
+    };
+
+    const applyCoherenceFixesAndProceed = async (selectedChecks: CoherenceCheckItem[]) => {
+        dispatch({ type: 'START_LOADING' });
+        try {
+            const storyData = {
+                initialConcept: state.initialConcept,
+                styleAndFormat: state.styleAndFormat,
+                characters: state.characters,
+                storyStructure: state.storyStructure,
+            };
+            const refinedData = await applyCoherenceFixes(storyData, selectedChecks);
+            dispatch({ type: 'APPLY_REFINED_DATA', payload: refinedData });
+// FIX: Chain the next action to proceed to Phase 5, breaking the loop.
+            await runMasterplanGeneration();
+        } catch (e) {
+            const friendlyError = formatApiError(e);
+            dispatch({ type: 'SET_ERROR', payload: `Fallo al aplicar las mejoras de coherencia: ${friendlyError}` });
+            dispatch({ type: 'SET_PHASE', payload: 4.5 }); // Stay on the same page on error
+        }
+        // No STOP_LOADING here, runMasterplanGeneration will handle it.
+    };
+
+
+    const generateHookMatrixAction = async () => {
+        if (!state.storyPlan) return;
+        dispatch({ type: 'START_LOADING' });
+        dispatch({ type: 'SET_PHASE', payload: 6.25 });
+        try {
+             handleProgress({ stage: 'hook_matrix', status: 'in_progress', message: 'Agente "Scroll-Stopper" está generando la matriz de ganchos...' });
+             const matrix = await generateHookMatrix(state.storyPlan);
+             dispatch({ type: 'SET_HOOK_MATRIX', payload: matrix });
+             if (state.storyPlan) {
+                dispatch({ type: 'SET_STORY_PLAN', payload: { ...state.storyPlan, hookMatrix: matrix } });
+             }
+             handleProgress({ stage: 'hook_matrix', status: 'complete', message: 'Matriz de ganchos generada.' });
+        } catch(e) {
+            const friendlyError = formatApiError(e);
+            dispatch({ type: 'SET_ERROR', payload: `Falló la generación de la matriz de ganchos: ${friendlyError}` });
+            handleProgress({ stage: 'hook_matrix', status: 'error', message: friendlyError });
+        } finally {
+            dispatch({ type: 'STOP_LOADING' });
+        }
+    };
+
+    const startReferenceGeneration = async () => {
+        if (!state.storyPlan) return;
+        dispatch({ type: 'START_LOADING' });
+        dispatch({ type: 'CLEAR_PROGRESS' });
+        dispatch({ type: 'SET_PHASE', payload: 6.3 });
+        try {
+            handleProgress({ stage: 'reference_assets', status: 'in_progress', message: 'Generando activos de referencia...' });
+            const assets = await generateReferenceAssets(state.storyPlan, handleProgress);
+            dispatch({ type: 'SET_REFERENCE_ASSETS', payload: assets });
+            handleProgress({ stage: 'reference_assets', status: 'complete', message: 'Activos de referencia completados.' });
+        } catch (e) {
+            const friendlyError = formatApiError(e);
+            dispatch({ type: 'SET_ERROR', payload: `Falló la generación de activos de referencia: ${friendlyError}` });
+            handleProgress({ stage: 'reference_assets', status: 'error', message: friendlyError });
+        } finally {
+            dispatch({ type: 'STOP_LOADING' });
+        }
+    };
+    
+    const regenerateSingleAsset = async (assetToRegen: ReferenceAsset) => {
+        dispatch({ type: 'UPDATE_SINGLE_REFERENCE_ASSET', payload: { ...assetToRegen, generationStatus: 'generating' } });
+        try {
+            const newAsset = await regenerateSingleReferenceAsset(assetToRegen);
+            dispatch({ type: 'UPDATE_SINGLE_REFERENCE_ASSET', payload: newAsset });
+        } catch (e) {
+            const friendlyError = formatApiError(e);
+            dispatch({ type: 'SET_ERROR', payload: `Fallo al regenerar ${assetToRegen.name}: ${friendlyError}` });
+            dispatch({ type: 'UPDATE_SINGLE_REFERENCE_ASSET', payload: { ...assetToRegen, generationStatus: 'failed' } });
+        }
+    };
+
+    const startVideoGeneration = async () => {
+        if (!state.storyPlan || !state.referenceAssets) return;
+        dispatch({ type: 'START_LOADING' });
+        dispatch({ type: 'SET_FINAL_ASSETS', payload: null });
+        dispatch({ type: 'CLEAR_PROGRESS' });
+        dispatch({ type: 'SET_PHASE', payload: 6.4 });
+        try {
+             const finalVideoAssets = await generateVideoAssets(state.storyPlan, state.referenceAssets, handleProgress);
+             dispatch({ type: 'SET_FINAL_ASSETS', payload: finalVideoAssets });
+             handleProgress({ stage: 'complete', status: 'complete', message: 'Todos los videos han sido generados.' });
+        } catch(e) {
+            const friendlyError = formatApiError(e);
+            dispatch({ type: 'SET_ERROR', payload: `Falló la generación de video: ${friendlyError}` });
+            handleProgress({ stage: 'complete', status: 'error', message: friendlyError });
+        } finally {
+            dispatch({ type: 'STOP_LOADING' });
+        }
+    };
+
+    // AI Acceleration Actions
+    const assistConcept = async (idea: string) => {
+        dispatch({ type: 'SET_LOCAL_LOADING', payload: { key: 'concept', value: true } });
+        try {
+            const result = await orchestrateConceptGeneration(idea, state.initialConcept);
+            dispatch({ type: 'SET_INITIAL_CONCEPT', payload: result });
+        } catch (e) {
+            alert(`Error de la IA: ${formatApiError(e)}`);
+        } finally {
+            dispatch({ type: 'SET_LOCAL_LOADING', payload: { key: 'concept', value: false } });
+        }
+    };
+
+    const suggestStyle = async () => {
+        if (!state.initialConcept) return;
+        dispatch({ type: 'SET_LOCAL_LOADING', payload: { key: 'style', value: true } });
+        try {
+            const suggestions = await orchestrateStyleGeneration(state.initialConcept);
+            dispatch({ type: 'SET_STYLE_AND_FORMAT', payload: suggestions });
+        } catch (e) {
+            alert(`Error de la IA: ${formatApiError(e)}`);
+        } finally {
+            dispatch({ type: 'SET_LOCAL_LOADING', payload: { key: 'style', value: false } });
+        }
+    };
+
+    const assistCharacter = async (charId: string) => {
+        const character = state.characters.find(c => c.id === charId);
+        if (!character || !state.initialConcept || !state.styleAndFormat) return;
+        
+        dispatch({ type: 'SET_LOCAL_LOADING', payload: { key: 'characters', id: charId, value: true } });
+        try {
+            const context = { concept: state.initialConcept, style: state.styleAndFormat };
+            const result = await orchestrateCharacterGeneration(context, character);
+            const updatedCharacter = { ...character, ...result, motivation: {...character.motivation, ...result.motivation} };
+            dispatch({ type: 'UPDATE_CHARACTER', payload: updatedCharacter });
+        } catch (e) {
+             alert(`Error de la IA: ${formatApiError(e)}`);
+        } finally {
+             dispatch({ type: 'SET_LOCAL_LOADING', payload: { key: 'characters', id: charId, value: false } });
+        }
+    };
+
+// FIX: Create a new action to handle assistance for a new character, providing full context.
+    const assistNewCharacter = async (newCharData: Partial<CharacterDefinition>): Promise<Partial<CharacterDefinition>> => {
+        if (!state.initialConcept || !state.styleAndFormat) {
+            throw new Error("El concepto y el estilo de la historia deben definirse primero.");
+        }
+        const context = { concept: state.initialConcept, style: state.styleAndFormat };
+        return await orchestrateCharacterGeneration(context, newCharData);
+    };
+
+    const generateStructure = async () => {
+        if (!state.initialConcept || !state.styleAndFormat) return;
+        dispatch({ type: 'SET_LOCAL_LOADING', payload: { key: 'structure', value: true } });
+        try {
+            const context = { concept: state.initialConcept, style: state.styleAndFormat, characters: state.characters };
+            const result = await generateOrImproveStoryStructure(context, state.storyStructure || {});
+            dispatch({ type: 'SET_STORY_STRUCTURE', payload: { ...state.storyStructure, ...result } });
+        } catch (e) {
+            alert(`Error de la IA: ${formatApiError(e)}`);
+        } finally {
+            dispatch({ type: 'SET_LOCAL_LOADING', payload: { key: 'structure', value: false } });
+        }
+    };
+
+
+    const actions = useMemo(() => ({
+        handleConceptComplete,
+        handleStyleComplete,
+        handleCharactersComplete,
+        handleStructureComplete,
+        runMasterplanGeneration,
+        applyCoherenceFixesAndProceed,
+        reAnalyzeStructure,
+        runCritiqueOnly,
+        continueToDocumentation,
+        applyImprovements,
+        generateHookMatrix: generateHookMatrixAction,
+        startReferenceGeneration,
+        regenerateSingleAsset,
+        startVideoGeneration,
+        assistConcept,
+        suggestStyle,
+        assistCharacter,
+        assistNewCharacter,
+        generateStructure,
+        updateStoryPlan: (plan: StoryMasterplan) => dispatch({ type: 'SET_STORY_PLAN', payload: plan }),
+        goToPhase: (phase: number) => dispatch({ type: 'SET_PHASE', payload: phase }),
+        goToPhase1: () => dispatch({ type: 'SET_PHASE', payload: 1 }),
+        goToPhase2: () => dispatch({ type: 'SET_PHASE', payload: 2 }),
+        goToPhase3: () => dispatch({ type: 'SET_PHASE', payload: 3 }),
+        goToPhase4: () => dispatch({ type: 'SET_PHASE', payload: 4 }),
+    }), [state.storyPlan, state.referenceAssets, state.initialConcept, state.styleAndFormat, state.characters, state.storyStructure, reAnalyzeStructure]);
+    
     return { state, actions };
-}
+};

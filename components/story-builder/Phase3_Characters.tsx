@@ -18,6 +18,7 @@ interface Phase3_CharactersProps {
     onAssistCharacter: (charId: string) => Promise<void>;
     onAssistNewCharacter: (charData: Partial<CharacterDefinition>) => Promise<Partial<CharacterDefinition>>;
     assistingCharacterIds: Set<string>;
+    areKeysConfigured: boolean;
 }
 
 const defaultMotivation: CharacterMotivation = { desire: '', fear: '', need: '' };
@@ -35,7 +36,7 @@ const getNewChar = (): CharacterDefinition => ({
 });
 
 
-const Phase3_Characters: React.FC<Phase3_CharactersProps> = ({ onComplete, initialData, onBack, onAssistCharacter, onAssistNewCharacter, assistingCharacterIds }) => {
+const Phase3_Characters: React.FC<Phase3_CharactersProps> = ({ onComplete, initialData, onBack, onAssistCharacter, onAssistNewCharacter, assistingCharacterIds, areKeysConfigured }) => {
     const [characters, setCharacters] = useState<CharacterDefinition[]>([]);
     const [newChar, setNewChar] = useState<CharacterDefinition>(getNewChar());
     const [isAssistingNew, setIsAssistingNew] = useState(false);
@@ -159,7 +160,7 @@ const Phase3_Characters: React.FC<Phase3_CharactersProps> = ({ onComplete, initi
     }
     
     // FIX: This now calls the centralized action from the state machine hook.
-    const handleAssistNewCharacterClick = async () => {
+    const handleAssistNewCharacter = async () => {
         setIsAssistingNew(true);
         try {
             const result = await onAssistNewCharacter(newChar);
@@ -195,7 +196,7 @@ const Phase3_Characters: React.FC<Phase3_CharactersProps> = ({ onComplete, initi
             <div className={`bg-gray-900/50 p-4 rounded-lg border border-gray-700 space-y-4 ${isAtLimit ? 'opacity-50 pointer-events-none' : ''}`}>
                 <div className="flex justify-between items-center">
                     <h3 className="font-semibold text-lg">{isAtLimit ? "Límite de Personajes Alcanzado" : "Añadir Nuevo Agente Narrativo"}</h3>
-                     <button onClick={handleAssistNewCharacterClick} disabled={isAssistingNew} className="flex items-center gap-2 bg-yellow-600 text-white font-bold py-2 px-3 rounded-lg text-sm hover:bg-yellow-500 transition-colors disabled:bg-yellow-800">
+                     <button onClick={handleAssistNewCharacter} disabled={isAssistingNew || !areKeysConfigured} title={!areKeysConfigured ? "Configura tus claves de API para activar la IA" : "Asistencia de IA para este nuevo personaje"} className="flex items-center gap-2 bg-yellow-600 text-white font-bold py-2 px-3 rounded-lg text-sm hover:bg-yellow-500 transition-colors disabled:bg-yellow-800 disabled:cursor-not-allowed">
                         {isAssistingNew ? <Spinner className="w-4 h-4" /> : <SparkleIcon className="w-4 h-4" />}
                         {isAssistingNew ? 'Creando...' : 'Asistencia IA'}
                      </button>
@@ -232,7 +233,7 @@ const Phase3_Characters: React.FC<Phase3_CharactersProps> = ({ onComplete, initi
             <div className="space-y-3">
                  <div className="flex justify-between items-center">
                     <h3 className="font-semibold text-lg">Personajes Definidos ({characters.length} / {COST_OPTIMIZATION_CONFIG.maxCharactersPerProject})</h3>
-                    <button onClick={handleSuggestRelationships} disabled={isSuggestingRels || characters.length < 2} className="flex items-center gap-2 bg-purple-600 text-white font-bold py-2 px-3 rounded-lg text-sm hover:bg-purple-500 transition-colors disabled:bg-purple-800">
+                    <button onClick={handleSuggestRelationships} disabled={isSuggestingRels || characters.length < 2 || !areKeysConfigured} title={!areKeysConfigured ? "Configura tus claves de API para activar la IA" : "Sugerir relaciones entre personajes"} className="flex items-center gap-2 bg-purple-600 text-white font-bold py-2 px-3 rounded-lg text-sm hover:bg-purple-500 transition-colors disabled:bg-purple-800 disabled:cursor-not-allowed">
                         {isSuggestingRels ? <Spinner className="w-4 h-4" /> : '🤝'}
                         {isSuggestingRels ? 'Pensando...' : 'Sugerir Relaciones IA'}
                      </button>
@@ -250,7 +251,7 @@ const Phase3_Characters: React.FC<Phase3_CharactersProps> = ({ onComplete, initi
                                         <p className="text-sm text-gray-300">{char.description}</p>
                                     </div>
                                     <div className="flex gap-2 items-center">
-                                         <button onClick={() => onAssistCharacter(char.id)} disabled={isAssisting} className="flex items-center gap-1.5 bg-yellow-600 text-white font-bold py-1 px-2 rounded-lg text-xs hover:bg-yellow-500 transition-colors disabled:bg-yellow-800">
+                                         <button onClick={() => onAssistCharacter(char.id)} disabled={isAssisting || !areKeysConfigured} title={!areKeysConfigured ? "Configura tus claves de API para activar la IA" : "Asistencia de IA para este personaje"} className="flex items-center gap-1.5 bg-yellow-600 text-white font-bold py-1 px-2 rounded-lg text-xs hover:bg-yellow-500 transition-colors disabled:bg-yellow-800">
                                             {isAssisting ? <Spinner className="w-3 h-3" /> : <SparkleIcon className="w-3 h-3" />}
                                          </button>
                                         <button onClick={() => handleRemoveCharacter(char.id)} className="text-red-400 hover:text-red-300 flex-shrink-0"><XCircleIcon className="w-6 h-6"/></button>

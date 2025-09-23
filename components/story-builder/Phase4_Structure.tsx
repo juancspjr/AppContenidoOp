@@ -13,9 +13,10 @@ interface Phase4_StructureProps {
     onBack: () => void;
     onGenerate: () => Promise<void>;
     isGenerating: boolean;
+    areKeysConfigured: boolean;
 }
 
-const Phase4_Structure: React.FC<Phase4_StructureProps> = ({ onComplete, initialData, onBack, onGenerate, isGenerating }) => {
+const Phase4_Structure: React.FC<Phase4_StructureProps> = ({ onComplete, initialData, onBack, onGenerate, isGenerating, areKeysConfigured }) => {
     const [structure, setStructure] = useState<StoryStructure>(initialData || {});
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -42,8 +43,9 @@ const Phase4_Structure: React.FC<Phase4_StructureProps> = ({ onComplete, initial
                 </div>
                  <button 
                     onClick={onGenerate}
-                    disabled={isGenerating || isSubmitting}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-500 transition-colors disabled:bg-yellow-800 disabled:cursor-wait"
+                    disabled={isGenerating || isSubmitting || !areKeysConfigured}
+                    title={!areKeysConfigured ? "Configura tus claves de API para activar la IA" : "Generar o mejorar la estructura con IA"}
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-500 transition-colors disabled:bg-yellow-800 disabled:cursor-not-allowed"
                 >
                     {isGenerating ? <Spinner className="w-5 h-5" /> : <SparkleIcon className="w-5 h-5" />}
                     {isGenerating ? 'Procesando...' : 'Generar/Mejorar con IA'}

@@ -7,7 +7,6 @@ import React, { useState, useCallback } from 'react';
 import StartScreen from './components/StartScreen';
 import EditorCanvas from './components/EditorCanvas';
 import StoryBuilder from './components/StoryBuilder';
-// FIX: Corrected import path for story-builder types to be relative from the current file, ensuring module resolution.
 import type { StoryMasterplan, ExportedProject } from './components/story-builder/types';
 import { projectPersistenceService } from './services/projectPersistenceService';
 import { logger } from './utils/logger';

@@ -3,25 +3,58 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-// ⚠️ REFACTORIZACIÓN DE SEGURIDAD CRÍTICA ⚠️
+// ⚠️ ACCIÓN REQUERIDA ⚠️
+// Reemplaza los siguientes marcadores de posición con tus claves de API reales de Google AI.
+// El sistema de rotación de claves NO FUNCIONARÁ hasta que proporciones claves válidas.
 //
-// Las claves de API han sido eliminadas permanentemente de este archivo del lado del cliente.
-// Toda la lógica de llamadas a la API de Google, incluyendo la gestión y rotación de claves,
-// ha sido movida a un proxy de backend simulado (ubicado en `services/geminiService.ts`)
-// para emular una arquitectura segura.
+// Puedes obtener tus claves aquí: https://aistudio.google.com/app/apikey
 //
-// EN UN ENTORNO DE PRODUCCIÓN REAL:
-// 1. Las claves de API NUNCA deben estar en el código del frontend.
-// 2. Deben residir en variables de entorno en un servidor backend (por ejemplo, Node.js, Python, Go).
-// 3. El frontend debe realizar llamadas a su propio backend (ej. `fetch('/api/generate-image')`).
-// 4. El backend, a su vez, realiza la llamada segura a la API de Google con la clave apropiada.
-//
-// Este cambio soluciona la vulnerabilidad de seguridad más importante de la aplicación.
+// Ejemplo de cómo debería verse una entrada válida:
+// {
+//   projectName: 'Mi Clave Principal de Google AI',
+//   api_key: 'AIzaSy...xxxxxxxxxxxxxxxxxxx', // Clave real que empieza con "AIzaSy"
+// },
 
-export const APIConfig = {
-    /**
-     * Endpoint del proxy de backend (simulado). En una aplicación real, este sería el
-     * URL de tu propio servidor.
-     */
-    BACKEND_API_ENDPOINT: '/api/gemini/v1',
-};
+export const API_KEYS = [
+  {
+    projectName: 'Project Key 1 (Primary)',
+    api_key: 'AIzaSyAtKX8NRdbO_0CrVCTAwD0eVKfe-AAt8j8',
+  },
+  {
+    projectName: 'Project Key 2',
+    api_key: 'AIzaSyBm09YMD8vI97ZJ62BWv-4YWWmu87HsHG8',
+  },
+  {
+    projectName: 'Project Key 3',
+    api_key: 'AIzaSyDqzJir5JkKnI1RvXfqMBROFJzGJbCGlV4',
+  },
+  {
+    projectName: 'Project Key 4',
+    api_key: 'AIzaSyBfVu-tILDX3x5TqviGpDohhjqJOhQ0szk',
+  },
+  {
+    projectName: 'Project Key 5',
+    api_key: 'AIzaSyDVgLT23C22qV4vMMVaQm8vZz_NBj7Skn0',
+  },
+  {
+    projectName: 'Project Key 6',
+    api_key: 'AIzaSyBdT5b7fYwmod6F0bkDySW48kEe8pMsqIk',
+  },
+  {
+    projectName: 'Project Key 7',
+    api_key: 'AIzaSyAZHb4qKtWtwQoVt9LHDSPWgUKVeUt_XMM',
+  },
+  {
+    projectName: 'Project Key 8',
+    api_key: 'AIzaSyB6hLW1DHlpDEZviszXECxNWu4i7MaxH2o',
+  },
+  {
+    projectName: 'Project Key 9',
+    api_key: 'AIzaSyC5tu2VNwIbtqRyctGBpEBxoFhP5XuxP0o',
+  },
+  {
+    projectName: 'Project Key 10',
+    api_key: 'AIzaSyDMPzwkMdcW1lifMir3rZXZmhQ6xRYabVc',
+  },
+  // Puedes añadir más claves aquí. El sistema rotará automáticamente a través de ellas.
+];

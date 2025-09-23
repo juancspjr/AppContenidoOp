@@ -2,253 +2,359 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
+
 import { z } from 'zod';
 
-// Phase 1: Initial Concept
+// For AdjustmentPanel AI Recommendations
+export interface AIRecommendation {
+    presetName: string;
+    reason: string;
+    confidence: number;
+    colorBalance?: { r: number; g: number; b: number; };
+}
+
+// =================================================================
+// STORY BUILDER CORE TYPES
+// =================================================================
+
+// Phase 1: Initial user input
+export interface InitialConcept {
+    idea: string;
+    targetAudience?: string;
+    keyElements?: string[];
+    logline?: string;
+}
+
+// Zod Schema for AI Concept Generation (Phase 1)
 export const InitialConceptSchema = z.object({
-    idea: z.string().min(1, "La idea es requerida."),
-    targetAudience: z.string(),
-    keyElements: z.array(z.string()),
+    idea: z.string(),
+    targetAudience: z.string().optional(),
+    keyElements: z.array(z.string()).optional(),
+    logline: z.string().optional(),
 });
-export type InitialConcept = z.infer<typeof InitialConceptSchema>;
 
 
-// Phase 2: Style & Format
-export const StyleAndFormatSchema = z.object({
-    outputFormat: z.array(z.string()).optional(),
-    narrativeStyle: z.array(z.string()).optional(),
-    visualStyle: z.array(z.string()).optional(),
-    narrativeStructure: z.array(z.string()).optional(),
-    hook: z.array(z.string()).optional(),
-    conflict: z.array(z.string()).optional(),
-    ending: z.array(z.string()).optional(),
-    styleNotes: z.string().optional(),
-});
-export type StyleAndFormat = z.infer<typeof StyleAndFormatSchema>;
+// Phase 2: User input
+export interface StyleAndFormat {
+    outputFormat?: string[];
+    narrativeStyle?: string[];
+    visualStyle?: string[];
+    narrativeStructure?: string[];
+    hook?: string[];
+    conflict?: string[];
+    ending?: string[];
+    styleNotes?: string;
+}
 
-
-// Type for what the AI suggests in Phase 2
+// Zod Schema for AI Style Suggestions (Phase 2)
 export const AIStyleSuggestionSchema = z.object({
-    outputFormat: z.array(z.string()).optional(),
-    narrativeStyle: z.array(z.string()).optional(),
-    visualStyle: z.array(z.string()).optional(),
-    narrativeStructure: z.array(z.string()).optional(),
-    hook: z.array(z.string()).optional(),
-    conflict: z.array(z.string()).optional(),
-    ending: z.array(z.string()).optional(),
+    outputFormat: z.array(z.string()).max(3),
+    narrativeStyle: z.array(z.string()).max(3),
+    visualStyle: z.array(z.string()).max(3),
+    narrativeStructure: z.array(z.string()).max(3).optional(),
+    hook: z.array(z.string()).max(3).optional(),
+    conflict: z.array(z.string()).max(3).optional(),
+    ending: z.array(z.string()).max(3).optional(),
     styleNotesSuggestion: z.string().optional(),
-});
-export type AIStyleSuggestion = z.infer<typeof AIStyleSuggestionSchema>;
+}).partial();
 
 
-// Phase 3: Characters
-export const CharacterMotivationSchema = z.object({
-    desire: z.string(),
-    fear: z.string(),
-    need: z.string(),
-});
-export type CharacterMotivation = z.infer<typeof CharacterMotivationSchema>;
+// Phase 3: User input - ELITE "Chain of Agents" STRUCTURE
+export interface CharacterRelationship {
+    characterId: string; // ID of the character this one is related to
+    relationshipType: string; // e.g., "Rival", "Mentor", "Ally", "Family", "Romantic Interest"
+}
 
-export const CharacterRelationshipSchema = z.object({
-    characterId: z.string(),
-    relationshipType: z.string(),
-});
-export type CharacterRelationship = z.infer<typeof CharacterRelationshipSchema>;
+export interface CharacterMotivation {
+    desire: string; // What the character wants.
+    fear: string;   // What the character is afraid of.
+    need: string;   // What the character truly needs to learn or accept.
+}
 
-export const CharacterDefinitionSchema = z.object({
-    id: z.string(),
-    name: z.string(),
+export interface CharacterDefinition {
+    id: string; // Unique identifier for relationships
+    name: string;
+    description: string;
+    role: 'Protagonist' | 'Antagonist' | 'Mentor' | 'Ally' | 'Foil' | 'Supporting' | 'Other';
+    archetype?: string;
+    motivation: CharacterMotivation;
+    flaw: string; // The character's critical weakness
+    arc: string; // The character's transformation, e.g., "From coward to hero"
+    relationships: CharacterRelationship[];
+    visual_prompt_enhancers: string; // Keywords for AI image generation, e.g. "red scarf, scar over left eye"
+    imageUrl?: string; 
+    imageAssetId?: string;
+    imageFile?: File;
+}
+
+// Zod Schema for AI Character Assistance (Phase 3)
+export const AICharacterDetailsSchema = z.object({
     description: z.string(),
-    archetype: z.string(),
-    role: z.enum(['Protagonist', 'Antagonist', 'Mentor', 'Ally', 'Foil', 'Supporting', 'Other']),
-    motivation: CharacterMotivationSchema,
+    motivation: z.object({
+        desire: z.string(),
+        fear: z.string(),
+        need: z.string(),
+    }),
     flaw: z.string(),
     arc: z.string(),
-    relationships: z.array(CharacterRelationshipSchema),
     visual_prompt_enhancers: z.string(),
-    imageFile: z.instanceof(File).optional(),
-    imageUrl: z.string().optional(),
-    imageAssetId: z.string().optional(),
-});
-export type CharacterDefinition = z.infer<typeof CharacterDefinitionSchema>;
+}).partial();
 
 
-// Phase 4: Story Structure
-export const StoryStructureSchema = z.object({
-    act1_summary: z.string().optional(),
-    act2_summary: z.string().optional(),
-    act3_summary: z.string().optional(),
-});
-export type StoryStructure = z.infer<typeof StoryStructureSchema>;
+// Phase 4: User input
+export interface StoryStructure {
+    act1_summary?: string;
+    act2_summary?: string;
+    act3_summary?: string;
+}
+
+// Zod Schema for AI Story Structure Generation (Phase 4)
+export const AIStoryStructureSchema = z.object({
+    act1_summary: z.string(),
+    act2_summary: z.string(),
+    act3_summary: z.string(),
+}).partial();
 
 
-// Phase 4.5: Coherence Check
+// Phase 4.5: AI-generated coherence check report
+export interface CoherenceCheckItem {
+    id: string; // Unique ID for managing selection state
+    element: string; // e.g., "Tone vs. Character", "Plot Hole"
+    concern: string;
+    suggestion: string;
+    severity: 'low' | 'medium' | 'high';
+}
+
+export interface StructuralCoherenceReport {
+    overallAssessment: string;
+    coherenceScore: number; // 0-10
+    checks: CoherenceCheckItem[];
+}
+
+export interface CoherenceCheckStep {
+    id: string;
+    label: string;
+    status: 'pending' | 'running' | 'complete' | 'error';
+    result?: string; // For summary or score
+    error?: string;
+}
+
+
+// Zod Schema for validation
 export const CoherenceCheckItemSchema = z.object({
-    id: z.string(),
-    element: z.string(),
-    concern: z.string(),
-    suggestion: z.string(),
-    severity: z.enum(['low', 'medium', 'high']),
+    id: z.string().default(() => `check_${Date.now()}_${Math.random()}`),
+    element: z.string().optional().default("General"),
+    concern: z.string().optional().default("No specific concern provided."),
+    suggestion: z.string().optional().default("No specific suggestion provided."),
+    severity: z.enum(['low', 'medium', 'high']).optional().default('low'),
 });
-export type CoherenceCheckItem = z.infer<typeof CoherenceCheckItemSchema>;
 
-export const StructuralCoherenceReportSchema = z.object({
-    coherenceScore: z.number(),
-    overallAssessment: z.string(),
+export const CoherenceCheckItemsSchema = z.array(CoherenceCheckItemSchema);
+
+
+// Base schema with common fields
+const BaseReportSchema = z.object({
+    coherenceScore: z.number().min(0).max(10),
     checks: z.array(CoherenceCheckItemSchema),
 });
-export type StructuralCoherenceReport = z.infer<typeof StructuralCoherenceReportSchema>;
 
-export const CoherenceCheckStepSchema = z.object({
-    id: z.string(),
-    label: z.string(),
-    status: z.enum(['pending', 'running', 'complete', 'error']),
-    result: z.string().optional(),
-    error: z.string().optional(),
+// Union schema for the varying field ('overallAssessment' or 'summary')
+const UnionKeySchema = z.union([
+    z.object({ overallAssessment: z.string() }),
+    z.object({ summary: z.string() })
+]);
+
+// Final schema that combines the base and union, then transforms the result
+// to a consistent internal format. This makes the system resilient to API variations.
+export const StructuralCoherenceReportSchema = BaseReportSchema.and(UnionKeySchema)
+    .transform((data): StructuralCoherenceReport => {
+        if ('summary' in data && data.summary) {
+            // If 'summary' key exists, normalize it to 'overallAssessment'
+            return {
+                overallAssessment: data.summary,
+                coherenceScore: data.coherenceScore,
+                checks: data.checks,
+            };
+        }
+        // Otherwise, the data already has 'overallAssessment' and is correct
+        return data as StructuralCoherenceReport;
+    });
+
+
+// Generated by the "Scroll-Stopper" Hook Adapter Agent
+export interface HookTemplate {
+    template: string; // The actual hook text/concept
+    rationale: string; // Why this hook works for this specific story
+}
+export interface HookMatrix {
+    patternInterrupts: HookTemplate[];
+    psychologicalTriggers: HookTemplate[];
+    curiosityGaps: HookTemplate[];
+    powerPhrases: HookTemplate[];
+    provenStructures: HookTemplate[];
+}
+
+
+// =================================================================
+// ZOD SCHEMAS for STORY MASTERPLAN (Phase 5) - NEW & CRITICAL
+// =================================================================
+
+const MetadataSchema = z.object({
+    title: z.string(),
+    logline: z.string(),
+    theme: z.string(),
+    version: z.string().optional(),
+    generatedAt: z.string().optional(),
 });
-export type CoherenceCheckStep = z.infer<typeof CoherenceCheckStepSchema>;
 
+const CreativeBriefSchema = z.object({
+    concept: z.string(),
+    target_audience: z.string(),
+    output_format: z.union([z.string(), z.array(z.string())]),
+    narrative_style: z.union([z.string(), z.array(z.string())]),
+    visual_style: z.union([z.string(), z.array(z.string())]),
+});
 
-// Phase 5: Story Masterplan
-export const SceneSchema = z.object({
+const CharacterPlanSchema = z.object({
+    name: z.string(),
+    description: z.string(),
+    visual_description: z.string(),
+    role: z.string(),
+    reference_asset_id: z.string().optional(),
+});
+
+const SceneSchema = z.object({
     scene_number: z.number(),
     title: z.string(),
+    setting: z.string(),
     summary: z.string(),
-    visual_description: z.string().optional(),
-    dialogue: z.string().optional(),
-    sound_design: z.string().optional(),
+    emotional_beat: z.string(),
+    characters_present: z.array(z.string()),
+    // CRITICAL IMPROVEMENT: Add a specific prompt for video generation per scene
+    visual_elements_prompt: z.string().optional().describe("A detailed prompt for an AI video generator for this specific scene."),
 });
-export type Scene = z.infer<typeof SceneSchema>;
 
-export const ActSchema = z.object({
+const ActSchema = z.object({
     act_number: z.number(),
     title: z.string(),
     summary: z.string(),
     scenes: z.array(SceneSchema),
 });
-export type Act = z.infer<typeof ActSchema>;
 
-export const StoryMasterplanSchema = z.object({
-    metadata: z.object({
-        title: z.string(),
-        logline: z.string(),
+const StoryStructurePlanSchema = z.object({
+    hook: z.object({
+        type: z.string(),
+        description: z.string(),
     }),
-    story_structure: z.object({
-        narrative_arc: z.array(ActSchema),
+    narrative_arc: z.array(ActSchema),
+    conflict: z.object({
+        type: z.string(),
+        description: z.string(),
+    }),
+    ending: z.object({
+        type: z.string(),
+        description: z.string(),
     }),
 });
+
+export const StoryMasterplanSchema = z.object({
+    metadata: MetadataSchema,
+    creative_brief: CreativeBriefSchema,
+    characters: z.array(CharacterPlanSchema),
+    story_structure: StoryStructurePlanSchema,
+    critique: z.any().optional(), // Critique is added later, not validated here
+    documentation: z.any().optional(), // Documentation is added later
+    hookMatrix: z.any().optional(), // Hook Matrix is added later
+});
+
+// The comprehensive plan generated by the AI after phase 4
 export type StoryMasterplan = z.infer<typeof StoryMasterplanSchema>;
 
 
-// Phase 6.1: Critique
-export const CritiqueSchema = z.object({
-    narrativeStrengths: z.array(z.string()),
-    weaknesses: z.array(z.object({ point: z.string(), suggestion: z.string() })),
-    viralPotential: z.number(),
-    improvementStrategies: z.array(z.object({ title: z.string(), description: z.string() })),
-    enrichedElements: z.any(),
-});
-export type Critique = z.infer<typeof CritiqueSchema>;
+// Phase 6.1: The AI's evaluation of the masterplan
+export interface Critique {
+    overallAssessment: string;
+    viralPotential: number; // Score from 1-10
+    narrativeStrengths: string[];
+    weaknesses: Array<{
+        point: string;
+        suggestion: string;
+    }>;
+    improvementStrategies: Array<{
+        title: string,
+        description: string,
+    }>;
+    enrichedElements?: {
+        characters?: any[];
+        actions?: any[];
+        environments?: any[];
+        narratives?: any[];
+        visuals?: any[];
+        technicals?: any[];
+    }
+}
 
+// Phase 6.2: Generated documentation
+export interface Documentation {
+    directorsBible: string;
+    aiProductionGuide: string;
+    visualStyleGuide: string;
+}
 
-// Phase 6.2: Documentation
-export const DocumentationSchema = z.object({
-    directorsBible: z.string(),
-    aiProductionGuide: z.string(),
-    visualStyleGuide: z.string(),
-});
-export type Documentation = z.infer<typeof DocumentationSchema>;
+// Phase 6.3: Generated reference assets
+export interface ReferenceAsset {
+    id: string; // e.g., "character_john_doe"
+    type: 'character' | 'environment' | 'element';
+    name: string;
+    description: string;
+    visualPrompt: string;
+    assetId: string; // ID for retrieving blob from cache
+    generationStatus?: 'pending' | 'generating' | 'completed' | 'failed';
+}
+export interface ReferenceAssets {
+    characters: ReferenceAsset[];
+    environments: ReferenceAsset[];
+    elements: ReferenceAsset[];
+}
 
+// Phase 6.4: Generated final video assets
+export interface VideoAsset {
+    sceneId: string; // "scene_1", "scene_2", etc.
+    segment: number;
+    totalSegments: number;
+    assetId: string; // ID for retrieving blob from cache
+}
 
-// Phase 6.2.5: Hook Matrix
-export const HookTemplateSchema = z.object({
-    template: z.string(),
-    rationale: z.string(),
-});
-export type HookTemplate = z.infer<typeof HookTemplateSchema>;
+export interface FinalAssets {
+    videoAssets: VideoAsset[];
+}
 
-export const HookMatrixSchema = z.object({
-    patternInterrupts: z.array(HookTemplateSchema),
-    psychologicalTriggers: z.array(HookTemplateSchema),
-    curiosityGaps: z.array(HookTemplateSchema),
-    powerPhrases: z.array(HookTemplateSchema),
-    provenStructures: z.array(HookTemplateSchema),
-});
-export type HookMatrix = z.infer<typeof HookMatrixSchema>;
+// For progress updates during long generation tasks
+export interface ProgressUpdate {
+    stage: string;
+    status: 'pending' | 'in_progress' | 'complete' | 'error';
+    message: string;
+    progress?: number;
+    sceneId?: string;
+    segment?: number;
+    totalSegments?: number;
+}
 
-
-// Phase 6.3: Reference Assets
-export const ReferenceAssetSchema = z.object({
-    id: z.string(),
-    type: z.enum(['character', 'environment', 'element']),
-    name: z.string(),
-    description: z.string(),
-    prompt: z.string(),
-    assetId: z.string(),
-    generationStatus: z.enum(['pending', 'generating', 'complete', 'error']),
-    aspectRatio: z.enum(['1:1', '16:9', '9:16']),
-});
-export type ReferenceAsset = z.infer<typeof ReferenceAssetSchema>;
-
-export const ReferenceAssetsSchema = z.object({
-    characters: z.array(ReferenceAssetSchema),
-    environments: z.array(ReferenceAssetSchema),
-    elements: z.array(ReferenceAssetSchema),
-});
-export type ReferenceAssets = z.infer<typeof ReferenceAssetsSchema>;
-
-
-// Phase 6.4: Final Video Generation
-export const VideoAssetSchema = z.object({
-    sceneId: z.string(),
-    segment: z.number(),
-    assetId: z.string(),
-});
-export type VideoAsset = z.infer<typeof VideoAssetSchema>;
-
-export const FinalAssetsSchema = z.object({
-    videoAssets: z.array(VideoAssetSchema),
-});
-export type FinalAssets = z.infer<typeof FinalAssetsSchema>;
-
-
-// --- Utility & State Machine Types ---
-export const ProgressUpdateSchema = z.object({
-    stage: z.string(),
-    message: z.string(),
-    progress: z.number().optional(),
-    segment: z.number().optional(),
-    totalSegments: z.number().optional(),
-    sceneId: z.string().optional(),
-    status: z.enum(['in_progress', 'complete', 'error']),
-});
-export type ProgressUpdate = z.infer<typeof ProgressUpdateSchema>;
-
-
-export const ExportedProjectSchema = z.object({
-    phase: z.number(),
-    initialConcept: InitialConceptSchema.nullable(),
-    styleAndFormat: StyleAndFormatSchema.nullable(),
-    characters: z.array(CharacterDefinitionSchema),
-    storyStructure: StoryStructureSchema.nullable(),
-    coherenceReport: StructuralCoherenceReportSchema.nullable(),
-    storyPlan: StoryMasterplanSchema.nullable(),
-    plan: StoryMasterplanSchema.optional(), // For legacy
-    critique: CritiqueSchema.nullable(),
-    documentation: DocumentationSchema.nullable(),
-    hookMatrix: HookMatrixSchema.nullable(),
-    referenceAssets: ReferenceAssetsSchema.nullable(),
-    finalAssets: FinalAssetsSchema.nullable(),
-    isLoading: z.boolean().optional(),
-    error: z.string().nullable().optional(),
-    progress: z.record(z.string(), ProgressUpdateSchema).optional(),
-});
-export type ExportedProject = z.infer<typeof ExportedProjectSchema>;
-
-
-// For AdjustmentPanel
-export interface AIRecommendation {
-    presetName?: string;
-    reason: string;
-    colorBalance?: { r: number, g: number, b: number };
+// For exporting/importing/saving the whole project state
+export interface ExportedProject {
+    phase: number;
+    initialConcept: InitialConcept | null;
+    styleAndFormat: StyleAndFormat | null;
+    characters: CharacterDefinition[];
+    storyStructure: StoryStructure | null;
+    coherenceReport: StructuralCoherenceReport | null;
+    coherenceCheckProgress: CoherenceCheckStep[] | null;
+    storyPlan: StoryMasterplan | null;
+    critique: Critique | null;
+    documentation: Documentation | null;
+    hookMatrix: HookMatrix | null;
+    referenceAssets: ReferenceAssets | null;
+    finalAssets: FinalAssets | null;
+    // Legacy support for older save format
+    plan?: StoryMasterplan;
 }

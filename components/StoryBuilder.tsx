@@ -3,15 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { BookOpenIcon, XCircleIcon } from './icons';
-// FIX: Corrected relative import paths for services, hooks, and utilities to align with the project's root directory structure.
-import { projectPersistenceService } from '../services/projectPersistenceService';
-import { logger } from '../utils/logger';
-// FIX: Corrected relative import path.
+import { projectPersistenceService } from '../../services/projectPersistenceService';
+import { logger } from '../../utils/logger';
 import type { ExportedProject } from './story-builder/types';
-// FIX: Corrected relative import path.
-import { useStoryBuilderStateMachine } from '../hooks/useStoryBuilderStateMachine';
+import { useStoryBuilderStateMachine } from '../../hooks/useStoryBuilderStateMachine';
 
 import PhaseStepper from './story-builder/PhaseStepper';
 import Spinner from './Spinner';
@@ -26,11 +23,11 @@ import EvaluationPhaseView from './story-builder/EvaluationPhaseView';
 import RefinementPhaseView from './story-builder/RefinementPhaseView';
 import ReferenceAssetView from './story-builder/ReferenceAssetView';
 import AssetGenerationView from './story-builder/AssetGenerationView';
-import APIStatusPanel from './story-builder/APIStatusPanel';
-import APIKeyValidator from './story-builder/APIKeyValidator';
 import GeminiWebLogin from './story-builder/GeminiWebLogin';
 import HealthStatusBanner from './story-builder/HealthStatusBanner';
-import geminiWebService from '../services/geminiWebService';
+import geminiWebService from '../../services/geminiWebService';
+import APIStatusPanel from './story-builder/APIStatusPanel';
+import { API_KEYS } from '../../config/secure_config';
 
 interface StoryBuilderProps {
   existingProject?: ExportedProject;
@@ -41,6 +38,10 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ existingProject, onExit }) 
     const { state, actions } = useStoryBuilderStateMachine(existingProject);
     const [isWebConnectionHealthy, setIsWebConnectionHealthy] = useState(true);
     const [showReconnectBanner, setShowReconnectBanner] = useState(false);
+
+    const areKeysConfigured = useMemo(() => 
+        API_KEYS.some(k => k.api_key && !k.api_key.startsWith('YOUR_API_KEY_HERE'))
+    , []);
 
     // Effect for auto-saving project state
     useEffect(() => {
@@ -72,6 +73,19 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ existingProject, onExit }) 
         return () => clearInterval(interval);
     }, []);
 
+    // Effect for running isolation tests in development
+    useEffect(() => {
+        // This check ensures the test only runs in a development environment
+        // The environment variable is typically set by bundlers like Vite or Create React App
+        // FIX: Cast `import.meta` to `any` and use optional chaining to safely access `env.DEV`, preventing runtime errors when `env` is undefined.
+        if ((import.meta as any).env?.DEV) {
+            import('../../services/testIsolation').then(({ testIsolationMethods }) => {
+                // Delay slightly to allow other initializations to complete
+                setTimeout(testIsolationMethods, 1000);
+            });
+        }
+    }, []);
+
     const renderPhaseContent = () => {
         const { phase, isLoading, error, progress, ...data } = state;
         
@@ -81,6 +95,7 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ existingProject, onExit }) 
                                 onComplete={actions.handleConceptComplete} 
                                 onAssist={actions.assistConcept}
                                 isAssisting={state.localLoading.concept}
+                                areKeysConfigured={areKeysConfigured}
                             />;
             case 2: return <Phase2_Style 
                                 initialData={data.styleAndFormat} 
@@ -88,6 +103,7 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ existingProject, onExit }) 
                                 onBack={actions.goToPhase1}
                                 onSuggest={actions.suggestStyle}
                                 isSuggesting={state.localLoading.style} 
+                                areKeysConfigured={areKeysConfigured}
                             />;
             case 3: return <Phase3_Characters 
                                 initialData={data.characters} 
@@ -96,6 +112,7 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ existingProject, onExit }) 
                                 onAssistCharacter={actions.assistCharacter}
                                 onAssistNewCharacter={actions.assistNewCharacter}
                                 assistingCharacterIds={state.localLoading.characters}
+                                areKeysConfigured={areKeysConfigured}
                             />;
             case 4: return <Phase4_Structure 
                                 initialData={data.storyStructure} 
@@ -103,6 +120,7 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ existingProject, onExit }) 
                                 onBack={actions.goToPhase3}
                                 onGenerate={actions.generateStructure}
                                 isGenerating={state.localLoading.structure}
+                                areKeysConfigured={areKeysConfigured}
                             />;
             case 4.5: return <Phase4_CoherenceCheck 
                                 report={data.coherenceReport} 
@@ -132,7 +150,7 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ existingProject, onExit }) 
             case 6.3:
                  return <ReferenceAssetView isLoading={isLoading} progress={progress} assets={data.referenceAssets} error={error} onRegenerateAll={actions.startReferenceGeneration} onRegenerateSingle={actions.regenerateSingleAsset} onContinue={actions.startVideoGeneration} onGoToPhase={actions.goToPhase} />;
             case 6.4:
-                return <AssetGenerationView isLoading={isLoading} progress={progress} assets={data.finalAssets} error={error} storyPlan={data.storyPlan} onExit={onExit} onRegenerate={actions.startVideoGeneration} onGoToPhase={actions.goToPhase} />;
+                return <AssetGenerationView isLoading={isLoading} progress={progress} assets={data.finalAssets} error={error} storyPlan={data.storyPlan} onRegenerate={actions.startVideoGeneration} onGoToPhase={actions.goToPhase} onExit={onExit} />;
             default:
                 return <div>Fase desconocida: {phase}</div>;
         }
@@ -153,6 +171,15 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ existingProject, onExit }) 
                 />
             }
             <div className="w-full max-w-4xl">
+                {!areKeysConfigured && (
+                    <div className="bg-red-900 border border-red-500 text-red-200 text-center p-4 rounded-lg mb-6 animate-pulse">
+                        <h2 className="font-bold text-lg">⚠️ ACCIÓN REQUERIDA: Configuración de API Incompleta</h2>
+                        <p className="mt-2 text-sm">
+                            Las funciones de IA están desactivadas porque no se han configurado claves de API válidas.
+                            Por favor, edita el archivo <code className="bg-black/50 px-1.5 py-0.5 rounded-md font-mono">config/secure_config.ts</code> y reemplaza los marcadores de posición con tus claves de API reales de Google AI.
+                        </p>
+                    </div>
+                )}
                  <header className="flex justify-between items-center mb-6">
                     <div className="flex items-center gap-3">
                         <BookOpenIcon className="w-8 h-8 text-blue-400" />
@@ -173,7 +200,6 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ existingProject, onExit }) 
                     <summary className="cursor-pointer hover:text-white">Paneles de Control (Debug)</summary>
                     <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
                         <APIStatusPanel />
-                        <APIKeyValidator />
                         <GeminiWebLogin />
                     </div>
                 </details>

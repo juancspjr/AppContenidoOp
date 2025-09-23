@@ -12,9 +12,10 @@ interface Phase1_ConceptProps {
     initialData: InitialConcept | null;
     onAssist: (idea: string) => Promise<void>;
     isAssisting: boolean;
+    areKeysConfigured: boolean;
 }
 
-const Phase1_Concept: React.FC<Phase1_ConceptProps> = ({ onComplete, initialData, onAssist, isAssisting }) => {
+const Phase1_Concept: React.FC<Phase1_ConceptProps> = ({ onComplete, initialData, onAssist, isAssisting, areKeysConfigured }) => {
     const [idea, setIdea] = useState(initialData?.idea || '');
     const [targetAudience, setTargetAudience] = useState(initialData?.targetAudience || '');
     const [keyElements, setKeyElements] = useState(initialData?.keyElements?.join(', ') || '');
@@ -54,9 +55,9 @@ const Phase1_Concept: React.FC<Phase1_ConceptProps> = ({ onComplete, initialData
                 </div>
                  <button 
                     onClick={handleAssistClick}
-                    disabled={isAssisting || !idea.trim()}
-                    title={!idea.trim() ? "Escribe una idea para activar la IA" : "Usa la IA para refinar y completar esta fase"}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-500 transition-colors disabled:bg-yellow-800 disabled:cursor-wait"
+                    disabled={isAssisting || !idea.trim() || !areKeysConfigured}
+                    title={!areKeysConfigured ? "Configura tus claves de API en config/secure_config.ts para activar la IA" : !idea.trim() ? "Escribe una idea para activar la IA" : "Usa la IA para refinar y completar esta fase"}
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-500 transition-colors disabled:bg-yellow-800 disabled:cursor-not-allowed"
                 >
                     {isAssisting ? <Spinner className="w-5 h-5" /> : <SparkleIcon className="w-5 h-5" />}
                     {isAssisting ? 'Generando...' : 'Generar con IA'}

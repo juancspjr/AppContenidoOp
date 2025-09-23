@@ -15,6 +15,11 @@ export function formatApiError(error: unknown): string {
     if (error instanceof Error) {
         const message = error.message.toLowerCase();
 
+        // New specific check for placeholder keys
+        if (message.includes('invalid or placeholder api key')) {
+            return "Clave de API inválida o de marcador de posición. Por favor, edita el archivo `config/secure_config.ts` y reemplaza 'YOUR_API_KEY_HERE_...' con tus claves reales de Google AI.";
+        }
+        
         // Specific Gemini API Errors
         if (message.includes('api key not valid')) {
             return "La clave de API proporcionada no es válida. Por favor, verifica la configuración del sistema.";

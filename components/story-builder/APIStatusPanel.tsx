@@ -2,118 +2,67 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
+import React, { useState, useEffect } from 'react';
+import { PersistentAPIKeyManager, type APIKeyStatus, type APIKeyData } from '../../services/persistentApiKeyManager';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { resetAllAPIs, resetSpecificAPI, listAPIStatus, getAPIStats } from '../../services/geminiService';
-import type { APIKeyStatus } from '../../services/apiKeyBlacklist';
+type KeyStatusDisplay = APIKeyData & APIKeyStatus;
 
 const APIStatusPanel: React.FC = () => {
-    const [apis, setApis] = useState<APIKeyStatus[]>([]);
-    const [stats, setStats] = useState<any | null>(null);
-    
-    const refreshStatus = useCallback(() => {
-        const statusList = listAPIStatus();
-        const apiStats = getAPIStats();
-        setApis(statusList);
-        setStats(apiStats);
-    }, []);
-    
+    const [keyStatuses, setKeyStatuses] = useState<KeyStatusDisplay[]>(PersistentAPIKeyManager.getAllKeyStatuses());
+
     useEffect(() => {
-        refreshStatus();
-        const interval = setInterval(refreshStatus, 5000); // Auto-refresh every 5 seconds
-        return () => clearInterval(interval);
-    }, [refreshStatus]);
-    
+        const unsubscribe = PersistentAPIKeyManager.subscribe(() => {
+            setKeyStatuses(PersistentAPIKeyManager.getAllKeyStatuses());
+        });
+        return () => unsubscribe();
+    }, []);
+
+    const getStatusIndicator = (status: 'available' | 'exhausted') => {
+        const color = status === 'available' ? 'bg-green-500' : 'bg-red-500';
+        return <div className={`w-3 h-3 rounded-full animate-pulse ${color}`} title={`Status: ${status}`}></div>;
+    };
+
     const handleResetAll = () => {
-        if (window.confirm('¿Estás seguro de resetear el estado de TODAS las APIs? Esto limpiará el estado persistente y reactivará todas las claves.')) {
-            resetAllAPIs();
-            refreshStatus();
+        if (window.confirm("Are you sure you want to reset all API key statuses? This will make all exhausted keys available again.")) {
+            PersistentAPIKeyManager.resetAllKeyStatus();
         }
-    };
+    }
     
-    const handleResetSpecific = (projectName: string) => {
-        if (window.confirm(`¿Estás seguro de resetear la API ${projectName}?`)) {
-            resetSpecificAPI(projectName);
-            refreshStatus();
-        }
-    };
-    
+    const hasPlaceholderKeys = keyStatuses.some(k => k.api_key.startsWith('YOUR_API_KEY_HERE'));
+
     return (
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 animate-fade-in">
-            <h3 className="text-lg font-bold text-white mb-4">🔑 Estado del Pool de APIs</h3>
-            
-            {stats && (
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4 text-sm">
-                    <div className="bg-gray-700/50 p-2 rounded text-center">
-                        <div className="text-gray-300">Total</div>
-                        <div className="text-white font-bold text-lg">{stats.total}</div>
-                    </div>
-                    <div className="bg-green-600/20 p-2 rounded text-center">
-                        <div className="text-green-400">✅ Activas</div>
-                        <div className="text-white font-bold text-lg">{stats.active}</div>
-                    </div>
-                    <div className="bg-red-600/20 p-2 rounded text-center">
-                        <div className="text-red-400">❌ Agotadas</div>
-                        <div className="text-white font-bold text-lg">{stats.quotaExhausted}</div>
-                    </div>
-                    <div className="bg-yellow-600/20 p-2 rounded text-center">
-                        <div className="text-yellow-400">⏰ Límite Diario</div>
-                        <div className="text-white font-bold text-lg">{stats.dailyLimit}</div>
-                    </div>
-                    <div className="bg-gray-600/20 p-2 rounded text-center">
-                        <div className="text-gray-400">🚫 Bloqueadas</div>
-                        <div className="text-white font-bold text-lg">{stats.permanentlyBlocked}</div>
-                    </div>
+        <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+            {hasPlaceholderKeys && (
+                <div className="bg-red-900/50 border border-red-500/50 text-red-300 text-sm p-3 rounded-md mb-4 animate-pulse">
+                    <h4 className="font-bold">⚠️ ¡ACCIÓN REQUERIDA!</h4>
+                    <p>El sistema está usando claves de API de marcador de posición. La generación de IA fallará. Por favor, edita el archivo <code className="bg-black/50 px-1 rounded">config/secure_config.ts</code> y añade tus claves de API reales.</p>
                 </div>
             )}
-            
-            <div className="space-y-2 max-h-60 overflow-y-auto mb-4 pr-2 border-t border-b border-gray-700 py-2">
-                {apis.map(api => {
-                    const statusConfig = {
-                        'active': { icon: '✅', color: 'text-green-400', bg: 'bg-green-900/20' },
-                        'quota_exhausted': { icon: '❌', color: 'text-red-400', bg: 'bg-red-900/20' },
-                        'daily_limit': { icon: '⏰', color: 'text-yellow-400', bg: 'bg-yellow-900/20' },
-                        'permanently_blocked': { icon: '🚫', color: 'text-gray-400', bg: 'bg-gray-700/30' }
-                    }[api.status];
-                    
-                    return (
-                        <div key={api.id} className={`flex items-center justify-between p-2 rounded ${statusConfig.bg}`}>
-                            <div className="flex items-center gap-3">
-                                <span title={api.status}>{statusConfig.icon}</span>
-                                <span className="text-white font-mono text-sm">{api.projectName}</span>
-                                {api.failureCount > 0 && (
-                                    <span className="text-xs bg-red-800/50 text-red-300 px-2 py-0.5 rounded-full" title={`Número de fallos consecutivos: ${api.failureCount}`}>
-                                        {api.failureCount} fallos
-                                    </span>
-                                )}
-                            </div>
-                            {api.status !== 'active' && (
-                                <button
-                                    onClick={() => handleResetSpecific(api.projectName)}
-                                    className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition-colors"
-                                    title={`Reactivar la API ${api.projectName}`}
-                                >
-                                    Reset
-                                </button>
-                            )}
-                        </div>
-                    );
-                })}
+            <div className="flex justify-between items-center mb-3">
+                <h3 className="font-semibold text-white">Estado de Claves API</h3>
+                 <button onClick={handleResetAll} className="text-xs bg-red-800 px-3 py-1 rounded hover:bg-red-700 text-red-200">
+                    Resetear Estados
+                </button>
             </div>
-            
-            <div className="flex gap-2 justify-end">
-                <button
-                    onClick={refreshStatus}
-                    className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-2 rounded text-sm"
-                >
-                    🔄 Actualizar
-                </button>
-                <button
-                    onClick={handleResetAll}
-                    className="bg-red-700 hover:bg-red-600 text-white px-3 py-2 rounded text-sm"
-                >
-                    💥 Resetear Todo
-                </button>
+            <div className="space-y-2">
+                {keyStatuses.map(key => (
+                    <div key={key.id} className="bg-gray-900/50 p-2 rounded-md text-sm">
+                        <div className="flex items-center gap-3">
+                            {getStatusIndicator(key.status)}
+                            <span className="flex-grow font-medium text-gray-300">{key.projectName}</span>
+                        </div>
+                        {key.status === 'exhausted' && key.cooldownUntil && (
+                            <div className="text-xs text-yellow-400 pl-6 mt-1">
+                                En cooldown hasta: {new Date(key.cooldownUntil).toLocaleTimeString()}
+                            </div>
+                        )}
+                         {key.lastError && (
+                            <div className="text-xs text-red-400 pl-6 mt-1 truncate" title={key.lastError}>
+                                Error: {key.lastError}
+                            </div>
+                        )}
+                    </div>
+                ))}
             </div>
         </div>
     );

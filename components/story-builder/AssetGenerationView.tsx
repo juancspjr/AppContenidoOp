@@ -4,7 +4,6 @@
 */
 
 import React, { useState, useEffect } from 'react';
-// FIX: Corrected relative import path.
 import type { StoryMasterplan, FinalAssets, ProgressUpdate } from './types';
 import Spinner from '../Spinner';
 import { DownloadIcon, ExportIcon } from '../icons';
@@ -206,21 +205,24 @@ const AssetGenerationView: React.FC<AssetGenerationViewProps> = ({
     }
 
     const renderSceneProgress = () => {
-        // FIX: Cast Object.values to ProgressUpdate[] to ensure correct type inference for downstream operations.
-        const allProgressUpdates = Object.values(progress) as ProgressUpdate[];
         return scenes.map(scene => {
             const sceneId = `scene_${scene.scene_number}`;
-            const sceneProgress = allProgressUpdates.filter(p => p.sceneId === sceneId);
-            const subPromptUpdate = sceneProgress.find(p => p.stage === 'sub_prompts');
-            const videoUpdates = sceneProgress.filter(p => p.stage === 'videos').sort((a,b) => (a.segment || 0) - (b.segment || 0));
+            // FIX: Add explicit type to parameter to resolve 'unknown' type error.
+            const sceneProgress = Object.values(progress).filter((p: ProgressUpdate) => p.sceneId === sceneId);
+            // FIX: Add explicit type to parameter to resolve 'unknown' type error.
+            const subPromptUpdate = sceneProgress.find((p: ProgressUpdate) => p.stage === 'sub_prompts');
+            // FIX: Add explicit types to parameters to resolve 'unknown' type errors.
+            const videoUpdates = sceneProgress.filter((p: ProgressUpdate) => p.stage === 'videos').sort((a: ProgressUpdate, b: ProgressUpdate) => (a.segment || 0) - (b.segment || 0));
 
             return (
                  <div key={sceneId} className="bg-gray-900/50 p-3 rounded-lg border border-gray-700">
                     <h4 className="font-bold text-gray-200">Escena {scene.scene_number}: {scene.title}</h4>
                      <div className="pl-4 mt-2 border-l-2 border-gray-700 space-y-2">
                          <ProgressItem update={subPromptUpdate} label="1. Planificación (Sub-Prompts)" />
-                         {videoUpdates.map(update => {
-                             const frameExtractionUpdate = sceneProgress.find(p => p.stage === 'frame_extraction' && p.segment === update.segment);
+                         {/* FIX: Add explicit type to parameter to resolve 'unknown' type errors. */}
+                         {videoUpdates.map((update: ProgressUpdate) => {
+                             // FIX: Add explicit type to parameter to resolve 'unknown' type error.
+                             const frameExtractionUpdate = sceneProgress.find((p: ProgressUpdate) => p.stage === 'frame_extraction' && p.segment === update.segment);
                              return (
                                  <div key={`segment_${update.segment}`}>
                                      <ProgressItem update={update} label={`2.${update.segment || 0} Generando Segmento ${update.segment}/${update.totalSegments}`} />
