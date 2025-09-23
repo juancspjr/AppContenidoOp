@@ -18,10 +18,9 @@ import type {
     Critique,
     Documentation,
     HookMatrix,
-    ReferenceAsset,
-    GenerateImagesResponse,
-    VideosOperationResponse
+    ReferenceAsset
 } from '../components/story-builder/types';
+import type { GenerateImagesResponse as GoogleImagesResponse, GenerateVideosOperation } from '@google/genai';
 
 // ============================================================================
 // 🚀 PROXY DE FRONTEND RESILIENTE Y TRANSPARENTE v2.0
@@ -307,7 +306,7 @@ export async function generateHookMatrix(plan: StoryMasterplan): Promise<HookMat
 
 export async function generateReferenceImage(asset: ReferenceAsset): Promise<Blob> {
     const response = await makeApiRequestWithRetry(async (client) => {
-        const imageResponse: GenerateImagesResponse = await client.models.generateImages({
+        const imageResponse: GoogleImagesResponse = await client.models.generateImages({
             model: 'imagen-4.0-generate-001',
             prompt: asset.visualPrompt,
             config: {
@@ -324,13 +323,16 @@ export async function generateReferenceImage(asset: ReferenceAsset): Promise<Blo
 
 
 export async function generateVideoSegment(prompt: string, referenceImage?: File): Promise<string> {
-    const availableKey = getNextAvailableKey();
-    if (!availableKey) throw new Error("No hay claves de API disponibles para iniciar la generación de video.");
-    const apiKeyForDownload = availableKey.apiKey.key;
-
+    // Inicializar el pool antes de obtener la clave
+    initializeApiKeyPool();
+    
+    let usedApiKey: string = '';
     const operation = await makeApiRequestWithRetry(async (client) => {
+        const availableKey = getNextAvailableKey();
+        if (!availableKey) throw new Error("No hay claves de API disponibles para iniciar la generación de video.");
+        usedApiKey = availableKey.apiKey.key;
         const imagePart = referenceImage ? await fileToGenerativePart(referenceImage) : undefined;
-        let op: VideosOperationResponse = await client.models.generateVideos({
+        let op: GenerateVideosOperation = await client.models.generateVideos({
             model: 'veo-2.0-generate-001',
             prompt: prompt,
             ...(imagePart && { image: { imageBytes: imagePart.inlineData.data, mimeType: imagePart.inlineData.mimeType } }),
@@ -339,7 +341,8 @@ export async function generateVideoSegment(prompt: string, referenceImage?: File
 
         while (!op.done) {
             await new Promise(resolve => setTimeout(resolve, 10000));
-            op = await client.operations.getVideosOperation({ operation: op });
+            const updatedOp: GenerateVideosOperation = await client.operations.getVideosOperation({ operation: op });
+            op = updatedOp;
         }
         return op;
     });
@@ -349,5 +352,5 @@ export async function generateVideoSegment(prompt: string, referenceImage?: File
         throw new Error("La operación de video finalizó pero no se encontró ningún enlace de descarga.");
     }
 
-    return `${downloadLink}&key=${apiKeyForDownload}`;
+    return `${downloadLink}&key=${usedApiKey}`;
 }
