@@ -12,18 +12,41 @@ interface Phase1_ConceptProps {
     initialData: InitialConcept | null;
     onAssist: (idea: string) => Promise<void>;
     isAssisting: boolean;
-    areKeysConfigured: boolean;
 }
 
-const Phase1_Concept: React.FC<Phase1_ConceptProps> = ({ onComplete, initialData, onAssist, isAssisting, areKeysConfigured }) => {
+const textModels = [
+    { name: "Gemini 2.5 Flash (Rápido y Equilibrado)", value: "gemini-2.5-flash" },
+    { name: "Gemini 2.5 Pro (Máxima Calidad)", value: "gemini-2.5-pro" },
+    { name: "Gemini 2.5 Pro Preview 06-05", value: "models/gemini-2.5-pro-preview-06-05" },
+    { name: "Gemini 2.5 Flash Preview 05-20", value: "models/gemini-2.5-flash-preview-05-20" },
+    { name: "Gemini 2.5 Flash Lite", value: "models/gemini-2.5-flash-lite" },
+    { name: "Gemma 3 12B IT", value: "models/gemma-3-12b-it" },
+    { name: "Gemma 3 4B IT", value: "models/gemma-3-4b-it" },
+];
+
+const imageModels = [
+    // FIX: Updated model name and value to match API guidelines.
+    { name: "Imagen 4.0 (Alta Calidad)", value: "imagen-4.0-generate-001" },
+    { name: "Nano Banana (Rápido)", value: "gemini-2.5-flash-image-preview" },
+];
+
+
+const Phase1_Concept: React.FC<Phase1_ConceptProps> = ({ onComplete, initialData, onAssist, isAssisting }) => {
     const [idea, setIdea] = useState(initialData?.idea || '');
     const [targetAudience, setTargetAudience] = useState(initialData?.targetAudience || '');
     const [keyElements, setKeyElements] = useState(initialData?.keyElements?.join(', ') || '');
+    const [selectedTextModel, setSelectedTextModel] = useState(initialData?.selectedTextModel || 'gemini-2.5-flash');
+    // FIX: Updated default state to use the new recommended image model.
+    const [selectedImageModel, setSelectedImageModel] = useState(initialData?.selectedImageModel || 'imagen-4.0-generate-001');
 
     useEffect(() => {
-        setIdea(initialData?.idea || '');
-        setTargetAudience(initialData?.targetAudience || '');
-        setKeyElements(initialData?.keyElements?.join(', ') || '');
+        if (initialData) {
+            setIdea(initialData.idea || '');
+            setTargetAudience(initialData.targetAudience || '');
+            setKeyElements(initialData.keyElements?.join(', ') || '');
+            setSelectedTextModel(initialData.selectedTextModel || 'gemini-2.5-flash');
+            setSelectedImageModel(initialData.selectedImageModel || 'imagen-4.0-generate-001');
+        }
     }, [initialData]);
 
     const canProceed = idea.trim().length > 20;
@@ -33,7 +56,9 @@ const Phase1_Concept: React.FC<Phase1_ConceptProps> = ({ onComplete, initialData
             onComplete({
                 idea,
                 targetAudience,
-                keyElements: keyElements.split(',').map(s => s.trim()).filter(Boolean)
+                keyElements: keyElements.split(',').map(s => s.trim()).filter(Boolean),
+                selectedTextModel,
+                selectedImageModel,
             });
         }
     };
@@ -55,8 +80,8 @@ const Phase1_Concept: React.FC<Phase1_ConceptProps> = ({ onComplete, initialData
                 </div>
                  <button 
                     onClick={handleAssistClick}
-                    disabled={isAssisting || !idea.trim() || !areKeysConfigured}
-                    title={!areKeysConfigured ? "Configura tus claves de API en config/secure_config.ts para activar la IA" : !idea.trim() ? "Escribe una idea para activar la IA" : "Usa la IA para refinar y completar esta fase"}
+                    disabled={isAssisting || !idea.trim()}
+                    title={!idea.trim() ? "Escribe una idea para activar la IA" : "Usa la IA para refinar y completar esta fase"}
                     className="w-full sm:w-auto flex items-center justify-center gap-2 bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-500 transition-colors disabled:bg-yellow-800 disabled:cursor-not-allowed"
                 >
                     {isAssisting ? <Spinner className="w-5 h-5" /> : <SparkleIcon className="w-5 h-5" />}
@@ -65,6 +90,34 @@ const Phase1_Concept: React.FC<Phase1_ConceptProps> = ({ onComplete, initialData
             </div>
             
             <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label htmlFor="text-model" className="block text-sm font-medium text-gray-300 mb-2">Modelo de IA de Texto</label>
+                        <select
+                            id="text-model"
+                            value={selectedTextModel}
+                            onChange={e => setSelectedTextModel(e.target.value)}
+                            className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-gray-200 focus:ring-2 focus:ring-blue-500"
+                        >
+                            {textModels.map(model => (
+                                <option key={model.value} value={model.value}>{model.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label htmlFor="image-model" className="block text-sm font-medium text-gray-300 mb-2">Modelo de IA de Imagen</label>
+                        <select
+                            id="image-model"
+                            value={selectedImageModel}
+                            onChange={e => setSelectedImageModel(e.target.value)}
+                            className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-gray-200 focus:ring-2 focus:ring-blue-500"
+                        >
+                            {imageModels.map(model => (
+                                <option key={model.value} value={model.value}>{model.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
                 <div>
                     <label htmlFor="idea" className="block text-sm font-medium text-gray-300 mb-2">Tu Idea (requerido)</label>
                     <textarea

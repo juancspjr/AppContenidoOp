@@ -6,9 +6,10 @@ import React from 'react';
 
 interface PhaseStepperProps {
     currentPhase: number;
+    onPhaseClick: (phase: number) => void;
 }
 
-const PhaseStepper: React.FC<PhaseStepperProps> = ({ currentPhase }) => {
+const PhaseStepper: React.FC<PhaseStepperProps> = ({ currentPhase, onPhaseClick }) => {
     
     const phases = [
         { id: 1, name: 'Concepto' },
@@ -53,14 +54,20 @@ const PhaseStepper: React.FC<PhaseStepperProps> = ({ currentPhase }) => {
                 {phases.map((phaseInfo) => {
                     const isCompleted = currentStep > phaseInfo.id;
                     const isActive = currentStep === phaseInfo.id;
+                    const isClickable = isCompleted || isActive;
 
                     return (
-                        <li key={phaseInfo.name} className="md:flex-1" {...(isActive && { 'aria-current': 'step' })}>
-                            <div className={`group flex flex-col border-l-4 py-2 pl-4 md:border-l-0 md:border-t-4 md:pl-0 md:pt-4 md:pb-0 transition-colors duration-300 ${
-                                isCompleted ? 'border-green-500' : 
-                                isActive ? 'border-blue-500' : 
-                                'border-gray-600'
-                            }`}>
+                        <li key={phaseInfo.name} className="md:flex-1">
+                            <button
+                                onClick={() => isClickable && onPhaseClick(phaseInfo.id)}
+                                disabled={!isClickable}
+                                className={`group flex flex-col w-full border-l-4 py-2 pl-4 md:border-l-0 md:border-t-4 md:pl-0 md:pt-4 md:pb-0 transition-colors duration-300 text-left ${
+                                    isCompleted ? 'border-green-500' : 
+                                    isActive ? 'border-blue-500' : 
+                                    'border-gray-600'
+                                } ${isClickable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                                aria-current={isActive ? 'step' : undefined}
+                            >
                                 <span className={`text-sm font-medium transition-colors duration-300 ${
                                     isCompleted ? 'text-green-400' :
                                     isActive ? 'text-blue-400' :
@@ -71,7 +78,7 @@ const PhaseStepper: React.FC<PhaseStepperProps> = ({ currentPhase }) => {
                                 }`}>
                                   {isActive ? getPhaseName(currentPhase) : phaseInfo.name}
                                 </span>
-                            </div>
+                            </button>
                         </li>
                     );
                 })}

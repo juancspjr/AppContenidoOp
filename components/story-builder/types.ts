@@ -3,12 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-// FIX: Added full type definitions to make this a valid and useful module.
+import { characterRoles } from './constants';
+
+export type CharacterRole = typeof characterRoles[number]['name'];
 
 export interface InitialConcept {
     idea: string;
     targetAudience: string;
     keyElements: string[];
+    selectedTextModel?: string;
+    selectedImageModel?: string;
 }
 
 export interface StyleAndFormat {
@@ -38,7 +42,7 @@ export interface CharacterRelationship {
 export interface CharacterDefinition {
     id: string;
     name: string;
-    role: 'Protagonist' | 'Antagonist' | 'Mentor' | 'Ally' | 'Foil' | 'Supporting' | 'Other';
+    role: CharacterRole;
     description: string;
     motivation: CharacterMotivation;
     flaw: string;
@@ -127,17 +131,100 @@ export interface EnrichedElements {
 
 export interface Critique {
     narrativeStrengths: string[];
-    weaknesses: Array<{ point: string; suggestion: string }>;
-    improvementStrategies: Array<{ title: string; description: string }>;
+    weaknesses: Array<{
+        point: string;
+        suggestion: string;
+        severity: 'Minor' | 'Moderate' | 'High';
+    }>;
+    improvementStrategies: Array<{ id: string; title: string; description: string }>;
     viralPotential: number;
     enrichedElements: EnrichedElements;
 }
 
+// --- New Professional Dossier and Prompt Structures ---
+
+export interface CharacterMasterPrompt {
+    base_description_es: string;
+    base_description_en: string;
+    physical_details: {
+        age: string;
+        ethnicity: string;
+        height: string;
+        build: string;
+        hair: string;
+        eyes: string;
+        skin: string;
+    };
+    wardrobe_evolution: {
+        early_scenes: string;
+        mid_scenes: string;
+        final_scenes: string;
+    };
+    lighting_preference: string;
+    emotional_states: {
+        vulnerable: string;
+        determined: string;
+        authentic: string;
+    };
+}
+
+export interface StoryboardPanelPrompt {
+    scene_title: string;
+    description_es: string;
+    description_en: string;
+    dialogue_es: string;
+    dialogue_en: string;
+    camera_angle: string;
+    lighting_specific: string;
+    props: string;
+    mood: string;
+}
+
+export interface StoryboardGroupPrompt {
+    total_scenes: number;
+    aspect_ratio: string;
+    canvas_size: string;
+    division_strategy: string;
+    global_style: {
+        aesthetic: string;
+        lighting: string;
+        color_palette: string;
+        consistency: string;
+    };
+    individual_panels: Record<string, StoryboardPanelPrompt>; // e.g., "panel_1": {...}
+}
+
+export interface AiProductionGuidePrompts {
+    character_master_prompts: Record<string, CharacterMasterPrompt>; // e.g., "elena_rodriguez": {...}
+    storyboard_groups: Record<string, StoryboardGroupPrompt>; // e.g., "group_1_setup": {...}
+    negative_prompts: {
+        character_consistency: string[];
+        technical_quality: string[];
+        scene_specific: string[];
+    };
+    audio_generation_prompts: {
+        opening_theme_es: string;
+        opening_theme_en: string;
+        marcus_theme_es: string;
+        marcus_theme_en: string;
+        community_theme_es: string;
+        community_theme_en: string;
+    };
+}
+
 export interface Documentation {
-    aiProductionGuide: string;
+    // These are strings containing Markdown content
     directorsBible: string;
     visualStyleGuide: string;
+    narrativeStory: string;
+    literaryScript: string;
+    readme: string;
+    // This is now a structured object
+    aiProductionGuide: {
+        prompts: AiProductionGuidePrompts;
+    };
 }
+
 
 export interface HookTemplate {
     template: string;
@@ -169,6 +256,15 @@ export interface ReferenceAssets {
     sceneFrames: ReferenceAsset[];
 }
 
+export interface StoryboardPanel {
+    id: string; // e.g., 'panel_1'
+    sceneNumber: number;
+    assetId: string; // The ID of the sliced image blob in IndexedDB
+    prompt: string;
+    narrativeText: string;
+    generationStatus: 'pending' | 'generating' | 'complete' | 'error';
+}
+
 export interface FinalAsset {
     sceneId: string;
     type: 'video' | 'animated_image' | 'static_image';
@@ -185,6 +281,12 @@ export interface ProgressUpdate {
     message?: string;
 }
 
+export interface CritiqueProgressStep {
+    id: string;
+    label: string;
+    status: 'pending' | 'running' | 'complete' | 'error';
+}
+
 export interface ExportedProject {
     phase: number;
     initialConcept: InitialConcept | null;
@@ -195,14 +297,18 @@ export interface ExportedProject {
     coherenceCheckProgress: CoherenceCheckStep[] | null;
     storyPlan: StoryMasterplan | null;
     critique: Critique | null;
+    critiqueStage: 'alpha' | 'beta' | 'approved' | null;
+    critiqueProgress: CritiqueProgressStep[] | null;
     documentation: Documentation | null;
     hookMatrix: HookMatrix | null;
     referenceAssets: ReferenceAssets | null;
+    storyboardAssets: StoryboardPanel[] | null;
     finalAssets: FinalAssets | null;
     plan?: any; // For legacy support
 }
 
-// FIX: Add missing Gemini API response types to resolve compilation errors.
+export type StoryBuilderState = Omit<ExportedProject, 'plan'>;
+
 export interface GenerateImagesResponse {
     generatedImages: Array<{
         image: {

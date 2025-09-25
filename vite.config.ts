@@ -5,25 +5,6 @@ import { fileURLToPath, URL } from 'node:url'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  server: {
-    host: '0.0.0.0',
-    port: 5000,
-    strictPort: true,
-    allowedHosts: true, // Permite todas las conexiones de hosts en Replit
-  },
-  define: {
-    // Inyectar las API keys como constantes globales
-    __GOOGLE_API_KEYS__: JSON.stringify([
-      process.env.GOOGLE_API_KEY0,
-      process.env.GOOGLE_API_KEY1,
-      process.env.GOOGLE_API_KEY2,
-      process.env.GOOGLE_API_KEY3,
-      process.env.GOOGLE_API_KEY4,
-      process.env.GOOGLE_API_KEY5,
-      process.env.GOOGLE_API_KEY6,
-      process.env.GOOGLE_API_KEY07
-    ].filter(key => key && key.trim() !== ''))
-  },
   resolve: {
     alias: {
       // FIX: Set alias '@' to resolve to the project's root directory.

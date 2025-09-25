@@ -23,7 +23,16 @@
 //
 // ============================================================================
 
-// Obtener las claves de API desde las constantes inyectadas por Vite
-declare const __GOOGLE_API_KEYS__: string[];
-
-export const GEMINI_API_KEYS: string[] = __GOOGLE_API_KEYS__ || [];
+export const GEMINI_API_KEYS: string[] = [
+    "AIzaSyAtKX8NRdbO_0CrVCTAwD0eVKfe-AAt8j8",
+    "AIzaSyBm09YMD8vI97ZJ62BWv-4YWWmu87HsHG8",
+    "AIzaSyDqzJir5JkKnI1RvXfqMBROFJzGJbCGlV4",
+    "AIzaSyBfVu-tILDX3x5TqviGpDohhjqJOhQ0szk",
+    "AIzaSyDVgLT23C22qV4vMMVaQm8vZz_NBj7Skn0",
+    "AIzaSyBdT5b7fYwmod6F0bkDySW48kEe8pMsqIk",
+    "AIzaSyAZHb4qKtWtwQoVt9LHDSPWgUKVeUt_XMM",
+    "AIzaSyB6hLW1DHlpDEZviszXECxNWu4i7MaxH2o",
+    "AIzaSyC5tu2VNwIbtqRyctGBpEBxoFhP5XuxP0o",
+    "AIzaSyDMPzwkMdcW1lifMir3rZXZmhQ6xRYabVc",
+    // ... puedes añadir más claves aquí
+];

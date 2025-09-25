@@ -4,8 +4,7 @@
 */
 
 import React from 'react';
-// FIX: Imported `ReferenceAssets` type to resolve the type error.
-import type { StoryMasterplan, FinalAssets, ProgressUpdate, ReferenceAsset, ReferenceAssets } from './types';
+import type { StoryMasterplan, FinalAssets, ProgressUpdate, StoryboardPanel } from './types';
 import Spinner from '../Spinner';
 import { DownloadIcon, ExportIcon } from '../icons';
 import { assetDBService } from '../../services/assetDBService';
@@ -13,12 +12,11 @@ import { projectPersistenceService } from '../../services/projectPersistenceServ
 import { logger } from '../../utils/logger';
 import { formatApiError } from '../../utils/errorUtils';
 
-// Interfaz para las nuevas props del Dashboard de Producción
 interface ProductionDashboardProps {
     isLoading: boolean;
     progress: Record<string, ProgressUpdate>;
     assets: FinalAssets | null;
-    referenceAssets: ReferenceAssets | null;
+    storyboardAssets: StoryboardPanel[] | null; // Use storyboard assets as the source
     error: string | null;
     storyPlan: StoryMasterplan | null;
     onGenerate: (selectedScenes: Map<number, { mode: 'veo' | 'ken_burns' | 'static'; notes: string }>) => void;
@@ -76,7 +74,7 @@ const FinalAssetDisplay: React.FC<{ assetId: string; assetType: 'video' | 'anima
 // Componente para una tarjeta de producción de escena individual
 const ProductionCard: React.FC<{
     scene: StoryMasterplan['story_structure']['narrative_arc'][0]['scenes'][0];
-    referenceFrame: ReferenceAsset | undefined;
+    storyboardPanel: StoryboardPanel | undefined;
     finalAsset: FinalAssets['assets'][0] | undefined;
     isSelected: boolean;
     onSelectionChange: (selected: boolean) => void;
@@ -85,21 +83,21 @@ const ProductionCard: React.FC<{
     currentMode: 'veo' | 'ken_burns' | 'static';
     currentNotes: string;
     isLoading: boolean;
-}> = ({ scene, referenceFrame, finalAsset, isSelected, onSelectionChange, onModeChange, onNotesChange, currentMode, currentNotes, isLoading }) => {
-    const [referenceFrameUrl, setReferenceFrameUrl] = React.useState('');
+}> = ({ scene, storyboardPanel, finalAsset, isSelected, onSelectionChange, onModeChange, onNotesChange, currentMode, currentNotes, isLoading }) => {
+    const [storyboardUrl, setStoryboardUrl] = React.useState('');
 
     React.useEffect(() => {
         let url = '';
-        if (referenceFrame?.assetId) {
-            assetDBService.loadAsset(referenceFrame.assetId).then(blob => {
+        if (storyboardPanel?.assetId) {
+            assetDBService.loadAsset(storyboardPanel.assetId).then(blob => {
                 if (blob) {
                     url = URL.createObjectURL(blob);
-                    setReferenceFrameUrl(url);
+                    setStoryboardUrl(url);
                 }
             });
         }
         return () => { if(url) URL.revokeObjectURL(url) };
-    }, [referenceFrame?.assetId]);
+    }, [storyboardPanel?.assetId]);
     
     return (
         <div className={`bg-gray-800/50 rounded-lg p-4 border-2 transition-colors ${isSelected ? 'border-blue-500' : 'border-transparent'}`}>
@@ -122,10 +120,10 @@ const ProductionCard: React.FC<{
                 <div className="w-full aspect-video bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden">
                    {finalAsset ? (
                        <FinalAssetDisplay assetId={finalAsset.assetId} assetType={finalAsset.type} assetName={scene.title} />
-                   ) : referenceFrameUrl ? (
-                        <img src={referenceFrameUrl} alt={`Ref: ${scene.title}`} className="w-full h-full object-cover"/>
+                   ) : storyboardUrl ? (
+                        <img src={storyboardUrl} alt={`Storyboard: ${scene.title}`} className="w-full h-full object-cover"/>
                    ) : (
-                       <div className="text-xs text-gray-400 p-2 text-center">Fotograma de referencia no encontrado.</div>
+                       <div className="text-xs text-gray-400 p-2 text-center">Panel de storyboard no encontrado.</div>
                    )}
                 </div>
 
@@ -164,7 +162,7 @@ const ProductionCard: React.FC<{
 // --- Componente Principal ---
 
 const AssetGenerationView: React.FC<ProductionDashboardProps> = ({
-    isLoading, progress, assets, referenceAssets, error, storyPlan,
+    isLoading, progress, assets, storyboardAssets, error, storyPlan,
     onGenerate, onGoToPhase, onExit
 }) => {
     const [selectedScenes, setSelectedScenes] = React.useState<Set<number>>(new Set());
@@ -174,14 +172,14 @@ const AssetGenerationView: React.FC<ProductionDashboardProps> = ({
 
     // Initialize choices
     React.useEffect(() => {
-        const initialChoices = new Map();
+        const initialChoices = new Map<number, { mode: 'veo' | 'ken_burns' | 'static'; notes: string }>();
         scenes.forEach(scene => {
             initialChoices.set(scene.scene_number, { mode: 'veo', notes: '' });
         });
         setSceneChoices(initialChoices);
-        // Pre-select all scenes by default
         setSelectedScenes(new Set(scenes.map(s => s.scene_number)));
-    }, [storyPlan]); // Depend only on storyPlan to run once
+    // FIX: Only run this effect when the storyPlan changes to avoid re-initializing on every render.
+    }, [storyPlan]);
 
     const handleSelectionChange = (sceneNumber: number, isSelected: boolean) => {
         setSelectedScenes(prev => {
@@ -195,8 +193,12 @@ const AssetGenerationView: React.FC<ProductionDashboardProps> = ({
     const handleChoiceChange = (sceneNumber: number, key: 'mode' | 'notes', value: any) => {
         setSceneChoices(prev => {
             const newMap = new Map(prev);
-            const current = newMap.get(sceneNumber) || { mode: 'veo', notes: '' };
-            newMap.set(sceneNumber, { ...current, [key]: value });
+            const current = newMap.get(sceneNumber) || { mode: 'veo' as const, notes: '' };
+            // FIX: Explicitly cast 'current' to the expected type to resolve a TypeScript compilation error
+            // where it was being inferred as 'unknown'.
+            const currentChoice = current as { mode: 'veo' | 'ken_burns' | 'static', notes: string };
+            const newChoice = { ...currentChoice, [key]: value };
+            newMap.set(sceneNumber, newChoice);
             return newMap;
         });
     };
@@ -226,8 +228,8 @@ const AssetGenerationView: React.FC<ProductionDashboardProps> = ({
     return (
         <div className="animate-fade-in space-y-6">
             <div>
-                 <h3 className="text-2xl font-bold mb-2 text-green-400">Fase 6.4: Dashboard de Producción de Video</h3>
-                <p className="text-gray-400">¡Luz, cámara, IA! Selecciona las escenas que quieres producir, elige el modo de generación y añade tus notas de director. La IA usará los fotogramas de referencia para garantizar la coherencia visual.</p>
+                 <h3 className="text-2xl font-bold mb-2 text-green-400">Fase 6.4: Ensamblaje Final</h3>
+                <p className="text-gray-400">¡Luz, cámara, IA! Selecciona las escenas que quieres producir, elige el modo de generación y añade tus notas de director. La IA usará los paneles del storyboard para garantizar la coherencia visual.</p>
             </div>
             
             {error && (
@@ -240,14 +242,14 @@ const AssetGenerationView: React.FC<ProductionDashboardProps> = ({
             <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
                 {scenes.map(scene => {
                     const finalAsset = assets?.assets.find(a => a.sceneId === `scene_${scene.scene_number}`);
-                    const referenceFrame = referenceAssets?.sceneFrames.find(f => f.name.includes(`Scene ${scene.scene_number}`)); // Simple matching
+                    const storyboardPanel = storyboardAssets?.find(p => p.sceneNumber === scene.scene_number);
                     const choices = sceneChoices.get(scene.scene_number) || { mode: 'veo', notes: '' };
 
                     return (
                         <ProductionCard
                             key={scene.scene_number}
                             scene={scene}
-                            referenceFrame={referenceFrame}
+                            storyboardPanel={storyboardPanel}
                             finalAsset={finalAsset}
                             isSelected={selectedScenes.has(scene.scene_number)}
                             onSelectionChange={(sel) => handleSelectionChange(scene.scene_number, sel)}

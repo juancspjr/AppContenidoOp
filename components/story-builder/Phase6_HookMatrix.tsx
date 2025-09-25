@@ -59,11 +59,11 @@ const Phase6_HookMatrix: React.FC<Phase6_HookMatrixProps> = ({ isLoading, hookMa
             <p className="text-gray-400">El agente de IA ha analizado tu historia "{storyPlan?.metadata?.title}" y ha generado 50 ganchos potenciales para maximizar su impacto en redes sociales. Úsalos como inspiración para tus primeros segundos de video.</p>
             
             <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-                <HookCategoryView category="patternInterrupts" templates={hookMatrix.patternInterrupts} />
-                <HookCategoryView category="psychologicalTriggers" templates={hookMatrix.psychologicalTriggers} />
-                <HookCategoryView category="curiosityGaps" templates={hookMatrix.curiosityGaps} />
-                <HookCategoryView category="powerPhrases" templates={hookMatrix.powerPhrases} />
-                <HookCategoryView category="provenStructures" templates={hookMatrix.provenStructures} />
+                <HookCategoryView category="patternInterrupts" templates={hookMatrix.patternInterrupts || []} />
+                <HookCategoryView category="psychologicalTriggers" templates={hookMatrix.psychologicalTriggers || []} />
+                <HookCategoryView category="curiosityGaps" templates={hookMatrix.curiosityGaps || []} />
+                <HookCategoryView category="powerPhrases" templates={hookMatrix.powerPhrases || []} />
+                <HookCategoryView category="provenStructures" templates={hookMatrix.provenStructures || []} />
             </div>
 
              <div className="pt-6 border-t border-gray-700 mt-6">

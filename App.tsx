@@ -6,8 +6,8 @@
 import React, { useState, useCallback } from 'react';
 import StartScreen from './components/StartScreen';
 import EditorCanvas from './components/EditorCanvas';
+// FIX: Corrected import path for StoryBuilder to point to the implemented component.
 import StoryBuilder from './components/StoryBuilder';
-// FIX: Corrected project type to `ExportedProject` to ensure type consistency.
 import type { ExportedProject } from './components/story-builder/types';
 import { projectPersistenceService } from './services/projectPersistenceService';
 import { logger } from './utils/logger';
@@ -15,7 +15,6 @@ import { logger } from './utils/logger';
 type AppState = 
   | { view: 'start' }
   | { view: 'photo_editor', files: File[] }
-  // FIX: Corrected project type to `ExportedProject` to ensure type consistency.
   | { view: 'story_builder', project?: ExportedProject };
 
 const App: React.FC = () => {
@@ -31,7 +30,6 @@ const App: React.FC = () => {
     setAppState({ view: 'story_builder' });
   }, []);
 
-  // FIX: Corrected project type to `ExportedProject` to match the expected data structure from import/load.
   const handleProjectImport = useCallback((project: ExportedProject) => {
     setAppState({ view: 'story_builder', project });
   }, []);

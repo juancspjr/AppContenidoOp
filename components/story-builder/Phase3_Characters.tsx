@@ -3,21 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import React, { useState, useEffect, useRef } from 'react';
-import type { CharacterDefinition, CharacterMotivation, CharacterRelationship } from './types';
+import type { CharacterDefinition, CharacterMotivation, CharacterRelationship, CharacterRole } from './types';
 import { SparkleIcon, UploadIcon, XCircleIcon } from '../icons';
 import { assetDBService } from '../../services/assetDBService';
 import { logger } from '../../utils/logger';
 import Spinner from '../Spinner';
 import { v4 as uuidv4 } from 'uuid';
+import { characterRoles } from './constants';
 
 interface Phase3_CharactersProps {
     onComplete: (data: CharacterDefinition[]) => void;
     initialData: CharacterDefinition[];
     onBack: () => void;
     onAssistCharacter: (characterId: string) => Promise<void>;
-    onAssistNewCharacter: (character: CharacterDefinition) => Promise<void>;
+    onGenerateCharacterCast: () => Promise<void>;
     assistingCharacterIds: Set<string>;
-    areKeysConfigured: boolean;
 }
 
 const CharacterEditor: React.FC<{
@@ -94,8 +94,8 @@ const CharacterEditor: React.FC<{
                     </div>
                     {/* Form Fields */}
                     <input type="text" value={editedChar.name} onChange={e => handleChange('name', e.target.value)} placeholder="Nombre" className="w-full bg-gray-900 p-2 rounded" />
-                    <select value={editedChar.role} onChange={e => handleChange('role', e.target.value)} className="w-full bg-gray-900 p-2 rounded">
-                        {['Protagonist', 'Antagonist', 'Mentor', 'Ally', 'Foil', 'Supporting', 'Other'].map(r => <option key={r} value={r}>{r}</option>)}
+                    <select value={editedChar.role} onChange={e => handleChange('role', e.target.value as CharacterRole)} className="w-full bg-gray-900 p-2 rounded">
+                        {characterRoles.map(r => <option key={r.name} value={r.name} title={r.description}>{r.name}</option>)}
                     </select>
                     <textarea value={editedChar.description} onChange={e => handleChange('description', e.target.value)} placeholder="Descripción" rows={3} className="w-full bg-gray-900 p-2 rounded" />
                     <input type="text" value={editedChar.motivation.desire} onChange={e => handleChange('motivation.desire', e.target.value)} placeholder="Deseo (Lo que quiere)" className="w-full bg-gray-900 p-2 rounded" />
@@ -114,7 +114,7 @@ const CharacterEditor: React.FC<{
     );
 };
 
-const Phase3_Characters: React.FC<Phase3_CharactersProps> = ({ onComplete, initialData, onBack, onAssistCharacter, onAssistNewCharacter, assistingCharacterIds, areKeysConfigured }) => {
+const Phase3_Characters: React.FC<Phase3_CharactersProps> = ({ onComplete, initialData, onBack, onAssistCharacter, onGenerateCharacterCast, assistingCharacterIds }) => {
     const [characters, setCharacters] = useState<CharacterDefinition[]>(initialData || []);
     const [editingCharacter, setEditingCharacter] = useState<CharacterDefinition | null>(null);
 
@@ -126,7 +126,7 @@ const Phase3_Characters: React.FC<Phase3_CharactersProps> = ({ onComplete, initi
         id: uuidv4(),
         name: '',
         description: '',
-        role: 'Supporting',
+        role: 'Secundario',
         motivation: { desire: '', fear: '', need: '' },
         flaw: '',
         arc: '',
@@ -136,12 +136,6 @@ const Phase3_Characters: React.FC<Phase3_CharactersProps> = ({ onComplete, initi
 
     const handleAddCharacter = () => {
         setEditingCharacter(createNewCharacter());
-    };
-
-    const handleAssistNew = async () => {
-        const newChar = createNewCharacter();
-        newChar.name = "Nuevo Personaje (Generado por IA)";
-        await onAssistNewCharacter(newChar);
     };
 
     const handleUpdateCharacter = (updatedCharacter: CharacterDefinition) => {
@@ -170,11 +164,11 @@ const Phase3_Characters: React.FC<Phase3_CharactersProps> = ({ onComplete, initi
                     const isAssisting = assistingCharacterIds.has(char.id);
                     return (
                         <div key={char.id} className="bg-gray-900/50 p-3 rounded-lg border border-gray-700 flex items-center gap-4">
-                            <div className="flex-grow">
-                                <h4 className="font-bold text-gray-200">{char.name} <span className="text-sm font-normal text-gray-400">({char.role})</span></h4>
+                            <div className="flex-grow overflow-hidden">
+                                <h4 className="font-bold text-gray-200 truncate">{char.name} <span className="text-sm font-normal text-gray-400">({char.role})</span></h4>
                                 <p className="text-xs text-gray-400 truncate">{char.description}</p>
                             </div>
-                            <button onClick={() => onAssistCharacter(char.id)} disabled={isAssisting || !areKeysConfigured} className="flex items-center gap-1 text-xs bg-yellow-600 text-white px-2 py-1 rounded hover:bg-yellow-500 disabled:bg-yellow-800">
+                            <button onClick={() => onAssistCharacter(char.id)} disabled={isAssisting} className="flex items-center gap-1 text-xs bg-yellow-600 text-white px-2 py-1 rounded hover:bg-yellow-500 disabled:bg-yellow-800">
                                 {isAssisting ? <Spinner className="w-4 h-4" /> : <SparkleIcon className="w-4 h-4" />}
                                 Asistir
                             </button>
@@ -187,9 +181,9 @@ const Phase3_Characters: React.FC<Phase3_CharactersProps> = ({ onComplete, initi
 
             <div className="flex flex-col sm:flex-row gap-4">
                 <button onClick={handleAddCharacter} className="bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-500">Añadir Personaje Manualmente</button>
-                <button onClick={handleAssistNew} disabled={assistingCharacterIds.has('new') || !areKeysConfigured} className="flex items-center justify-center gap-2 bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-500 disabled:bg-yellow-800">
-                     {assistingCharacterIds.has('new') ? <Spinner className="w-5 h-5" /> : <SparkleIcon className="w-5 h-5" />}
-                    Generar Personaje con IA
+                <button onClick={onGenerateCharacterCast} disabled={assistingCharacterIds.has('new-cast')} className="flex items-center justify-center gap-2 bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-500 disabled:bg-yellow-800">
+                     {assistingCharacterIds.has('new-cast') ? <Spinner className="w-5 h-5" /> : <SparkleIcon className="w-5 h-5" />}
+                    Sugerir Elenco con IA
                 </button>
             </div>
 

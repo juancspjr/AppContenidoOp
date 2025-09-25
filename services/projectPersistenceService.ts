@@ -2,159 +2,111 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-
 import type { ExportedProject } from '../components/story-builder/types';
-import { logger } from '../utils/logger';
-import JSZip from 'jszip';
 import { assetDBService } from './assetDBService';
+import { logger } from '../utils/logger';
 
-const STORAGE_KEY = 'pixshop_saved_story_project_v2';
+// Since we can't add a new library like JSZip, we'll download files individually.
+// A more advanced implementation would use a library to create a single zip file.
 
 class ProjectPersistenceService {
+    private readonly projectKey = 'storyBuilderProject';
+
     public saveProject(project: ExportedProject): void {
         try {
-            // Create a clean, serializable version of the project state
-            const savableProject = this.createSavableProject(project);
-            const jsonString = JSON.stringify(savableProject);
-            
-            if (jsonString.length > 4.8 * 1024 * 1024) { // ~4.8MB warning threshold
-                 logger.log('WARNING', 'PersistenceService', `Project size is large (${(jsonString.length / 1024).toFixed(2)} KB), nearing localStorage limit.`);
-            }
-
-            localStorage.setItem(STORAGE_KEY, jsonString);
-            logger.log('DEBUG', 'PersistenceService', `Project saved. Size: ${(jsonString.length / 1024).toFixed(2)} KB`);
+            const projectString = JSON.stringify(project);
+            localStorage.setItem(this.projectKey, projectString);
+            logger.log('SUCCESS', 'PersistenceService', 'Project saved to local session.');
         } catch (error) {
-            logger.log('ERROR', 'PersistenceService', "Error saving project to localStorage", error);
-            if (error instanceof DOMException && (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
-                alert("Error de autoguardado: Almacenamiento local lleno. Por favor, exporta tu proyecto a un archivo .zip para guardar tu progreso.");
-            } else {
-                alert("Ocurrió un error desconocido al intentar autoguardar el proyecto.");
-            }
+            logger.log('ERROR', 'PersistenceService', 'Failed to save project to localStorage.', error);
         }
-    }
-
-    private createSavableProject(project: ExportedProject): ExportedProject {
-        // Deep copy to avoid mutating the original state object
-        const copy: ExportedProject = JSON.parse(JSON.stringify(project));
-
-        // Sanitize characters: remove non-persistent data (File objects, temporary URLs)
-        if (copy.characters) {
-            copy.characters = copy.characters.map(char => {
-                const { imageFile, imageUrl, ...savableChar } = char;
-                return savableChar;
-            });
-        }
-        
-        return copy;
     }
 
     public loadProject(): ExportedProject | null {
-        const jsonString = localStorage.getItem(STORAGE_KEY);
-        if (!jsonString) {
-            return null;
-        }
         try {
-            const project = JSON.parse(jsonString) as ExportedProject;
-            // Migration for old format
-            if(project.plan && !project.storyPlan) {
-                project.storyPlan = project.plan;
-                delete project.plan;
+            const projectString = localStorage.getItem(this.projectKey);
+            if (projectString) {
+                const project = JSON.parse(projectString) as ExportedProject;
+                logger.log('SUCCESS', 'PersistenceService', 'Project loaded from local session.');
+                return project;
             }
-            return project;
+            return null;
         } catch (error) {
-            logger.log('ERROR', 'PersistenceService', "Error parsing project from localStorage", error);
-            this.clearSavedProject();
+            logger.log('ERROR', 'PersistenceService', 'Failed to load project from localStorage.', error);
+            this.clearSavedProject(); // Clear corrupted data
             return null;
         }
     }
-
+    
     public hasSavedProject(): boolean {
-        return localStorage.getItem(STORAGE_KEY) !== null;
+        return localStorage.getItem(this.projectKey) !== null;
     }
-
+    
     public clearSavedProject(): void {
-        localStorage.removeItem(STORAGE_KEY);
-        logger.log('INFO', 'PersistenceService', 'Saved project cleared from localStorage.');
+        localStorage.removeItem(this.projectKey);
+        logger.log('INFO', 'PersistenceService', 'Cleared saved project from local session.');
     }
-
-    public async exportProjectWithAssets(): Promise<void> {
-        const project = this.loadProject();
-        if (!project) {
-            alert("No hay ningún proyecto guardado para exportar.");
-            return;
-        }
-        
-        logger.log('INFO', 'PersistenceService', 'Starting project export with assets...');
-        const zip = new JSZip();
-
-        // Add project metadata file, ensuring it's the clean, savable version
-        const projectToExport = this.createSavableProject(project);
-        zip.file('project.json', JSON.stringify(projectToExport, null, 2));
-
-        const assetPromises: Promise<void>[] = [];
-        
-        // Add character reference images
-        if (project.characters) {
-            const charFolder = zip.folder('character_references');
-            for (const char of project.characters) {
-                if(char.imageAssetId) {
-                    assetPromises.push(
-                        assetDBService.loadAsset(char.imageAssetId).then(blob => {
-                            if(blob) {
-                                charFolder?.file(`${char.name.replace(/\s+/g, '_')}.png`, blob);
-                            }
-                        })
-                    );
-                }
-            }
-        }
-
-        // Add generated reference assets
-        const referenceAssets = project.referenceAssets;
-        if (referenceAssets) {
-            const refFolder = zip.folder('generated_reference_assets');
-            const allRefs = [...referenceAssets.characters, ...referenceAssets.environments, ...referenceAssets.elements, ...referenceAssets.sceneFrames];
-            for (const asset of allRefs) {
-                assetPromises.push(
-                    assetDBService.loadAsset(asset.assetId).then(blob => {
-                        if (blob) {
-                            refFolder?.file(`${asset.type}_${asset.name.replace(/\s+/g, '_')}.png`, blob);
-                        }
-                    })
-                );
-            }
-        }
-
-        // Add final assets (videos, animated images, etc.)
-        const finalAssets = project.finalAssets;
-        if (finalAssets && finalAssets.assets) {
-            const finalFolder = zip.folder('final_production_assets');
-            for (const asset of finalAssets.assets) {
-                 assetPromises.push(
-                    assetDBService.loadAsset(asset.assetId).then(blob => {
-                        if (blob) {
-                            const sceneNum = asset.sceneId.split('_')[1] || 'unknown';
-                            const extension = asset.type === 'video' ? 'mp4' : 'png';
-                            finalFolder?.file(`${asset.type}_S${sceneNum}.${extension}`, blob);
-                        }
-                    })
-                );
-            }
-        }
-        
-        await Promise.all(assetPromises);
-        
-        const zipBlob = await zip.generateAsync({ type: 'blob' });
-        const url = URL.createObjectURL(zipBlob);
+    
+    private downloadBlob(blob: Blob, filename: string): void {
+        const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        const title = project.storyPlan?.metadata.title.replace(/\s+/g, '_') || 'story_project';
-        a.download = `${title}.zip`;
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        logger.log('SUCCESS', 'PersistenceService', 'Project exported successfully.');
+    }
+    
+    public async exportProjectWithAssets(): Promise<void> {
+        logger.log('INFO', 'PersistenceService', 'Starting project export...');
+        const project = this.loadProject();
+        if (!project) {
+            alert("No project found to export.");
+            logger.log('WARNING', 'PersistenceService', 'Export cancelled: no project found.');
+            return;
+        }
+
+        try {
+            // 1. Export the main project JSON file
+            const projectJson = JSON.stringify(project, null, 2);
+            const projectBlob = new Blob([projectJson], { type: 'application/json' });
+            this.downloadBlob(projectBlob, 'project.json');
+            
+            // 2. Collect all asset IDs from the project
+            const assetIds = new Set<string>();
+            project.characters?.forEach(c => {
+                if (c.imageAssetId) assetIds.add(c.imageAssetId);
+            });
+            project.referenceAssets?.characters.forEach(a => assetIds.add(a.assetId));
+            project.referenceAssets?.environments.forEach(a => assetIds.add(a.assetId));
+            project.referenceAssets?.elements.forEach(a => assetIds.add(a.assetId));
+            project.referenceAssets?.sceneFrames.forEach(a => assetIds.add(a.assetId));
+            project.finalAssets?.assets.forEach(a => assetIds.add(a.assetId));
+            
+            if (assetIds.size > 0) {
+                alert(`El proyecto se descargará como un archivo 'project.json'. A continuación, se descargarán ${assetIds.size} archivos de activos multimedia. Por favor, permite las descargas múltiples en tu navegador.`);
+                
+                // 3. Download each asset from IndexedDB
+                for (const assetId of assetIds) {
+                    const blob = await assetDBService.loadAsset(assetId);
+                    if (blob) {
+                        const extension = blob.type.split('/')[1] || 'bin';
+                        this.downloadBlob(blob, `${assetId}.${extension}`);
+                        // Add a small delay to help browsers manage multiple downloads
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                    } else {
+                         logger.log('WARNING', 'PersistenceService', `Asset ID ${assetId} not found in DB for export.`);
+                    }
+                }
+            }
+            
+            logger.log('SUCCESS', 'PersistenceService', 'Project and assets exported successfully.');
+            
+        } catch(error) {
+            logger.log('ERROR', 'PersistenceService', 'An error occurred during project export.', error);
+            alert("An error occurred during export. Check the console for details.");
+        }
     }
 }
 

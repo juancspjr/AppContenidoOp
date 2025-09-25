@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { StyleAndFormat } from './types';
 import { outputFormats, narrativeStyles, visualStyles, narrativeStructures, hookTypes, conflictTypes, endingTypes } from './constants';
 import { SparkleIcon } from '../icons';
@@ -14,180 +14,145 @@ interface Phase2_StyleProps {
     onBack: () => void;
     onSuggest: () => Promise<void>;
     isSuggesting: boolean;
-    areKeysConfigured: boolean;
+    error: string | null;
 }
 
-const StyleCategory: React.FC<{
-    label: string;
-    options: { name: string, description: string }[];
-    selected: string[];
-    onChange: (value: string) => void;
-    required?: boolean;
-}> = ({ label, options, selected, onChange, required }) => {
-    const isMaxReached = selected.length >= 4;
-
-    return (
-        <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-200 mb-3">{label}{required && <span className="text-red-400">*</span>}</h3>
-            <div className="flex flex-wrap gap-2">
-                {options.map(opt => {
-                    const isSelected = selected.includes(opt.name);
-                    const isDisabled = isMaxReached && !isSelected;
-                    return (
-                        <button
-                            key={opt.name}
-                            title={opt.description}
-                            onClick={() => onChange(opt.name)}
-                            disabled={isDisabled}
-                            className={`px-3 py-1.5 text-sm rounded-full border transition-all duration-200 transform active:scale-95 ${
-                                isSelected 
-                                ? 'bg-blue-500 border-blue-400 text-white shadow-md shadow-blue-500/20' 
-                                : 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600 hover:border-gray-500'
-                            } ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                            {isSelected && '✓ '}
-                            {opt.name}
-                        </button>
-                    );
-                })}
-            </div>
-        </div>
-    );
+const allCategories = {
+    outputFormat: { label: "Formato de Salida", options: outputFormats },
+    narrativeStyle: { label: "Estilo Narrativo", options: narrativeStyles },
+    visualStyle: { label: "Estilo Visual", options: visualStyles },
+    narrativeStructure: { label: "Estructura Narrativa", options: narrativeStructures },
+    hook: { label: "Tipo de Gancho (Hook)", options: hookTypes },
+    conflict: { label: "Tipo de Conflicto Principal", options: conflictTypes },
+    ending: { label: "Tipo de Final", options: endingTypes }
 };
 
+type CategoryKey = keyof typeof allCategories;
 
-const Phase2_Style: React.FC<Phase2_StyleProps> = ({ onComplete, initialData, onBack, onSuggest, isSuggesting, areKeysConfigured }) => {
-    const [style, setStyle] = useState<StyleAndFormat>(initialData || {});
+const SelectorGrid: React.FC<{
+    title: string;
+    description: string;
+    options: Record<string, { name: string; value?: string; description: string }[]>;
+    selected: string[];
+    onToggle: (value: string) => void;
+}> = ({ title, description, options, selected, onToggle }) => (
+    <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
+        <h3 className="text-lg font-bold text-blue-300">{title}</h3>
+        <p className="text-sm text-gray-400 mb-4">{description}</p>
+        <div className="space-y-3">
+            {/* FIX: Use Object.keys() to iterate, which provides better type inference for the object's values than Object.entries() on a complex union type. */}
+            {Object.keys(options).map((groupName) => (
+                <div key={groupName}>
+                    <h4 className="font-semibold text-gray-200 text-sm mb-2">{groupName}</h4>
+                    <div className="flex flex-wrap gap-2">
+                        {options[groupName].map(option => {
+                            const value = option.value || option.name;
+                            const isSelected = selected.includes(value);
+                            return (
+                                <button
+                                    key={value}
+                                    onClick={() => onToggle(value)}
+                                    title={option.description}
+                                    className={`px-3 py-1.5 text-sm rounded-full transition-all duration-200 ${
+                                        isSelected 
+                                        ? 'bg-blue-600 text-white font-semibold' 
+                                        : 'bg-gray-700/80 text-gray-300 hover:bg-gray-600'
+                                    }`}
+                                >
+                                    {option.name}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            ))}
+        </div>
+    </div>
+);
 
-    // Update local state when initialData changes from AI suggestion
-    React.useEffect(() => {
-        setStyle(prevStyle => ({ ...prevStyle, ...initialData }));
+
+const Phase2_Style: React.FC<Phase2_StyleProps> = ({ onComplete, initialData, onBack, onSuggest, isSuggesting, error }) => {
+    const [style, setStyle] = useState<StyleAndFormat>(initialData || { energyLevel: 5 });
+
+    useEffect(() => {
+        if (initialData) setStyle(initialData);
     }, [initialData]);
 
-    const handleSelectionChange = (key: keyof StyleAndFormat, value: string) => {
+    const handleToggle = (category: CategoryKey, value: string) => {
         setStyle(prev => {
-            const currentValues = (prev[key] as string[] | undefined) || [];
-            const isSelected = currentValues.includes(value);
-
-            let newValues: string[];
-            if (isSelected) {
-                newValues = currentValues.filter(item => item !== value);
-            } else {
-                if (currentValues.length < 4) {
-                    newValues = [...currentValues, value];
-                } else {
-                    // This case should not be reached if UI is disabled correctly, but is a safe fallback.
-                    newValues = currentValues;
-                }
-            }
-            // The type assertion is safe because we are targeting array fields.
-            return { ...prev, [key]: newValues as any };
+            const currentSelection = prev[category] || [];
+            const newSelection = currentSelection.includes(value)
+                ? currentSelection.filter(item => item !== value)
+                : [...currentSelection, value];
+            return { ...prev, [category]: newSelection };
         });
     };
     
-    const handleEnergyLevelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setStyle(prev => ({ ...prev, energyLevel: parseInt(e.target.value, 10) }));
-    };
-    
-    const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        setStyle(prev => ({...prev, styleNotes: e.target.value}));
-    };
-
-    const canProceed = !!(
-        style.outputFormat?.length &&
-        style.narrativeStyle?.length &&
-        style.visualStyle?.length &&
-        style.narrativeStructure?.length &&
-        style.hook?.length &&
-        style.conflict?.length &&
-        style.ending?.length
-    );
-
-    const flattenOptions = (obj: Record<string, {name: string, description: string}[]>) => Object.values(obj).flat();
-
-    const categories: { key: keyof StyleAndFormat, label: string, options: any[], required?: boolean }[] = [
-        { key: 'outputFormat', label: 'Formato de Salida', options: flattenOptions(outputFormats), required: true },
-        { key: 'narrativeStyle', label: 'Estilo Narrativo', options: flattenOptions(narrativeStyles), required: true },
-        { key: 'visualStyle', label: 'Estilo Visual', options: flattenOptions(visualStyles), required: true },
-        { key: 'narrativeStructure', label: 'Estructura Narrativa', options: narrativeStructures, required: true },
-        { key: 'hook', label: 'Tipo de Gancho (Hook)', options: flattenOptions(hookTypes), required: true },
-        { key: 'conflict', label: 'Tipo de Conflicto', options: flattenOptions(conflictTypes), required: true },
-        { key: 'ending', label: 'Tipo de Final', options: flattenOptions(endingTypes), required: true },
-    ];
+    const canProceed = Object.values(style).some(val => Array.isArray(val) ? val.length > 0 : !!val);
 
     return (
         <div className="animate-fade-in space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-                <div>
+                 <div>
                     <h2 className="text-2xl font-bold text-blue-300">Fase 2: Estilo y Formato</h2>
-                    <p className="text-gray-400">Define el look & feel de tu historia. Elige hasta 4 opciones por categoría o deja que la IA lo haga por ti.</p>
+                    <p className="text-gray-400">Define el "look & feel" de tu historia. Estas elecciones guiarán a la IA en la creación de contenido.</p>
                 </div>
                 <button 
                     onClick={onSuggest}
-                    disabled={isSuggesting || !areKeysConfigured}
-                    title={!areKeysConfigured ? "Configura tus claves de API para activar la IA" : "Sugerir estilos con IA"}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-500 transition-colors disabled:bg-yellow-800 disabled:cursor-not-allowed"
+                    disabled={isSuggesting}
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-500 transition-colors disabled:bg-yellow-800"
                 >
-                    {isSuggesting ? <Spinner className="w-5 h-5" /> : <SparkleIcon className="w-5 h-5" />}
+                   {isSuggesting ? <Spinner className="w-5 h-5" /> : <SparkleIcon className="w-5 h-5" />}
                     {isSuggesting ? 'Sugiriendo...' : 'Sugerir con IA'}
                 </button>
             </div>
             
-            <div className="space-y-4">
-                {categories.map(cat => (
-                    <StyleCategory
-                        // FIX: Cast key to string to satisfy React's key type requirement.
-                        key={String(cat.key)}
-                        label={cat.label}
-                        options={cat.options}
-                        selected={(style[cat.key] as string[] | undefined) || []}
-                        onChange={(value) => handleSelectionChange(cat.key, value)}
-                        required={cat.required}
+            {error && <p className="text-red-400 bg-red-900/50 p-3 rounded-md">{error}</p>}
+            
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+                {Object.entries(allCategories).map(([key, data]) => (
+                    <SelectorGrid
+                        key={key}
+                        title={data.label}
+                        description=""
+                        options={data.options}
+                        selected={style[key as CategoryKey] || []}
+                        onToggle={(value) => handleToggle(key as CategoryKey, value)}
                     />
                 ))}
-
-                <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
-                    <h3 className="text-lg font-semibold text-gray-200 mb-3">Nivel de energía (1=Calmado, 10=Caótico)</h3>
-                    <div className="flex items-center gap-4">
-                        <span className="text-sm text-gray-400">Calmado</span>
-                        <input
-                            type="range"
-                            min="1"
-                            max="10"
-                            value={style.energyLevel || 5}
-                            onChange={handleEnergyLevelChange}
-                            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                        />
-                        <span className="text-sm text-gray-400">Caótico</span>
-                        <span className="font-bold text-lg text-white w-8 text-center">{style.energyLevel || 5}</span>
-                    </div>
+                 <div>
+                    <label htmlFor="energy" className="block text-sm font-medium text-gray-300 mb-2">Nivel de Energía (1=Lento/Contemplativo, 10=Frenético/Intenso)</label>
+                    <input
+                        id="energy"
+                        type="range"
+                        min="1" max="10"
+                        value={style.energyLevel}
+                        onChange={e => setStyle(prev => ({ ...prev, energyLevel: Number(e.target.value) }))}
+                        className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <div className="text-center font-bold text-lg mt-1">{style.energyLevel}</div>
                 </div>
-                
-                <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
-                     <h3 className="text-lg font-semibold text-gray-200 mb-3">Notas Adicionales de Estilo (Opcional)</h3>
-                     <textarea
-                        rows={4}
+                 <div>
+                    <label htmlFor="notes" className="block text-sm font-medium text-gray-300 mb-2">Notas Adicionales de Estilo (opcional)</label>
+                    <textarea
+                        id="notes"
+                        rows={3}
                         value={style.styleNotes || ''}
-                        onChange={handleNotesChange}
-                        className="w-full bg-gray-800 border border-gray-600 rounded-lg p-3 text-gray-200 focus:ring-2 focus:ring-blue-500"
-                        placeholder="Describe cualquier detalle específico que la IA deba considerar, como una paleta de colores, un movimiento de cámara particular, o una referencia a un artista no listado."
+                        onChange={e => setStyle(prev => ({ ...prev, styleNotes: e.target.value }))}
+                        className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3"
+                        placeholder="Ej: 'Quiero un look similar a la película Blade Runner 2049', 'La música debe ser synthwave ochentera'."
                     />
                 </div>
             </div>
             
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col sm:flex-row gap-4 pt-6 border-t border-gray-700">
+                <button onClick={onBack} className="w-full sm:w-auto bg-gray-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-gray-500 transition-colors">Atrás</button>
                 <button 
-                    onClick={onBack}
-                    className="w-full sm:w-auto bg-gray-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-gray-500 transition-colors"
-                >
-                    Atrás
-                </button>
-                <button 
-                    onClick={() => onComplete(style)} 
+                    onClick={() => onComplete(style)}
                     disabled={!canProceed}
                     className="w-full flex-grow bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-500 transition-colors disabled:bg-blue-800 disabled:cursor-not-allowed"
                 >
-                    {canProceed ? 'Continuar a Personajes' : 'Completa los campos requeridos (*)'}
+                   {canProceed ? 'Continuar a Personajes' : 'Selecciona al menos un estilo'}
                 </button>
             </div>
         </div>
