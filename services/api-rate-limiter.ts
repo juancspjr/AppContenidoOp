@@ -2,6 +2,9 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
+import { logger } from '../utils/logger';
+import { formatApiError } from '../utils/errorUtils';
+
 class APIRateLimiter {
     private callQueue: Array<() => Promise<any>> = [];
     private isProcessing = false;
@@ -10,11 +13,18 @@ class APIRateLimiter {
     
     async addCall<T>(apiCall: () => Promise<T>): Promise<T> {
         return new Promise((resolve, reject) => {
+            const startTime = Date.now();
             this.callQueue.push(async () => {
+                const waitTime = Date.now() - startTime;
+                if (waitTime > 1000) {
+                    logger.log('DEBUG', 'RateLimiter', `⏱️ Request esperó ${waitTime}ms en cola`);
+                }
                 try {
                     const result = await apiCall();
+                    logger.log('DEBUG', 'RateLimiter', '✅ API call completada exitosamente');
                     resolve(result);
                 } catch (error) {
+                    logger.log('WARNING', 'RateLimiter', '⚠️ API call falló', { error: formatApiError(error) });
                     reject(error);
                 }
             });

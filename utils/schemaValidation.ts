@@ -126,9 +126,9 @@ export function safeParseWithDefaults<T extends z.ZodTypeAny>(
   }
   
   // NEW: Attempt partial recovery
-  // FIX: Add guard to ensure schema is a ZodObject before calling .partial(), which only exists on object types.
-  if (options.preservePartial && typeof data === 'object' && data !== null && schema instanceof z.ZodObject) {
-    const partialSchema = schema.partial();
+  // FIX: Replaced `instanceof z.ZodObject` with a check on `schema._def.typeName` to resolve a TypeScript compilation error. This is a robust way to identify Zod schema types.
+  if (options.preservePartial && typeof data === 'object' && data !== null && schema._def.typeName === z.ZodFirstPartyTypeKind.ZodObject) {
+    const partialSchema = (schema as z.ZodObject<any>).partial();
     const partialResult = partialSchema.safeParse(data);
     
     if (partialResult.success) {
