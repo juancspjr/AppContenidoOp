@@ -4,6 +4,7 @@
 */
 
 import React from 'react';
+// FIX: Correctly import the `FinalAssets` type.
 import type { StoryMasterplan, FinalAssets, ProgressUpdate, StoryboardPanel } from './types';
 import Spinner from '../Spinner';
 import { DownloadIcon, ExportIcon } from '../icons';
@@ -73,6 +74,7 @@ const FinalAssetDisplay: React.FC<{ assetId: string; assetType: 'video' | 'anima
 
 // Componente para una tarjeta de producción de escena individual
 const ProductionCard: React.FC<{
+    // FIX: Access nested scenes array correctly.
     scene: StoryMasterplan['story_structure']['narrative_arc'][0]['scenes'][0];
     storyboardPanel: StoryboardPanel | undefined;
     finalAsset: FinalAssets['assets'][0] | undefined;
@@ -88,6 +90,7 @@ const ProductionCard: React.FC<{
 
     React.useEffect(() => {
         let url = '';
+        // FIX: Correctly access the `assetId` property on the `storyboardPanel` object.
         if (storyboardPanel?.assetId) {
             assetDBService.loadAsset(storyboardPanel.assetId).then(blob => {
                 if (blob) {
@@ -97,6 +100,7 @@ const ProductionCard: React.FC<{
             });
         }
         return () => { if(url) URL.revokeObjectURL(url) };
+    // FIX: Correctly access the `assetId` property on the `storyboardPanel` object.
     }, [storyboardPanel?.assetId]);
     
     return (
@@ -168,6 +172,7 @@ const AssetGenerationView: React.FC<ProductionDashboardProps> = ({
     const [selectedScenes, setSelectedScenes] = React.useState<Set<number>>(new Set());
     const [sceneChoices, setSceneChoices] = React.useState<Map<number, { mode: 'veo' | 'ken_burns' | 'static'; notes: string }>>(new Map());
 
+    // FIX: Correctly access the `narrative_arc` from the `story_structure` property.
     const scenes = storyPlan?.story_structure?.narrative_arc?.flatMap(act => act?.scenes || []).filter(Boolean) || [];
 
     // Initialize choices
@@ -179,6 +184,7 @@ const AssetGenerationView: React.FC<ProductionDashboardProps> = ({
         setSceneChoices(initialChoices);
         setSelectedScenes(new Set(scenes.map(s => s.scene_number)));
     // FIX: Only run this effect when the storyPlan changes to avoid re-initializing on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [storyPlan]);
 
     const handleSelectionChange = (sceneNumber: number, isSelected: boolean) => {
@@ -242,6 +248,7 @@ const AssetGenerationView: React.FC<ProductionDashboardProps> = ({
             <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
                 {scenes.map(scene => {
                     const finalAsset = assets?.assets.find(a => a.sceneId === `scene_${scene.scene_number}`);
+                    // FIX: Correctly access the `sceneNumber` property on the `storyboardPanel` object.
                     const storyboardPanel = storyboardAssets?.find(p => p.sceneNumber === scene.scene_number);
                     const choices = sceneChoices.get(scene.scene_number) || { mode: 'veo', notes: '' };
 

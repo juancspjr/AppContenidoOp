@@ -3,16 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import { characterRoles } from './constants';
-
-export type CharacterRole = typeof characterRoles[number]['name'];
-
+// --- Base Types ---
 export interface InitialConcept {
     idea: string;
     targetAudience: string;
     keyElements: string[];
-    selectedTextModel?: string;
-    selectedImageModel?: string;
+    selectedTextModel: string;
+    selectedImageModel: string;
 }
 
 export interface StyleAndFormat {
@@ -23,9 +20,11 @@ export interface StyleAndFormat {
     hook?: string[];
     conflict?: string[];
     ending?: string[];
-    energyLevel?: number;
+    energyLevel: number;
     styleNotes?: string;
 }
+
+export type CharacterRole = 'Protagonista' | 'Antagonista' | 'Mentor' | 'Aliado' | 'Personaje de Contraste (Foil)' | 'Secundario' | 'Interés Romántico' | 'Catalizador' | 'Fuerza de la Naturaleza' | 'Otro';
 
 export interface CharacterMotivation {
     desire: string;
@@ -35,66 +34,48 @@ export interface CharacterMotivation {
 
 export interface CharacterRelationship {
     characterId: string;
-    relationshipType: string;
-    description: string;
+    relationship: string;
 }
 
 export interface CharacterDefinition {
     id: string;
     name: string;
-    role: CharacterRole;
     description: string;
+    role: CharacterRole;
     motivation: CharacterMotivation;
     flaw: string;
     arc: string;
     relationships: CharacterRelationship[];
     visual_prompt_enhancers: string;
     imageFile?: File;
-    imageUrl?: string;
     imageAssetId?: string;
+    imageUrl?: string; // transient, for UI display
 }
 
 export interface StoryStructure {
-    act1_summary?: string;
-    act2_summary?: string;
-    act3_summary?: string;
+    act1_summary: string;
+    act2_summary: string;
+    act3_summary: string;
 }
 
-// --- NEW AGENT-ENHANCED DATA CONTRACTS ---
 
-export interface EnhancedStoryData extends StoryStructure {
-  psychological_layers: any[]; // Define specific types if known
-  cultural_elements: any[];
-  historical_depth: any[];
-  narrative_innovations: any[];
-  viral_hooks: any[];
-  humanization_score: number;
-  enhancement_metadata: {
+// --- Agent & Premium Types ---
+
+export interface EnhancementMetadata {
     agents_applied: string[];
     processing_time: number;
     quality_score: number;
-    // FIX: Add missing property to match usage in AgentOrchestrator.
     process_log: any[];
-  };
 }
 
-export interface CoherenceCheckStep {
-    id: string;
-    label: string;
-    status: 'pending' | 'running' | 'complete' | 'error';
-    result?: string;
-}
-
-export interface StructuralCoherenceReport {
-    coherenceScore: number;
-    overallAssessment: string;
-    checks: Array<{
-        id: string;
-        element: string;
-        concern: string;
-        suggestion: string;
-        severity: 'low' | 'medium' | 'high';
-    }>;
+export interface EnhancedStoryData {
+    psychological_layers: any[];
+    cultural_elements: any[];
+    historical_depth: any[];
+    narrative_innovations: any[];
+    viral_hooks: any[];
+    humanization_score: number;
+    enhancement_metadata: EnhancementMetadata;
 }
 
 export interface Scene {
@@ -103,7 +84,8 @@ export interface Scene {
     summary: string;
     emotional_beat: string;
     characters_present: string[];
-    visual_elements_prompt?: string;
+    visual_description: string;
+    dialogue_snippet?: string;
 }
 
 export interface Act {
@@ -122,157 +104,42 @@ export interface StoryMasterplan {
     creative_brief: {
         concept: string;
         target_audience: string;
-        output_format: string[];
-        narrative_style: string[];
-        visual_style: string[];
+        narrative_style: string;
+        visual_style: string;
     };
-    characters: Array<{
-        name: string;
-        role: string;
-        description: string;
-        visual_description: string;
-    }>;
+    characters: CharacterDefinition[];
     story_structure: {
         narrative_arc: Act[];
     };
-    critique?: Critique;
 }
+
 
 export interface PremiumStoryPlan extends StoryMasterplan {
-  enhanced_metadata: {
-    psychological_profile: string;
-    cultural_resonance: string;
-    historical_significance: string;
-    innovation_index: number;
-    viral_potential: number;
-    human_authenticity: number;
-  };
-  agent_contributions: {
-    psychology_insights: string[];
-    cultural_integrations: string[];
-    historical_connections: string[];
-    narrative_innovations: string[];
-    viral_optimizations: string[];
-  };
-}
-
-export interface Critique {
-    narrative_score: number;
-    viral_score: number;
-    integrated_score: number;
-    strengths: string[];
-    weaknesses: Array<{
-        point: string;
-        suggestion: string;
-        severity: 'Minor' | 'Moderate' | 'High';
-    }>;
-    viral_moments: string[];
-    improvement_strategies: Array<{ id: string; title: string; description: string }>;
-}
-
-// --- New Professional Dossier and Prompt Structures ---
-
-export interface CharacterMasterPrompt {
-    base_description_es: string;
-    base_description_en: string;
-    physical_details: {
-        age: string;
-        ethnicity: string;
-        height: string;
-        build: string;
-        hair: string;
-        eyes: string;
-        skin: string;
+    enhanced_metadata?: {
+        viral_potential: number;
+        human_authenticity: number;
     };
-    wardrobe_evolution: {
-        early_scenes: string;
-        mid_scenes: string;
-        final_scenes: string;
+    agent_contributions?: {
+        psychology_insights: string[];
+        viral_optimizations: string[];
     };
-    lighting_preference: string;
-    emotional_states: {
-        vulnerable: string;
-        determined: string;
-        authentic: string;
-    };
-}
-
-export interface StoryboardPanelPrompt {
-    scene_title: string;
-    description_es: string;
-    description_en: string;
-    dialogue_es: string;
-    dialogue_en: string;
-    camera_angle: string;
-    lighting_specific: string;
-    props: string;
-    mood: string;
-}
-
-export interface StoryboardGroupPrompt {
-    total_scenes: number;
-    aspect_ratio: string;
-    canvas_size: string;
-    division_strategy: string;
-    global_style: {
-        aesthetic: string;
-        lighting: string;
-        color_palette: string;
-        consistency: string;
-    };
-    individual_panels: Record<string, StoryboardPanelPrompt>; // e.g., "panel_1": {...}
 }
 
 export interface AiProductionGuidePrompts {
-    character_master_prompts: Record<string, CharacterMasterPrompt>; // e.g., "elena_rodriguez": {...}
-    storyboard_groups: Record<string, StoryboardGroupPrompt>; // e.g., "group_1_setup": {...}
-    negative_prompts: {
-        character_consistency: string[];
-        technical_quality: string[];
-        scene_specific: string[];
-    };
-    audio_generation_prompts: {
-        opening_theme_es: string;
-        opening_theme_en: string;
-        marcus_theme_es: string;
-        marcus_theme_en: string;
-        community_theme_es: string;
-        community_theme_en: string;
-    };
-}
-
-export interface Documentation {
-    // These are strings containing Markdown content
-    directorsBible: string;
-    visualStyleGuide: string;
-    narrativeStory: string;
-    literaryScript: string;
-    readme: string;
-    // This is now a structured object
-    aiProductionGuide: {
-        prompts: AiProductionGuidePrompts;
-    };
+    [key: string]: any;
 }
 
 
-export interface PremiumDocumentation extends Documentation {
-  enhanced_components: {
-    psychological_analysis: string;
-    cultural_study: string;
-    historical_research: string;
-    innovation_documentation: string;
-    viral_strategy: string;
-    humanization_report: string;
-  };
-  quality_certifications: {
-    human_likeness_score: number;
-    viral_potential_score: number;
-    cultural_authenticity_score: number;
-    innovation_uniqueness_score: number;
-  };
+export interface PremiumDocumentation {
+    narrativeStory?: string;
+    aiProductionGuide?: AiProductionGuidePrompts;
+    directorsBible?: string;
+    visualStyleGuide?: string;
+    literaryScript?: string;
 }
 
 
+// --- Asset & Progress Types ---
 export interface ReferenceAsset {
     id: string;
     type: 'character' | 'environment' | 'element' | 'scene_frame';
@@ -290,62 +157,56 @@ export interface ReferenceAssets {
     sceneFrames: ReferenceAsset[];
 }
 
+
 export interface StoryboardPanel {
-    id: string; // e.g., 'panel_1'
+    id: string;
     sceneNumber: number;
-    assetId: string; // The ID of the sliced image blob in IndexedDB
-    prompt: string;
     narrativeText: string;
-    generationStatus: 'pending' | 'generating' | 'complete' | 'error';
+    shotType: string;
+    cameraAngle: string;
+    visualPrompt: string;
+    assetId: string;
+    generationStatus?: 'pending' | 'generating' | 'complete' | 'error';
 }
+
 
 export interface FinalAsset {
-    sceneId: string;
-    type: 'video' | 'animated_image' | 'static_image';
     assetId: string;
+    type: 'video' | 'animated_image' | 'static_image';
+    sceneId: string;
 }
-
 export interface FinalAssets {
     assets: FinalAsset[];
 }
 
+
 export interface ProgressUpdate {
-    status: string;
-    progress?: number;
+    status: 'generating' | 'polling' | 'complete' | 'error';
+    progress?: number; // 0-100 for generation
     message?: string;
+    assetId?: string;
 }
 
-export interface CritiqueProgressStep {
-    id: string;
-    label: string;
-    status: 'pending' | 'running' | 'complete' | 'error';
+
+// --- NEW Real-time Progress Types ---
+export interface AgentProgressStep {
+    agent: string;
+    step: number;
+    total: number;
+    description: string;
+    status: 'pending' | 'processing' | 'complete' | 'error';
+    timestamp: string;
+    result?: any;
+    errorMessage?: string;
 }
 
-export interface ExportedProject {
-    phase: number;
-    initialConcept: InitialConcept | null;
-    styleAndFormat: StyleAndFormat | null;
-    characters: CharacterDefinition[];
-    storyStructure: StoryStructure | null;
-    coherenceReport: StructuralCoherenceReport | null;
-    coherenceCheckProgress: CoherenceCheckStep[] | null;
-    storyPlan: StoryMasterplan | null;
-    critique: Critique | null;
-    critiqueStage: 'alpha' | 'beta' | 'approved' | null;
-    critiqueProgress: CritiqueProgressStep[] | null;
-    documentation: Documentation | null;
-    referenceAssets: ReferenceAssets | null;
-    storyboardAssets: StoryboardPanel[] | null;
-    finalAssets: FinalAssets | null;
-    plan?: any; // For legacy support
-
-    // New premium fields
-    enhancedData?: EnhancedStoryData | null;
-    premiumPlan?: PremiumStoryPlan | null;
-    premiumDocumentation?: PremiumDocumentation | null;
-    finalEvaluation?: any | null; // Define a specific type for FinalEvaluation
+export interface ProcessLog extends LogEntry {
+    agent?: string;
+    data?: any;
 }
 
+
+// --- Utility & State Types ---
 export interface LogEntry {
     id: string;
     timestamp: number;
@@ -356,6 +217,7 @@ export interface LogEntry {
 }
 
 export interface StyleSuggestions {
+    justificacion: string;
     outputFormat?: string[];
     narrativeStyle?: string[];
     visualStyle?: string[];
@@ -363,45 +225,73 @@ export interface StyleSuggestions {
     hook?: string[];
     conflict?: string[];
     ending?: string[];
-    justificacion?: string;
 }
 
-export type StoryBuilderState = Omit<ExportedProject, 'plan'> & {
-    // Additional runtime state properties not saved in the project file
+export interface CoherenceCheckStep {
+    id: string;
+    label: string;
+    status: 'pending' | 'running' | 'complete' | 'error';
+    result?: any;
+    error?: string;
+}
+
+export interface StructuralCoherenceReport {
+    coherenceScore: number;
+    overallAssessment: string;
+    checks: Array<{
+        id: string;
+        element: string;
+        concern: string;
+        suggestion: string;
+        severity: 'low' | 'medium' | 'high';
+    }>;
+}
+
+export interface Critique {
+    narrative_score: number;
+    viral_score: number;
+    integrated_score: number;
+    strengths: string[];
+    weaknesses: Array<{
+        point: string;
+        suggestion: string;
+        severity: 'Minor' | 'Moderate' | 'High';
+    }>;
+    viral_moments: string[];
+    improvement_strategies: Array<{
+        id: string;
+        title: string;
+        description: string;
+    }>;
+}
+
+export interface ExportedProject {
+    phase: number;
+    initialConcept: InitialConcept | null;
+    styleAndFormat: StyleAndFormat | null;
+    characters: CharacterDefinition[];
+    storyStructure: StoryStructure | null;
+    enhancedData: EnhancedStoryData | null;
+    premiumPlan: PremiumStoryPlan | null;
+    premiumDocumentation: PremiumDocumentation | null;
+    finalEvaluation: any | null; // Define properly if structure is known
+    storyPlan?: StoryMasterplan | PremiumStoryPlan | null; // For new projects
+    plan?: any; // For legacy projects
+    referenceAssets: ReferenceAssets | null;
+    storyboardAssets: StoryboardPanel[] | null;
+    finalAssets: FinalAssets | null;
+}
+
+export type StoryBuilderState = ExportedProject & {
     isLoading?: boolean;
     isAssisting?: boolean;
     error?: string | null;
     assistingCharacterIds?: Set<string>;
     progress?: Record<string, ProgressUpdate>;
-    agentProgress?: any[];
+    agentProgress?: AgentProgressStep[];
     currentAgent?: string;
-    processingCache?: Map<string, any>;
-    logs?: LogEntry[];
+    logs?: ProcessLog[];
     isOptimizing?: boolean;
     isSuggestingStyle?: boolean;
     styleSuggestions?: StyleSuggestions | null;
 };
-
-
-export interface GenerateImagesResponse {
-    generatedImages: Array<{
-        image: {
-            imageBytes: string;
-            uri: string;
-        };
-    }>;
-}
-
-export interface VideosOperationResponse {
-    done: boolean;
-    name?: string;
-    response?: {
-        generatedVideos?: Array<{
-            video?: {
-                uri: string;
-            };
-        }>;
-    };
-    error?: any;
-    metadata?: any;
-}

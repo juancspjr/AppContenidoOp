@@ -11,11 +11,13 @@ import { HumanizationAgent } from './HumanizationAgent';
 import type { StoryBuilderState, EnhancedStoryData } from '../../components/story-builder/types';
 
 // Define a simpler type for the base data passed between agents
+// FIX: Correctly pick properties from the `StoryBuilderState` type.
 type BaseStoryData = Pick<StoryBuilderState, 'storyStructure' | 'initialConcept' | 'styleAndFormat' | 'characters'>;
 
 interface SpecializedAgent {
     name: string;
-    outputField: keyof Omit<EnhancedStoryData, keyof StoryBuilderState | 'enhancement_metadata'>;
+    // FIX: Correct the type to properly exclude fields and avoid resolving to `never`.
+    outputField: keyof Omit<EnhancedStoryData, keyof StoryStructure>;
     process(
         data: any,
         callbacks: { onProgress?: (progress: any) => void }
@@ -28,6 +30,7 @@ export class AgentOrchestrator {
     
     constructor() {
         this.agents = [
+            // FIX: Ensure all agent classes conform to the SpecializedAgent interface.
             new PsychologyPatternAgent(),
             new CulturalAnthropologyAgent(),
             new HistoricalContextAgent(),

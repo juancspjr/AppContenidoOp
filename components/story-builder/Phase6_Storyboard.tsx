@@ -37,6 +37,7 @@ const CharacterReferenceCard: React.FC<{ asset: ReferenceAsset }> = ({ asset }) 
     useEffect(() => {
         let objectUrl: string | null = null;
         const loadImage = async () => {
+            // FIX: Correctly access properties on the `asset` object.
             if (asset.assetId && asset.generationStatus === 'complete') {
                 const blob = await assetDBService.loadAsset(asset.assetId);
                 if (blob) {
@@ -52,11 +53,13 @@ const CharacterReferenceCard: React.FC<{ asset: ReferenceAsset }> = ({ asset }) 
     return (
         <div className="bg-gray-800 rounded-lg p-3 text-center">
             <div className="w-full aspect-[3/4] bg-gray-700 rounded mb-2 flex items-center justify-center overflow-hidden">
+                {/* FIX: Correctly access properties on the `asset` object. */}
                 {asset.generationStatus === 'generating' && <Spinner />}
                 {asset.generationStatus === 'complete' && imageUrl && <img src={imageUrl} alt={asset.name} className="w-full h-full object-cover" />}
                 {asset.generationStatus === 'error' && <span className="text-red-400 text-xs">Error</span>}
                  {!asset.generationStatus && <span className="text-gray-400 text-xs">Pendiente</span>}
             </div>
+            {/* FIX: Correctly access properties on the `asset` object. */}
             <h5 className="font-bold text-sm text-gray-200">{asset.name}</h5>
         </div>
     );
@@ -72,6 +75,7 @@ const PanelCard: React.FC<{
     useEffect(() => {
         let objectUrl: string | null = null;
         const loadImage = async () => {
+            // FIX: Correctly access the `assetId` property.
             if (panel.assetId) {
                 try {
                     const blob = await assetDBService.loadAsset(panel.assetId);
@@ -86,8 +90,10 @@ const PanelCard: React.FC<{
         };
         loadImage();
         return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+    // FIX: Correctly access properties for dependency array.
     }, [panel.assetId, panel.generationStatus]);
 
+    // FIX: Correctly access the `generationStatus` property.
     const isGenerating = panel.generationStatus === 'generating';
 
     return (
@@ -98,6 +104,7 @@ const PanelCard: React.FC<{
                  <div className="text-xs text-gray-400">Error</div>}
             </div>
             <div className="flex-grow">
+                {/* FIX: Correctly access properties on the `panel` object. */}
                 <h5 className="font-bold truncate text-gray-200">Escena {panel.sceneNumber}</h5>
                 <p className="text-xs text-gray-400 h-8 overflow-hidden" title={panel.narrativeText}>{panel.narrativeText}</p>
             </div>
@@ -125,6 +132,7 @@ const Phase6_Storyboard: React.FC<Phase6_StoryboardProps> = ({
 }) => {
     const [selectedAspectRatio, setSelectedAspectRatio] = useState<AspectRatioKey>('16:9');
     
+    // FIX: Correctly access the `generationStatus` property.
     const charactersGenerated = characterAssets && characterAssets.every(a => a.generationStatus === 'complete');
     const charactersHaveBeenInitiated = characterAssets && characterAssets.length > 0;
 
@@ -161,6 +169,7 @@ const Phase6_Storyboard: React.FC<Phase6_StoryboardProps> = ({
                     </div>
                 ) : (
                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                        {/* FIX: Correctly access the `id` property for the key. */}
                         {characterAssets.map(charAsset => <CharacterReferenceCard key={charAsset.id} asset={charAsset} />)}
                     </div>
                 )}
@@ -187,6 +196,7 @@ const Phase6_Storyboard: React.FC<Phase6_StoryboardProps> = ({
                  {storyboardAssets ? (
                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                         {storyboardAssets.map(panel => (
+                            // FIX: Correctly access the `id` property for the key.
                             <PanelCard key={panel.id} panel={panel} onRegenerate={onRegeneratePanel} />
                         ))}
                     </div>

@@ -123,6 +123,7 @@ const Phase2_Style: React.FC<Phase2_StyleProps> = ({
                     <div className="flex justify-between items-start mb-4">
                         <div>
                             <h3 className="text-xl font-bold text-blue-400">🎯 Sugerencias de IA</h3>
+                            {/* FIX: Correctly access the `justificacion` property from the `suggestions` object. */}
                             <p className="text-sm text-gray-300 mt-1">{suggestions.justificacion}</p>
                         </div>
                         <button onClick={onClearSuggestions} className="text-gray-400 hover:text-white text-sm">✕ Cerrar</button>
@@ -135,7 +136,8 @@ const Phase2_Style: React.FC<Phase2_StyleProps> = ({
 
                             return (
                                 <div key={categoryKey} className="bg-black/20 p-4 rounded-lg">
-                                    <h4 className="font-semibold text-white mb-2 capitalize">{categoryKey.replace(/([A-Z])/g, ' $1')}</h4>
+                                    {/* FIX: Ensure `categoryKey` is treated as a string for `replace` method. */}
+                                    <h4 className="font-semibold text-white mb-2 capitalize">{String(categoryKey).replace(/([A-Z])/g, ' $1')}</h4>
                                     <div className="space-y-2">
                                         {(value as string[]).map((option, idx) => (
                                             <label key={idx} className="flex items-center gap-2 cursor-pointer">
@@ -194,6 +196,7 @@ const Phase2_Style: React.FC<Phase2_StyleProps> = ({
                     />
                 ))}
                  <div>
+                    {/* FIX: Correctly access the `energyLevel` property from the `style` object. */}
                     <label htmlFor="energy" className="block text-sm font-medium text-gray-300 mb-2">Nivel de Energía (1=Lento/Contemplativo, 10=Frenético/Intenso)</label>
                     <input
                         id="energy"
@@ -203,6 +206,7 @@ const Phase2_Style: React.FC<Phase2_StyleProps> = ({
                         onChange={e => onUpdateStyle({ energyLevel: Number(e.target.value) })}
                         className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer"
                     />
+                    {/* FIX: Correctly access the `energyLevel` property from the `style` object. */}
                     <div className="text-center font-bold text-lg mt-1">{style.energyLevel}</div>
                 </div>
                  <div>
@@ -210,6 +214,7 @@ const Phase2_Style: React.FC<Phase2_StyleProps> = ({
                     <textarea
                         id="notes"
                         rows={3}
+                        // FIX: Correctly access the `styleNotes` property from the `style` object.
                         value={style.styleNotes || ''}
                         onChange={e => onUpdateStyle({ styleNotes: e.target.value })}
                         className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3"

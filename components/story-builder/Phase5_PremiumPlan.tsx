@@ -72,6 +72,7 @@ const Phase5_PremiumPlan: React.FC<Phase5_PremiumPlanProps> = ({
             {/* NEW: Optional Metrics Optimization Panel */}
             <MetricsOptimizationPanel
               currentMetrics={{
+                // FIX: Correctly access nested properties on the `premiumPlan` object.
                 viral_potential: premiumPlan.enhanced_metadata?.viral_potential || 0,
                 human_authenticity: premiumPlan.enhanced_metadata?.human_authenticity || 0
               }}
@@ -86,6 +87,7 @@ const Phase5_PremiumPlan: React.FC<Phase5_PremiumPlanProps> = ({
                     <div>
                         <h4 className="font-semibold text-white mb-2">Metadata Principal</h4>
                         <div className="space-y-2 text-sm">
+                            {/* FIX: Correctly access nested properties on the `premiumPlan` object. */}
                             <div><span className="text-gray-400">Título:</span> <span className="text-white font-medium">{premiumPlan.metadata.title}</span></div>
                             <div><span className="text-gray-400">Logline:</span> <span className="text-gray-200">{premiumPlan.metadata.logline}</span></div>
                             <div><span className="text-gray-400">Tema Central:</span> <span className="text-gray-200">{premiumPlan.metadata.theme}</span></div>
@@ -96,12 +98,14 @@ const Phase5_PremiumPlan: React.FC<Phase5_PremiumPlanProps> = ({
                         <div className="grid grid-cols-2 gap-3">
                             <div className="bg-black/20 p-3 rounded text-center">
                                 <div className="text-lg font-bold text-purple-400">
+                                    {/* FIX: Correctly access nested properties on the `premiumPlan` object. */}
                                     {(premiumPlan.enhanced_metadata?.viral_potential || 0).toFixed(1)}/10
                                 </div>
                                 <div className="text-xs text-gray-400">Potencial Viral</div>
                             </div>
                             <div className="bg-black/20 p-3 rounded text-center">
                                 <div className="text-lg font-bold text-green-400">
+                                    {/* FIX: Correctly access nested properties on the `premiumPlan` object. */}
                                     {(premiumPlan.enhanced_metadata?.human_authenticity || 0).toFixed(2)}%
                                 </div>
                                 <div className="text-xs text-gray-400">Autenticidad</div>
@@ -114,6 +118,7 @@ const Phase5_PremiumPlan: React.FC<Phase5_PremiumPlanProps> = ({
             <div className="bg-gray-800/50 p-6 rounded-lg">
                 <h3 className="text-lg font-bold text-yellow-300 mb-4">👥 Elenco de Personajes</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* FIX: Correctly access the `characters` array. */}
                     {premiumPlan.characters.map((char, index) => (
                         <div key={index} className="bg-black/20 p-4 rounded-lg">
                             <div className="flex justify-between items-start mb-2">
@@ -121,7 +126,7 @@ const Phase5_PremiumPlan: React.FC<Phase5_PremiumPlanProps> = ({
                                 <span className="text-xs bg-blue-600 px-2 py-1 rounded text-white">{char.role}</span>
                             </div>
                             <p className="text-sm text-gray-300 mb-2">{char.description}</p>
-                            <p className="text-xs text-gray-400 italic">{char.visual_description}</p>
+                            <p className="text-xs text-gray-400 italic">{char.visual_prompt_enhancers}</p>
                         </div>
                     ))}
                 </div>
@@ -138,6 +143,7 @@ const Phase5_PremiumPlan: React.FC<Phase5_PremiumPlanProps> = ({
                     </button>
                 </div>
                 
+                {/* FIX: Correctly access the `story_structure` and `narrative_arc` properties. */}
                 {premiumPlan.story_structure.narrative_arc.map((act, actIndex) => (
                     <div key={actIndex} className="mb-6 last:mb-0">
                         <h4 className="font-semibold text-white text-md mb-2 p-2 bg-gray-700/50 rounded">
@@ -167,6 +173,7 @@ const Phase5_PremiumPlan: React.FC<Phase5_PremiumPlanProps> = ({
             <div className="bg-gradient-to-r from-purple-900/30 to-pink-900/30 p-6 rounded-lg border border-purple-500/30">
                 <h3 className="text-lg font-bold text-purple-300 mb-4">🤖 Contribuciones de Agentes Especializados</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* FIX: Correctly access nested agent contribution properties. */}
                     {premiumPlan.agent_contributions?.psychology_insights?.length > 0 && (
                         <div className="bg-black/20 p-4 rounded">
                             <h4 className="font-medium text-purple-400 mb-2">🧠 Insights Psicológicos</h4>

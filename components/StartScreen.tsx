@@ -39,10 +39,12 @@ const StartScreen: React.FC<StartScreenProps> = ({ onStartPhotoEditor, onStartSt
       reader.onload = (event) => {
         try {
           const projectData = JSON.parse(event.target?.result as string) as ExportedProject;
-          if (projectData && (projectData.storyPlan || projectData.plan)) { // Legacy support for 'plan'
+          // FIX: Correctly check for `storyPlan` or legacy `plan` property on the imported project data.
+          if (projectData && (projectData.storyPlan || (projectData as any).plan)) { // Legacy support for 'plan'
              const finalProject: ExportedProject = {
                ...projectData,
-               storyPlan: projectData.storyPlan || projectData.plan,
+               // FIX: Coalesce `storyPlan` and legacy `plan` to ensure the project object is correctly structured.
+               storyPlan: projectData.storyPlan || (projectData as any).plan,
              };
              onProjectImport(finalProject);
           } else {
