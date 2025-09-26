@@ -402,16 +402,95 @@ export const useStoryBuilderStateMachine = (existingProject?: ExportedProject) =
         generatePremiumDocs: async () => {
             const cacheKey = 'phase_6.1';
             if (state.phaseCache.has(cacheKey)) {
-                dispatch({ type: 'API_SUCCESS', payload: { premiumDocumentation: state.phaseCache.get(cacheKey), phase: 6.2 } });
+                const cachedData = state.phaseCache.get(cacheKey);
+                dispatch({ type: 'API_SUCCESS', payload: { premiumDocumentation: cachedData, phase: 6.2 } });
                 return;
             }
-            if (!state.premiumPlan) return;
-            const data = await apiCall<PremiumDocumentation>(
-                (model) => geminiService.generateContent(Prompts.getPremiumDocumentationPrompt(state.premiumPlan!), model),
-                (data) => ({ premiumDocumentation: data, phase: 6.2 }),
-                { validationContext: 'PremiumDocumentation' }
-            );
-             if(data) dispatch({ type: 'CACHE_PHASE_RESULT', payload: { key: cacheKey, data: { premiumDocumentation: data } } });
+        
+            dispatch({ type: 'API_START' });
+            
+            try {
+                if (!state.premiumPlan?.metadata?.title) {
+                    throw new Error('El plan maestro premium está incompleto. Regresa a la fase anterior.');
+                }
+        
+                const { premiumPlan } = state;
+                const cleanedPlan = {
+                    metadata: {
+                        title: premiumPlan.metadata?.title || 'Historia Sin Título',
+                        logline: premiumPlan.metadata?.logline || 'Logline pendiente',
+                        theme: premiumPlan.metadata?.theme || 'Tema por definir'
+                    },
+                    characters: (premiumPlan.characters || [])
+                        .filter(char => char && char.name)
+                        .slice(0, 5) 
+                        .map(char => ({
+                            name: char.name,
+                            role: char.role || 'Personaje',
+                            description: char.description?.substring(0, 300) || 'Descripción pendiente'
+                        })),
+                    story_structure: {
+                        narrative_arc: (premiumPlan.story_structure?.narrative_arc || [])
+                            .slice(0, 3) 
+                            .map(act => ({
+                                act_number: act.act_number || 0,
+                                title: act.title?.substring(0, 100) || `Acto ${act.act_number}`,
+                                summary: act.summary?.substring(0, 500) || 'Resumen pendiente'
+                            }))
+                    }
+                };
+        
+                const prompt = Prompts.getPremiumDocumentationPrompt(cleanedPlan);
+                const primaryModel = state.initialConcept?.selectedTextModel || 'gemini-2.5-flash';
+                const fallbackModel = 'gemini-2.5-flash';
+                
+                logger.log('INFO', 'StateMachine', '📄 Iniciando generación de documentación premium', { model: primaryModel });
+        
+                let response;
+                try {
+                    response = await apiRateLimiter.addCall(() => geminiService.generateContent(prompt, primaryModel));
+                } catch (apiError: any) {
+                    logger.log('WARNING', 'StateMachine', '⚠️ Error con modelo principal, probando fallback', { originalError: apiError.message });
+                    
+                    const simplifiedPrompt = {
+                        ...prompt,
+                        config: { ...prompt.config, maxOutputTokens: 4096, temperature: 0.6, thinkingConfig: { thinkingBudget: 2048 } }
+                    };
+                    
+                    response = await apiRateLimiter.addCall(() => geminiService.generateContent(simplifiedPrompt, fallbackModel));
+                }
+        
+                const documentationData = parseJsonMarkdown(response.text);
+                const mappedDocumentation: PremiumDocumentation = {
+                    readme: documentationData.readme_content || "# README no generado",
+                    aiProductionGuide: { prompts: documentationData.production_guide || { character_prompts: [], scene_prompts: [] } } as any,
+                    directorsBible: '',
+                    visualStyleGuide: '',
+                    narrativeStory: '',
+                    literaryScript: '',
+                    enhanced_components: { psychological_analysis: '', cultural_study: '', historical_research: '', innovation_documentation: '', viral_strategy: '', humanization_report: '' },
+                    quality_certifications: { human_likeness_score: 0, viral_potential_score: 0, cultural_authenticity_score: 0, innovation_uniqueness_score: 0 }
+                };
+        
+                dispatch({ type: 'CACHE_PHASE_RESULT', payload: { key: cacheKey, data: mappedDocumentation } });
+                dispatch({ type: 'API_SUCCESS', payload: { premiumDocumentation: mappedDocumentation, phase: 6.2 } });
+                logger.log('SUCCESS', 'StateMachine', '✅ Documentación premium generada exitosamente.');
+                
+            } catch (error: any) {
+                const errorMessage = formatApiError(error);
+                logger.log('ERROR', 'StateMachine', '❌ Error fatal generando documentación premium', { error: errorMessage });
+                
+                let userMessage = 'Error generando documentación: ';
+                if (errorMessage.includes('invalid input') || errorMessage.includes('INVALID_ARGUMENT')) {
+                    userMessage += 'Los datos del proyecto son demasiado complejos. Intenta simplificar la historia en fases anteriores.';
+                } else if (errorMessage.includes('quota') || errorMessage.includes('429')) {
+                    userMessage += 'Límite de API alcanzado. Por favor, espera 2-3 minutos antes de intentar de nuevo.';
+                } else {
+                    userMessage += errorMessage;
+                }
+                
+                dispatch({ type: 'API_ERROR', payload: userMessage });
+            }
         },
         
         runFinalEvaluation: async () => {

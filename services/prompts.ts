@@ -417,7 +417,7 @@ const enhancedDocumentationDossierSchema = {
     required: ['storyPlan', 'documentation']
 };
 
-const premiumDocumentationSchema = {
+const premiumDocumentationSchema_OLD = {
     ...enhancedDocumentationDossierSchema,
     properties: {
         ...enhancedDocumentationDossierSchema.properties,
@@ -769,34 +769,61 @@ Devuelve un objeto de documentación completo con optimización viral integrada.
   }
 });
 
-export const getPremiumDocumentationPrompt = (premiumStoryPlan: PremiumStoryPlan) => {
+export const getPremiumDocumentationPrompt = (cleanStoryPlan: any) => {
+    const promptContent = `Eres un equipo de producción premium. Genera documentación profesional para esta historia:
+
+**PROYECTO:** ${cleanStoryPlan.metadata.title}
+**LOGLINE:** ${cleanStoryPlan.metadata.logline}
+**TEMA:** ${cleanStoryPlan.metadata.theme}
+
+**PERSONAJES:**
+${cleanStoryPlan.characters.map((char: any) => `- ${char.name}: ${char.description}`).join('\n')}
+
+**ESTRUCTURA:**
+${cleanStoryPlan.story_structure.narrative_arc.map((act: any) => `${act.title}: ${act.summary}`).join('\n')}
+
+GENERA:
+1. **README_MASTER.md**: Resumen ejecutivo del proyecto, incluyendo propósito, público objetivo y estrategia de contenido. Debe ser conciso y profesional.
+2. **AI_PRODUCTION_GUIDE.json**: Prompts estructurados para generación de assets. Crea prompts detallados para al menos 2 personajes principales y 3 escenas clave.
+
+IMPORTANTE: Responde SOLO con JSON válido. No incluyas markdown extra ni texto introductorio. Tu respuesta debe empezar con { y terminar con }.`;
+
+    const schema = {
+        type: Type.OBJECT,
+        properties: {
+            readme_content: {
+                type: Type.STRING,
+                description: "Contenido completo en formato Markdown para el archivo README.md del proyecto."
+            },
+            production_guide: {
+                type: Type.OBJECT,
+                properties: {
+                    character_prompts: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING },
+                        description: "Una lista de prompts detallados y listos para usar para generar imágenes de los personajes principales."
+                    },
+                    scene_prompts: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING },
+                        description: "Una lista de prompts detallados y listos para usar para generar imágenes de las escenas clave."
+                    }
+                },
+                required: ['character_prompts', 'scene_prompts']
+            }
+        },
+        required: ['readme_content', 'production_guide']
+    };
+
     return {
-        contents: `Eres el equipo de la casa productora creativa más prestigiosa del mundo. Crea un dossier de documentación premium completo que incorpore todas las mejoras de los agentes especializados.
-
-**PLAN DE HISTORIA PREMIUM CON MEJORAS DE AGENTES:**
-${JSON.stringify(premiumStoryPlan, null, 2)}
-
-**MISIÓN: Crear documentación que sea:**
-1. **Psicológicamente Rica**: Incorpora todas las ideas y patrones psicológicos.
-2. **Culturalmente Profunda**: Integra elementos culturales y profundidad antropológica.
-3. **Históricamente Resonante**: Entrelaza referencias históricas y conexiones arquetípicas.
-4. **Narrativamente Innovadora**: Muestra elementos disruptivos y únicos.
-5. **Viralmente Optimizada**: Integra de forma natural ganchos virales y estrategias de retención.
-6. **Completamente Humana**: Sin rastros de IA detectables, creatividad humana auténtica.
-
-**REQUISITOS DE DOCUMENTACIÓN MEJORADA:**
-- README: Incluye resumen de mejoras de agentes e indicadores de calidad premium.
-- Narrative Story: Integra capas psicológicas y profundidad cultural de forma natural.
-- Literary Script: Marca momentos virales y ritmos psicológicos sutilmente.
-- Director's Bible: Incluye las ideas de los agentes como "intuiciones creativas".
-- Visual Style Guide: Incorpora elementos visuales culturales e históricos.
-- AI Production Guide: Prompts mejorados que mantienen la calidad a nivel de agente.
-
-**CRÍTICO**: La documentación debe leerse como si hubiera sido creada por un equipo de expertos humanos en psicología, antropología, historia y creación de contenido viral. Sin mención de agentes de IA o mejoras artificiales. **TODO EN ESPAÑOL.**`,
+        contents: promptContent,
         config: {
             systemInstruction: SYSTEM_INSTRUCTION_DIRECTOR,
             responseMimeType: 'application/json',
-            responseSchema: premiumDocumentationSchema,
+            responseSchema: schema,
+            temperature: 0.7,
+            maxOutputTokens: 8192,
+            thinkingConfig: { thinkingBudget: 4096 }
         }
     };
 };
