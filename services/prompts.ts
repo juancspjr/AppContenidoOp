@@ -10,6 +10,7 @@ import type {
     PremiumStoryPlan
 } from '../components/story-builder/types';
 import { outputFormats, narrativeStyles, visualStyles, narrativeStructures, hookTypes, conflictTypes, endingTypes } from '../components/story-builder/constants';
+import { STYLE_OPTIONS_COMPLETE } from '../utils/styleOptions';
 
 // Helper to format options for the prompt
 const formatOptionsForPrompt = (category: Record<string, any[]>) => {
@@ -48,6 +49,52 @@ const styleSchema = {
         energyLevel: { type: Type.INTEGER },
         styleNotes: { type: Type.STRING },
     }
+};
+
+const styleSelectionSchema = {
+    type: Type.OBJECT,
+    properties: {
+        outputFormat: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "3-4 formatos de salida recomendados"
+        },
+        narrativeStyle: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "3-4 estilos narrativos recomendados"
+        },
+        visualStyle: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "3-4 estilos visuales recomendados"
+        },
+        narrativeStructure: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "3-4 estructuras narrativas recomendadas"
+        },
+        hook: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "3-4 tipos de gancho recomendados"
+        },
+        conflict: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "3-4 tipos de conflicto recomendados"
+        },
+        ending: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "3-4 tipos de final recomendados"
+        },
+        justificacion: {
+            type: Type.STRING,
+            description: "Breve explicación de por qué estas opciones funcionan juntas para este concepto"
+        }
+    },
+    required: ['outputFormat', 'narrativeStyle', 'visualStyle', 'narrativeStructure', 'hook', 'conflict', 'ending', 'justificacion']
 };
 
 const characterSchema = {
@@ -312,6 +359,7 @@ Responde en el formato JSON solicitado.`,
 };
 
 export const getStyleSuggestionPrompt = (concept: InitialConcept) => {
+    // This is the old function. The new smart selection function is below.
     return {
         contents: `Basándote en este concepto de historia, sugiere estilos y formatos apropiados.
 
@@ -326,6 +374,42 @@ Sugiere configuraciones de estilo que complementen esta historia. Selecciona var
             responseMimeType: 'application/json',
             responseSchema: styleSchema,
             temperature: 0.7
+        }
+    };
+};
+
+export const getStyleSelectionPrompt = (concept: InitialConcept) => {
+    return {
+        contents: `Eres un director creativo experto. Basándote en este concepto de historia, selecciona las opciones de estilo más apropiadas.
+
+**CONCEPTO DE LA HISTORIA:**
+- Idea: ${concept.idea}
+- Público objetivo: ${concept.targetAudience || 'General'}
+- Elementos clave: ${concept.keyElements?.join(', ') || 'No especificados'}
+
+**INSTRUCCIONES ESPECÍFICAS:**
+1. Selecciona EXACTAMENTE 3-4 opciones por categoría.
+2. Elige opciones que se complementen entre sí para crear una visión coherente.
+3. Prioriza la coherencia temática y visual.
+4. Considera el público objetivo y la plataforma más probable.
+5. Balancea entre opciones populares y creativas.
+
+**OPCIONES DISPONIBLES (USA ESTOS TEXTOS EXACTOS):**
+${JSON.stringify(STYLE_OPTIONS_COMPLETE, null, 2)}
+
+**IMPORTANTE:**
+- Responde SOLO con el JSON solicitado.
+- Usa los textos EXACTOS de las opciones disponibles.
+- No inventes opciones nuevas.
+- Mantén coherencia entre todas las categorías seleccionadas.
+
+Responde en formato JSON con la estructura solicitada.`,
+        config: {
+            systemInstruction: SYSTEM_INSTRUCTION_DIRECTOR,
+            responseMimeType: 'application/json',
+            responseSchema: styleSelectionSchema,
+            temperature: 0.7,
+            maxOutputTokens: 2048
         }
     };
 };

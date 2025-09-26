@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { 
     ExportedProject, InitialConcept, StyleAndFormat, CharacterDefinition, 
     StoryStructure, StoryMasterplan, PremiumStoryPlan, PremiumDocumentation,
-    EnhancedStoryData, StoryBuilderState, LogEntry,
+    EnhancedStoryData, StoryBuilderState, LogEntry, StyleSuggestions,
     ReferenceAsset, ReferenceAssets, StoryboardPanel, FinalAssets, ProgressUpdate, VideosOperationResponse
 } from '../components/story-builder/types';
 import { geminiService } from '../services/geminiService';
@@ -20,6 +20,7 @@ import { formatApiError } from '../utils/errorUtils';
 import { AgentOrchestrator } from '../services/specialized-agents/AgentOrchestrator';
 import { apiRateLimiter } from '../services/api-rate-limiter';
 import { safeParseWithDefaults } from '../utils/schemaValidation';
+import { STYLE_OPTIONS_COMPLETE } from '../utils/styleOptions';
 
 type Action =
     | { type: 'REINITIALIZE'; payload: ExportedProject }
@@ -40,7 +41,12 @@ type Action =
     | { type: 'SET_CURRENT_AGENT'; payload: string }
     | { type: 'SET_CACHE'; payload: { key: string; data: any } }
     | { type: 'UPDATE_PREMIUM_PLAN'; payload: PremiumStoryPlan }
-    | { type: 'ADD_LOG'; payload: Omit<LogEntry, 'id'> };
+    | { type: 'ADD_LOG'; payload: Omit<LogEntry, 'id'> }
+    // New actions for style suggestions
+    | { type: 'SET_SUGGESTING_STYLE'; payload: boolean }
+    | { type: 'SET_STYLE_SUGGESTIONS'; payload: StyleSuggestions }
+    | { type: 'UPDATE_STYLE'; payload: Partial<StyleAndFormat> }
+    | { type: 'CLEAR_STYLE_SUGGESTIONS' };
 
 
 const initialState: StoryBuilderState = {
@@ -74,6 +80,8 @@ const fullInitialState: StoryBuilderState & {
     processingCache: Map<string, any>; 
     logs: LogEntry[];
     isOptimizing: boolean;
+    isSuggestingStyle: boolean;
+    styleSuggestions: StyleSuggestions | null;
 } = {
     ...initialState,
     isLoading: false,
@@ -86,6 +94,8 @@ const fullInitialState: StoryBuilderState & {
     processingCache: new Map<string, any>(),
     logs: [],
     isOptimizing: false,
+    isSuggestingStyle: false,
+    styleSuggestions: null,
 };
 
 function storyBuilderReducer(
@@ -145,6 +155,16 @@ function storyBuilderReducer(
                 ...action.payload,
             };
             return { ...state, logs: [...state.logs, newLog] };
+        
+        // Style Suggestion Actions
+        case 'SET_SUGGESTING_STYLE':
+            return { ...state, isSuggestingStyle: action.payload, error: null };
+        case 'SET_STYLE_SUGGESTIONS':
+            return { ...state, styleSuggestions: action.payload, isSuggestingStyle: false };
+        case 'CLEAR_STYLE_SUGGESTIONS':
+            return { ...state, styleSuggestions: null };
+        case 'UPDATE_STYLE':
+            return { ...state, styleAndFormat: { ...state.styleAndFormat, ...action.payload } as StyleAndFormat };
 
         // Keep legacy types for compatibility, even if unused in new flow
         case 'UPDATE_ASSET_GENERATION_PROGRESS':
@@ -157,6 +177,32 @@ function storyBuilderReducer(
             return state;
     }
 }
+
+const validateStyleSuggestions = (suggestions: any): StyleSuggestions => {
+    const validated: Partial<StyleSuggestions> = {};
+    const allOptionsMap: Record<string, string[]> = {};
+
+    // Flatten all available options into a simple map for easy lookup
+    Object.entries(STYLE_OPTIONS_COMPLETE).forEach(([key, value]) => {
+        if (Array.isArray(value)) {
+            allOptionsMap[key] = value;
+        } else if (typeof value === 'object') {
+            allOptionsMap[key] = Object.values(value).flat();
+        }
+    });
+
+    // Validate each category from the AI's response
+    Object.keys(allOptionsMap).forEach(category => {
+        if (suggestions[category] && Array.isArray(suggestions[category])) {
+            (validated as any)[category] = suggestions[category].filter((option: string) => 
+                allOptionsMap[category]?.includes(option.trim())
+            );
+        }
+    });
+    
+    validated.justificacion = suggestions.justificacion || 'Selección basada en coherencia temática y visual.';
+    return validated as StyleSuggestions;
+};
 
 
 export const useStoryBuilderStateMachine = (existingProject?: ExportedProject) => {
@@ -232,6 +278,8 @@ export const useStoryBuilderStateMachine = (existingProject?: ExportedProject) =
             dispatch({ type: 'SET_STRUCTURE', payload: data });
             actions.runArtisticConstruction();
         },
+        updateStyle: (data: Partial<StyleAndFormat>) => dispatch({ type: 'UPDATE_STYLE', payload: data }),
+        clearStyleSuggestions: () => dispatch({ type: 'CLEAR_STYLE_SUGGESTIONS' }),
 
         runArtisticConstruction: async () => {
             const cacheKey = `artistic_${JSON.stringify({idea: state.initialConcept?.idea, structure: state.storyStructure?.act1_summary})}`;
@@ -365,14 +413,34 @@ export const useStoryBuilderStateMachine = (existingProject?: ExportedProject) =
                 dispatch({ type: 'API_ERROR', payload: userMessage });
             }
         },
-        suggestStyle: async () => {
-            if (!state.initialConcept) return;
-            await apiCall(
-                (model) => geminiService.generateContent(Prompts.getStyleSuggestionPrompt(state.initialConcept!), model),
-                (data) => ({ styleAndFormat: data }),
-                { isAssist: true }
-            );
+        
+        generateStyleSuggestions: async () => {
+            if (!state.initialConcept?.idea) {
+                dispatch({ type: 'API_ERROR', payload: 'Necesitas completar el concepto antes de generar sugerencias de estilo.' });
+                return;
+            }
+
+            dispatch({ type: 'SET_SUGGESTING_STYLE', payload: true });
+            
+            try {
+                const promptRequest = Prompts.getStyleSelectionPrompt(state.initialConcept);
+                const selectedModel = state.initialConcept?.selectedTextModel || 'gemini-2.5-flash';
+                
+                const response = await apiRateLimiter.addCall(() => geminiService.generateContent(promptRequest, selectedModel));
+                const suggestions = parseJsonMarkdown(response.text);
+                const validatedSuggestions = validateStyleSuggestions(suggestions);
+                
+                dispatch({ type: 'SET_STYLE_SUGGESTIONS', payload: validatedSuggestions });
+                logger.log('SUCCESS', 'StyleSuggestion', `Sugerencias de estilo generadas exitosamente.`);
+                
+            } catch (error) {
+                const errorMessage = formatApiError(error);
+                logger.log('ERROR', 'StyleSuggestion', `Error generando sugerencias de estilo: ${errorMessage}`);
+                dispatch({ type: 'API_ERROR', payload: `Error al generar sugerencias: ${errorMessage}` });
+                dispatch({ type: 'SET_SUGGESTING_STYLE', payload: false });
+            }
         },
+
         assistCharacter: async (characterId: string) => {
             const character = state.characters.find(c => c.id === characterId);
             if (!character || !state.initialConcept) return;
@@ -386,7 +454,6 @@ export const useStoryBuilderStateMachine = (existingProject?: ExportedProject) =
                 dispatch({ type: 'API_ERROR', payload: formatApiError(error) });
             }
         },
-// FIX: Implemented `generateCharacterCast` to call the Gemini API and add the generated characters to the state.
         generateCharacterCast: async () => {
             if (!state.initialConcept) return;
             dispatch({ type: 'API_ASSIST_CHAR_START', payload: 'new-cast' });
@@ -413,7 +480,6 @@ export const useStoryBuilderStateMachine = (existingProject?: ExportedProject) =
                 dispatch({ type: 'API_ERROR', payload: formatApiError(error) });
             }
         },
-// FIX: Implemented `assistStructure` to call the Gemini API for assistance with the story's three-act structure.
         assistStructure: async () => {
             if (!state.initialConcept || !state.styleAndFormat || state.characters.length === 0) return;
             await apiCall(

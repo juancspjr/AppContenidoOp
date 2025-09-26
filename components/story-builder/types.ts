@@ -355,6 +355,16 @@ export interface LogEntry {
     details?: any;
 }
 
+export interface StyleSuggestions {
+    outputFormat?: string[];
+    narrativeStyle?: string[];
+    visualStyle?: string[];
+    narrativeStructure?: string[];
+    hook?: string[];
+    conflict?: string[];
+    ending?: string[];
+    justificacion?: string;
+}
 
 export type StoryBuilderState = Omit<ExportedProject, 'plan'> & {
     // Additional runtime state properties not saved in the project file
@@ -368,6 +378,8 @@ export type StoryBuilderState = Omit<ExportedProject, 'plan'> & {
     processingCache?: Map<string, any>;
     logs?: LogEntry[];
     isOptimizing?: boolean;
+    isSuggestingStyle?: boolean;
+    styleSuggestions?: StyleSuggestions | null;
 };
 
 

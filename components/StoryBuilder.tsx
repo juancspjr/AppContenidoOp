@@ -42,49 +42,59 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ existingProject, onExit }) 
             case 1:
                 return <Phase1_Concept onComplete={actions.setConcept} initialData={state.initialConcept} onAssist={actions.assistConcept} isAssisting={state.isAssisting} />;
             case 2:
-                return <Phase2_Style onComplete={actions.setStyle} initialData={state.styleAndFormat} onBack={() => actions.goToPhase(1)} onSuggest={actions.suggestStyle} isSuggesting={state.isAssisting} error={state.error} />;
+                return <Phase2_Style 
+                            onComplete={actions.setStyle} 
+                            initialData={state.styleAndFormat} 
+                            onBack={() => actions.goToPhase(1)} 
+                            onSuggest={actions.generateStyleSuggestions} 
+                            isSuggesting={state.isSuggestingStyle ?? false} 
+                            error={state.error}
+                            suggestions={state.styleSuggestions ?? null}
+                            onUpdateStyle={actions.updateStyle}
+                            onClearSuggestions={actions.clearStyleSuggestions}
+                        />;
             case 3:
-                return <Phase3_Characters onComplete={actions.setCharacters} initialData={state.characters} onBack={() => actions.goToPhase(2)} onAssistCharacter={actions.assistCharacter} onGenerateCharacterCast={actions.generateCharacterCast} assistingCharacterIds={state.assistingCharacterIds} />;
+                return <Phase3_Characters onComplete={actions.setCharacters} initialData={state.characters} onBack={() => actions.goToPhase(2)} onAssistCharacter={actions.assistCharacter} onGenerateCharacterCast={actions.generateCharacterCast} assistingCharacterIds={state.assistingCharacterIds ?? new Set()} />;
             case 4:
-                return <Phase4_Structure onComplete={actions.setStructure} initialData={state.storyStructure} onBack={() => actions.goToPhase(3)} onAssist={actions.assistStructure} isAssisting={state.isAssisting} />;
+                return <Phase4_Structure onComplete={actions.setStructure} initialData={state.storyStructure} onBack={() => actions.goToPhase(3)} onAssist={actions.assistStructure} isAssisting={state.isAssisting ?? false} />;
 
             // --- NEW PREMIUM ARTISTIC FLOW ---
             case 4.5:
                 return <Phase4_5_ArtisticConstruction 
-                            enhancedData={state.enhancedData}
+                            enhancedData={state.enhancedData ?? null}
                             onComplete={actions.generatePremiumPlan} 
                             onBack={() => actions.goToPhase(4)}
-                            isProcessing={state.isLoading}
-                            currentAgent={state.currentAgent}
-                            progress={state.agentProgress}
+                            isProcessing={state.isLoading ?? false}
+                            currentAgent={state.currentAgent ?? ''}
+                            progress={state.agentProgress ?? []}
                         />;
             case 5:
                  return <Phase5_PremiumPlan
-                            premiumPlan={state.premiumPlan}
-                            isGenerating={state.isLoading}
-                            error={state.error}
+                            premiumPlan={state.premiumPlan ?? null}
+                            isGenerating={state.isLoading ?? false}
+                            error={state.error ?? null}
                             onGenerate={actions.generatePremiumPlan}
-                            onComplete={actions.generatePremiumDocs}
+                            onComplete={() => actions.generatePremiumDocs()}
                             onBack={() => actions.goToPhase(4.5)}
-                            isOptimizing={state.isOptimizing}
+                            isOptimizing={state.isOptimizing ?? false}
                             onUpdatePlan={actions.updatePremiumPlan}
                         />;
             case 6.1:
                 return <Phase6_1_PremiumDocumentation 
-                            premiumDocumentation={state.premiumDocumentation}
-                            isGenerating={state.isLoading}
-                            error={state.error}
+                            premiumDocumentation={state.premiumDocumentation ?? null}
+                            isGenerating={state.isLoading ?? false}
+                            error={state.error ?? null}
                             onGenerate={actions.generatePremiumDocs}
                             onGenerateSpecific={actions.generateSpecificDocument}
                             onComplete={actions.runFinalEvaluation}
                             onBack={() => actions.goToPhase(5)}
-                            logs={state.logs}
+                            logs={state.logs ?? []}
                         />;
             case 6.2:
                  return <Phase6_2_FinalEvaluation
                             premiumDocumentation={state.premiumDocumentation!}
-                            finalEvaluation={state.finalEvaluation}
-                            isEvaluating={state.isLoading}
+                            finalEvaluation={state.finalEvaluation ?? null}
+                            isEvaluating={state.isLoading ?? false}
                             onEvaluate={actions.runFinalEvaluation}
                             onComplete={() => actions.goToPhase(6.3)}
                             onBack={() => actions.goToPhase(6.1)}
@@ -92,9 +102,9 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ existingProject, onExit }) 
             
             // --- Final Asset Generation (Unchanged) ---
             case 6.3:
-                 return <Phase6_Storyboard isLoading={state.isLoading} characterAssets={state.referenceAssets?.characters || null} storyboardAssets={state.storyboardAssets} error={state.error} storyPlan={state.storyPlan} onGenerateCharacters={actions.generateCharacterReferences} onGenerateStoryboard={actions.generateStoryboard} onRegeneratePanel={actions.regenerateStoryboardPanel} onContinue={() => actions.goToPhase(6.4)} />;
+                 return <Phase6_Storyboard isLoading={state.isLoading ?? false} characterAssets={state.referenceAssets?.characters || null} storyboardAssets={state.storyboardAssets} error={state.error} storyPlan={state.storyPlan} onGenerateCharacters={actions.generateCharacterReferences} onGenerateStoryboard={actions.generateStoryboard} onRegeneratePanel={actions.regenerateStoryboardPanel} onContinue={() => actions.goToPhase(6.4)} />;
             case 6.4:
-                 return <AssetGenerationView isLoading={state.isLoading} progress={state.progress} assets={state.finalAssets} storyboardAssets={state.storyboardAssets} error={state.error} storyPlan={state.storyPlan} onGenerate={actions.generateFinalAssets} onGoToPhase={actions.goToPhase} onExit={onExit} />;
+                 return <AssetGenerationView isLoading={state.isLoading ?? false} progress={state.progress ?? {}} assets={state.finalAssets} storyboardAssets={state.storyboardAssets} error={state.error} storyPlan={state.storyPlan} onGenerate={actions.generateFinalAssets} onGoToPhase={actions.goToPhase} onExit={onExit} />;
             
             default:
                 return <div>Fase desconocida: {state.phase}</div>;
