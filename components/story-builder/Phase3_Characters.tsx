@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import React, { useState, useEffect, useRef } from 'react';
-// FIX: Correctly import all necessary types for character definition.
 import type { CharacterDefinition, CharacterMotivation, CharacterRelationship, CharacterRole } from './types';
 import { SparkleIcon, UploadIcon, XCircleIcon } from '../icons';
 import { assetDBService } from '../../services/assetDBService';
@@ -34,14 +33,12 @@ const CharacterEditor: React.FC<{
     useEffect(() => {
         let objectUrl: string | null = null;
         const loadImage = async () => {
-            // FIX: Correctly access the `imageAssetId` property from the character object.
             if (editedChar.imageAssetId) {
                 const blob = await assetDBService.loadAsset(editedChar.imageAssetId);
                 if (blob) {
                     objectUrl = URL.createObjectURL(blob);
                     setImageUrl(objectUrl);
                 }
-            // FIX: Correctly access the `imageFile` property from the character object.
             } else if (editedChar.imageFile) {
                 objectUrl = URL.createObjectURL(editedChar.imageFile);
                 setImageUrl(objectUrl);
@@ -60,7 +57,6 @@ const CharacterEditor: React.FC<{
             const motivationField = field.split('.')[1] as keyof CharacterMotivation;
             setEditedChar(prev => ({
                 ...prev,
-                // FIX: Correctly access the `motivation` property from the character object.
                 motivation: { ...prev.motivation, [motivationField]: value }
             }));
         } else {
@@ -72,7 +68,6 @@ const CharacterEditor: React.FC<{
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            // FIX: Correctly access the `id` property from the character object.
             const assetId = `char_img_${editedChar.id}`;
             await assetDBService.saveAsset(assetId, file);
             setEditedChar(prev => ({ ...prev, imageFile: file, imageAssetId: assetId, imageUrl: '' }));
@@ -98,7 +93,6 @@ const CharacterEditor: React.FC<{
                         <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
                     </div>
                     {/* Form Fields */}
-                    {/* FIX: Correctly access properties on the `editedChar` object. */}
                     <input type="text" value={editedChar.name} onChange={e => handleChange('name', e.target.value)} placeholder="Nombre" className="w-full bg-gray-900 p-2 rounded" />
                     <select value={editedChar.role} onChange={e => handleChange('role', e.target.value as CharacterRole)} className="w-full bg-gray-900 p-2 rounded">
                         {characterRoles.map(r => <option key={r.name} value={r.name} title={r.description}>{r.name}</option>)}
@@ -146,10 +140,8 @@ const Phase3_Characters: React.FC<Phase3_CharactersProps> = ({ onComplete, initi
 
     const handleUpdateCharacter = (updatedCharacter: CharacterDefinition) => {
         setCharacters(prev => {
-            // FIX: Correctly access the `id` property from the character object.
             const exists = prev.some(c => c.id === updatedCharacter.id);
             if (exists) {
-                // FIX: Correctly access the `id` property from the character object.
                 return prev.map(c => c.id === updatedCharacter.id ? updatedCharacter : c);
             }
             return [...prev, updatedCharacter];
@@ -169,23 +161,18 @@ const Phase3_Characters: React.FC<Phase3_CharactersProps> = ({ onComplete, initi
 
             <div className="space-y-4">
                 {characters.map(char => {
-                    // FIX: Correctly access the `id` property from the character object.
                     const isAssisting = assistingCharacterIds.has(char.id);
                     return (
-                        // FIX: Correctly access the `id` property from the character object.
                         <div key={char.id} className="bg-gray-900/50 p-3 rounded-lg border border-gray-700 flex items-center gap-4">
                             <div className="flex-grow overflow-hidden">
-                                {/* FIX: Correctly access properties on the `char` object. */}
                                 <h4 className="font-bold text-gray-200 truncate">{char.name} <span className="text-sm font-normal text-gray-400">({char.role})</span></h4>
                                 <p className="text-xs text-gray-400 truncate">{char.description}</p>
                             </div>
-                            {/* FIX: Correctly access the `id` property from the character object. */}
                             <button onClick={() => onAssistCharacter(char.id)} disabled={isAssisting} className="flex items-center gap-1 text-xs bg-yellow-600 text-white px-2 py-1 rounded hover:bg-yellow-500 disabled:bg-yellow-800">
                                 {isAssisting ? <Spinner className="w-4 h-4" /> : <SparkleIcon className="w-4 h-4" />}
                                 Asistir
                             </button>
                             <button onClick={() => setEditingCharacter(char)} className="text-xs bg-blue-600 px-3 py-1 rounded hover:bg-blue-500">Editar</button>
-                            {/* FIX: Correctly access the `id` property from the character object. */}
                             <button onClick={() => handleDeleteCharacter(char.id)} className="text-red-400 hover:text-red-300"><XCircleIcon className="w-6 h-6" /></button>
                         </div>
                     );

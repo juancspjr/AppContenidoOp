@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import React, { useState } from 'react';
+// FIX: Corrected import path for useStoryBuilderStateMachine to be relative.
 import { useStoryBuilderStateMachine } from '../hooks/useStoryBuilderStateMachine';
 import type { ExportedProject } from './story-builder/types';
 
@@ -12,10 +13,14 @@ import Phase1_Concept from './story-builder/Phase1_Concept';
 import Phase2_Style from './story-builder/Phase2_Style';
 import Phase3_Characters from './story-builder/Phase3_Characters';
 import Phase4_Structure from './story-builder/Phase4_Structure';
+
+// New Premium Flow Components
 import Phase4_5_ArtisticConstruction from './story-builder/Phase4_5_ArtisticConstruction';
 import Phase5_PremiumPlan from './story-builder/Phase5_PremiumPlan';
 import Phase6_1_PremiumDocumentation from './story-builder/Phase6_1_PremiumDocumentation';
 import Phase6_2_FinalEvaluation from './story-builder/Phase6_2_FinalEvaluation';
+
+// Final Asset Generation Components (Unchanged)
 import Phase6_Storyboard from './story-builder/Phase6_Storyboard';
 import AssetGenerationView from './story-builder/AssetGenerationView';
 
@@ -32,86 +37,68 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ existingProject, onExit }) 
     const [isLogVisible, setIsLogVisible] = useState(false);
 
     const renderCurrentPhase = () => {
-        // FIX: Correctly access properties from the state object.
         switch (state.phase) {
+            // --- Initial Setup Phases (Unchanged) ---
             case 1:
-                return <Phase1_Concept onComplete={actions.setConcept} initialData={state.initialConcept} onAssist={actions.assistConcept} isAssisting={state.isAssisting ?? false} />;
+                return <Phase1_Concept onComplete={actions.setConcept} initialData={state.initialConcept} onAssist={actions.assistConcept} isAssisting={state.isAssisting} />;
             case 2:
-                return <Phase2_Style 
-                            onComplete={actions.setStyle} 
-                            // FIX: Correctly access properties from the state object.
-                            initialData={state.styleAndFormat} 
-                            onBack={() => actions.goToPhase(1)} 
-                            onSuggest={actions.generateStyleSuggestions} 
-                            isSuggesting={state.isSuggestingStyle ?? false} 
-                            error={state.error}
-                            suggestions={state.styleSuggestions ?? null}
-                            onUpdateStyle={actions.updateStyle}
-                            onClearSuggestions={actions.clearStyleSuggestions}
-                        />;
+                return <Phase2_Style onComplete={actions.setStyle} initialData={state.styleAndFormat} onBack={() => actions.goToPhase(1)} onSuggest={actions.suggestStyle} isSuggesting={state.isAssisting} error={state.error} />;
             case 3:
-                // FIX: Correctly access properties from the state object.
-                return <Phase3_Characters onComplete={actions.setCharacters} initialData={state.characters} onBack={() => actions.goToPhase(2)} onAssistCharacter={actions.assistCharacter} onGenerateCharacterCast={actions.generateCharacterCast} assistingCharacterIds={state.assistingCharacterIds ?? new Set()} />;
+                return <Phase3_Characters onComplete={actions.setCharacters} initialData={state.characters} onBack={() => actions.goToPhase(2)} onAssistCharacter={actions.assistCharacter} onGenerateCharacterCast={actions.generateCharacterCast} assistingCharacterIds={state.assistingCharacterIds} />;
             case 4:
-                // FIX: Correctly access properties from the state object.
-                return <Phase4_Structure onComplete={actions.setStructure} initialData={state.storyStructure} onBack={() => actions.goToPhase(3)} onAssist={actions.assistStructure} isAssisting={state.isAssisting ?? false} />;
+                return <Phase4_Structure onComplete={actions.setStructure} initialData={state.storyStructure} onBack={() => actions.goToPhase(3)} onAssist={actions.assistStructure} isAssisting={state.isAssisting} />;
+
+            // --- NEW PREMIUM ARTISTIC FLOW ---
             case 4.5:
+                // FIX: Pass 'enhancedData' prop and remove props not defined in the component's interface.
                 return <Phase4_5_ArtisticConstruction 
-                            onComplete={() => actions.goToPhase(5)} 
+                            enhancedData={state.enhancedData}
+                            onComplete={() => {
+                                actions.generatePremiumPlan();
+                            }} 
                             onBack={() => actions.goToPhase(4)}
-                            isProcessing={state.isLoading ?? false}
-                            currentAgent={state.currentAgent ?? ''}
-                            agentProgress={state.agentProgress ?? []}
-                            // FIX: Correctly access properties from the state object.
-                            enhancedData={state.enhancedData ?? null}
-                            onStartProcessing={actions.runArtisticConstruction}
-                            onReprocess={actions.runArtisticConstruction}
-                            logs={state.logs ?? []}
+                            isProcessing={state.isLoading}
+                            currentAgent={state.currentAgent}
+                            progress={state.agentProgress}
                         />;
             case 5:
+                 // FIX: Pass missing `isOptimizing` and `onUpdatePlan` props. Correct `onComplete` to match type signature.
                  return <Phase5_PremiumPlan
-                            // FIX: Correctly access properties from the state object.
-                            premiumPlan={state.premiumPlan ?? null}
-                            isGenerating={state.isLoading ?? false}
-                            error={state.error ?? null}
+                            premiumPlan={state.premiumPlan}
+                            isGenerating={state.isLoading}
+                            error={state.error}
                             onGenerate={actions.generatePremiumPlan}
-                            onComplete={() => actions.goToPhase(6.1)}
+                            onComplete={(finalPlan) => actions.generatePremiumDocs()}
                             onBack={() => actions.goToPhase(4.5)}
-                            isOptimizing={state.isOptimizing ?? false}
+                            isOptimizing={state.isOptimizing}
                             onUpdatePlan={actions.updatePremiumPlan}
                         />;
             case 6.1:
                 return <Phase6_1_PremiumDocumentation 
-                            // FIX: Correctly access properties from the state object.
-                            premiumDocumentation={state.premiumDocumentation ?? null}
-                            isGenerating={state.isLoading ?? false}
-                            error={state.error ?? null}
+                            premiumDocumentation={state.premiumDocumentation}
+                            isGenerating={state.isLoading}
+                            error={state.error}
                             onGenerate={actions.generatePremiumDocs}
-                            onGenerateSpecific={actions.generateSpecificDocument}
-                            onComplete={() => actions.goToPhase(6.2)}
+                            onComplete={actions.runFinalEvaluation}
                             onBack={() => actions.goToPhase(5)}
-                            logs={state.logs ?? []}
                         />;
             case 6.2:
                  return <Phase6_2_FinalEvaluation
-                            // FIX: Correctly access properties from the state object.
                             premiumDocumentation={state.premiumDocumentation!}
-                            // FIX: Correctly access properties from the state object.
-                            finalEvaluation={state.finalEvaluation ?? null}
-                            isEvaluating={state.isLoading ?? false}
+                            finalEvaluation={state.finalEvaluation}
+                            isEvaluating={state.isLoading}
                             onEvaluate={actions.runFinalEvaluation}
                             onComplete={() => actions.goToPhase(6.3)}
                             onBack={() => actions.goToPhase(6.1)}
                         />;
+            
+            // --- Final Asset Generation (Unchanged) ---
             case 6.3:
-                 // FIX: Correctly access properties from the state object.
-                 return <Phase6_Storyboard isLoading={state.isLoading ?? false} characterAssets={state.referenceAssets?.characters || null} storyboardAssets={state.storyboardAssets} error={state.error} storyPlan={state.storyPlan} onGenerateCharacters={actions.generateCharacterReferences} onGenerateStoryboard={actions.generateStoryboard} onRegeneratePanel={actions.regenerateStoryboardPanel} onContinue={() => actions.goToPhase(6.4)} />;
+                 return <Phase6_Storyboard isLoading={state.isLoading} characterAssets={state.referenceAssets?.characters || null} storyboardAssets={state.storyboardAssets} error={state.error} storyPlan={state.storyPlan} onGenerateCharacters={actions.generateCharacterReferences} onGenerateStoryboard={actions.generateStoryboard} onRegeneratePanel={actions.regenerateStoryboardPanel} onContinue={() => actions.goToPhase(6.4)} />;
             case 6.4:
-                 // FIX: Correctly access properties from the state object.
-                 return <AssetGenerationView isLoading={state.isLoading ?? false} progress={state.progress ?? {}} assets={state.finalAssets} storyboardAssets={state.storyboardAssets} error={state.error} storyPlan={state.storyPlan} onGenerate={actions.generateFinalAssets} onGoToPhase={actions.goToPhase} onExit={onExit} />;
+                 return <AssetGenerationView isLoading={state.isLoading} progress={state.progress} assets={state.finalAssets} storyboardAssets={state.storyboardAssets} error={state.error} storyPlan={state.storyPlan} onGenerate={actions.generateFinalAssets} onGoToPhase={actions.goToPhase} onExit={onExit} />;
             
             default:
-                // FIX: Correctly access properties from the state object.
                 return <div>Fase desconocida: {state.phase}</div>;
         }
     };
@@ -126,7 +113,6 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ existingProject, onExit }) 
                         </button>
                     </div>
                     <div className="flex-grow">
-                        {/* FIX: Correctly access properties from the state object. */}
                         <PhaseStepper currentPhase={state.phase} onPhaseClick={actions.goToPhase} />
                     </div>
                     <button onClick={onExit} className="ml-4 text-gray-400 hover:text-white transition-colors">

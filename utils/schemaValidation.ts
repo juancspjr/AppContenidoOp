@@ -4,7 +4,6 @@
 */
 import { z } from 'zod';
 import type { 
-    // FIX: Correctly import all necessary types.
     StructuralCoherenceReport, CoherenceCheckStep, StoryMasterplan, 
     Critique, CharacterDefinition, Act, Scene,
     ReferenceAsset

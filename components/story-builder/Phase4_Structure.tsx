@@ -32,7 +32,6 @@ const Phase4_Structure: React.FC<Phase4_StructureProps> = ({ onComplete, initial
         setStructure(prev => ({ ...prev, [act]: value }));
     };
 
-    // FIX: Correctly check properties on the `structure` object.
     const canProceed = structure.act1_summary && structure.act2_summary && structure.act3_summary;
 
     return (
@@ -59,7 +58,6 @@ const Phase4_Structure: React.FC<Phase4_StructureProps> = ({ onComplete, initial
                     <textarea
                         id="act1"
                         rows={5}
-                        // FIX: Correctly access the `act1_summary` property.
                         value={structure.act1_summary || ''}
                         onChange={e => handleChange('act1_summary', e.target.value)}
                         className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-gray-200 focus:ring-2 focus:ring-blue-500"
@@ -71,7 +69,6 @@ const Phase4_Structure: React.FC<Phase4_StructureProps> = ({ onComplete, initial
                     <textarea
                         id="act2"
                         rows={7}
-                        // FIX: Correctly access the `act2_summary` property.
                         value={structure.act2_summary || ''}
                         onChange={e => handleChange('act2_summary', e.target.value)}
                         className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-gray-200 focus:ring-2 focus:ring-blue-500"
@@ -83,7 +80,6 @@ const Phase4_Structure: React.FC<Phase4_StructureProps> = ({ onComplete, initial
                     <textarea
                         id="act3"
                         rows={5}
-                        // FIX: Correctly access the `act3_summary` property.
                         value={structure.act3_summary || ''}
                         onChange={e => handleChange('act3_summary', e.target.value)}
                         className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-gray-200 focus:ring-2 focus:ring-blue-500"

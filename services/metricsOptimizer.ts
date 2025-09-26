@@ -19,7 +19,6 @@ export const analyzeMetricsAndSuggestImprovements = async (storyPlan: PremiumSto
   
   CURRENT STORY PLAN:
   ${JSON.stringify({
-// FIX: Correctly access properties from the `storyPlan` object.
     metadata: storyPlan.metadata,
     creative_brief: storyPlan.creative_brief,
     characters: storyPlan.characters.map(c => c.name),

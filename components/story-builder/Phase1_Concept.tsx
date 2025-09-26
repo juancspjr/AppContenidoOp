@@ -32,7 +32,6 @@ const imageModels = [
 
 
 const Phase1_Concept: React.FC<Phase1_ConceptProps> = ({ onComplete, initialData, onAssist, isAssisting }) => {
-    // FIX: Correctly access properties on the InitialConcept type.
     const [idea, setIdea] = useState(initialData?.idea || '');
     const [targetAudience, setTargetAudience] = useState(initialData?.targetAudience || '');
     const [keyElements, setKeyElements] = useState(initialData?.keyElements?.join(', ') || '');
@@ -42,7 +41,6 @@ const Phase1_Concept: React.FC<Phase1_ConceptProps> = ({ onComplete, initialData
 
     useEffect(() => {
         if (initialData) {
-            // FIX: Correctly access properties on the InitialConcept type.
             setIdea(initialData.idea || '');
             setTargetAudience(initialData.targetAudience || '');
             setKeyElements(initialData.keyElements?.join(', ') || '');

@@ -75,15 +75,14 @@ class ProjectPersistenceService {
             
             // 2. Collect all asset IDs from the project
             const assetIds = new Set<string>();
-            // FIX: Correctly access properties on the `ExportedProject` type.
             project.characters?.forEach(c => {
                 if (c.imageAssetId) assetIds.add(c.imageAssetId);
             });
-            project.referenceAssets?.characters?.forEach(a => assetIds.add(a.assetId));
-            project.referenceAssets?.environments?.forEach(a => assetIds.add(a.assetId));
-            project.referenceAssets?.elements?.forEach(a => assetIds.add(a.assetId));
-            project.storyboardAssets?.forEach(a => assetIds.add(a.assetId));
-            project.finalAssets?.assets?.forEach(a => assetIds.add(a.assetId));
+            project.referenceAssets?.characters.forEach(a => assetIds.add(a.assetId));
+            project.referenceAssets?.environments.forEach(a => assetIds.add(a.assetId));
+            project.referenceAssets?.elements.forEach(a => assetIds.add(a.assetId));
+            project.referenceAssets?.sceneFrames.forEach(a => assetIds.add(a.assetId));
+            project.finalAssets?.assets.forEach(a => assetIds.add(a.assetId));
             
             if (assetIds.size > 0) {
                 alert(`El proyecto se descargará como un archivo 'project.json'. A continuación, se descargarán ${assetIds.size} archivos de activos multimedia. Por favor, permite las descargas múltiples en tu navegador.`);
