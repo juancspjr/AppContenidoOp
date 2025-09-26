@@ -6,6 +6,8 @@ import React, { useEffect, useState } from 'react';
 import type { StructuralCoherenceReport, CoherenceCheckStep } from './types';
 import Spinner from '../Spinner';
 import { SparkleIcon } from '../icons';
+import { safeMap } from '../../utils/safeData';
+import { isCheck, isProgressStep } from '../../utils/schemaValidation';
 
 interface Phase4_CoherenceCheckProps {
     onComplete: () => void;
@@ -50,7 +52,7 @@ const Phase4_CoherenceCheck: React.FC<Phase4_CoherenceCheckProps> = ({
 
     const handleApplyClick = () => {
         if (report && selectedChecks.size > 0) {
-            const suggestionsToApply = report.checks.filter(c => selectedChecks.has(c.id));
+            const suggestionsToApply = report.checks.filter(c => c && selectedChecks.has(c.id));
             onApplySuggestions(suggestionsToApply);
         }
     };
@@ -101,13 +103,13 @@ const Phase4_CoherenceCheck: React.FC<Phase4_CoherenceCheckProps> = ({
                 </p>
                 {isChecking && !isApplyingSuggestions && (
                     <div className="mt-4 text-left max-w-md mx-auto space-y-2">
-                        {progress?.map(step => (
+                        {safeMap(progress, (step: CoherenceCheckStep) => (
                             <div key={step.id} className={`flex items-center gap-3 p-2 rounded-lg ${step.status === 'running' ? 'bg-blue-900/50' : 'bg-gray-900/50'}`}>
                                <div className="w-5 h-5 flex items-center justify-center">{getStatusIcon(step.status)}</div>
                                <span>{step.label}</span>
                                {step.result && <span className="ml-auto text-sm text-gray-300">{step.result}</span>}
                             </div>
-                        ))}
+                        ), { guard: isProgressStep })}
                     </div>
                 )}
             </div>
@@ -128,7 +130,7 @@ const Phase4_CoherenceCheck: React.FC<Phase4_CoherenceCheckProps> = ({
             </div>
             
             <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                {(report.checks || []).map(item => (
+                {safeMap(report.checks, (item: StructuralCoherenceReport['checks'][0]) => (
                     <div key={item.id} className={`bg-gray-800/80 p-3 rounded-lg border-l-4 flex items-start gap-3 ${getSeverityClass(item.severity)}`}>
                         <input
                             type="checkbox"
@@ -143,7 +145,7 @@ const Phase4_CoherenceCheck: React.FC<Phase4_CoherenceCheckProps> = ({
                             <p className="text-sm text-green-400"><strong>Sugerencia:</strong> {item.suggestion}</p>
                         </label>
                     </div>
-                ))}
+                ), { guard: isCheck })}
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-gray-700">

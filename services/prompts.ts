@@ -197,10 +197,14 @@ const storyPlanSchema = {
     },
     required: ['metadata', 'creative_brief', 'characters', 'story_structure']
 };
+
 const critiqueSchema = {
     type: Type.OBJECT,
     properties: {
-        narrativeStrengths: {
+        narrative_score: { type: Type.NUMBER, description: "Score for narrative quality (0-100)." },
+        viral_score: { type: Type.NUMBER, description: "Score for viral potential (0-100)." },
+        integrated_score: { type: Type.NUMBER, description: "Weighted average score." },
+        strengths: {
             type: Type.ARRAY,
             items: { type: Type.STRING },
             description: "A list of key strengths in the narrative."
@@ -218,12 +222,17 @@ const critiqueSchema = {
             },
             description: "A list of weaknesses and corresponding suggestions."
         },
-        improvementStrategies: {
+        viral_moments: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "Specific moments in the story with high viral potential."
+        },
+        improvement_strategies: {
             type: Type.ARRAY,
             items: {
                 type: Type.OBJECT,
                 properties: {
-                    id: { type: Type.STRING, description: "A unique ID for the strategy, e.g., 'enhance_character_motivation'."},
+                    id: { type: Type.STRING, description: "A unique ID for the strategy, e.g., 'enhance_character_motivation'." },
                     title: { type: Type.STRING, description: "The title of the improvement strategy." },
                     description: { type: Type.STRING, description: "A detailed description of the strategy." },
                 },
@@ -231,24 +240,10 @@ const critiqueSchema = {
             },
             description: "A list of high-level strategies to improve the story."
         },
-        viralPotential: {
-            type: Type.NUMBER,
-            description: "An estimated score from 0.0 to 10.0 for the story's viral potential."
-        },
-        enrichedElements: {
-            type: Type.OBJECT,
-            properties: {
-                characters: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Suggestions for enriching characters." },
-                actions: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Suggestions for enriching actions/scenes." },
-                environments: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Suggestions for enriching environments." },
-                narratives: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Suggestions for enriching the narrative." },
-                visuals: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Suggestions for enriching the visuals." },
-                technicals: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Suggestions for technical improvements." },
-            },
-        }
     },
-    required: ['narrativeStrengths', 'weaknesses', 'improvementStrategies', 'viralPotential', 'enrichedElements']
+    required: ['narrative_score', 'viral_score', 'integrated_score', 'strengths', 'weaknesses', 'viral_moments', 'improvement_strategies']
 };
+
 
 const improvementStrategiesSchema = {
     type: Type.OBJECT,
@@ -267,15 +262,6 @@ const improvementStrategiesSchema = {
         }
     },
     required: ['improvementStrategies']
-};
-
-const hookTemplateSchema = {
-    type: Type.OBJECT,
-    properties: {
-        template: { type: Type.STRING },
-        rationale: { type: Type.STRING }
-    },
-    required: ['template', 'rationale']
 };
 
 const characterMasterPromptSchema = {
@@ -383,7 +369,7 @@ const aiProductionGuideSchema = {
 };
 
 
-const documentationDossierSchema = {
+const enhancedDocumentationDossierSchema = {
     type: Type.OBJECT,
     properties: {
         storyPlan: { ...storyPlanSchema, description: "The fully rewritten and improved story masterplan." },
@@ -399,19 +385,8 @@ const documentationDossierSchema = {
             },
              required: ['readme', 'aiProductionGuide', 'directorsBible', 'visualStyleGuide', 'narrativeStory', 'literaryScript']
         },
-        hookMatrix: {
-            type: Type.OBJECT,
-            properties: {
-                patternInterrupts: { type: Type.ARRAY, items: hookTemplateSchema },
-                psychologicalTriggers: { type: Type.ARRAY, items: hookTemplateSchema },
-                curiosityGaps: { type: Type.ARRAY, items: hookTemplateSchema },
-                powerPhrases: { type: Type.ARRAY, items: hookTemplateSchema },
-                provenStructures: { type: Type.ARRAY, items: hookTemplateSchema },
-            },
-            required: ['patternInterrupts', 'psychologicalTriggers', 'curiosityGaps', 'powerPhrases', 'provenStructures']
-        }
     },
-    required: ['storyPlan', 'documentation', 'hookMatrix']
+    required: ['storyPlan', 'documentation']
 };
 
 
@@ -578,14 +553,33 @@ export const getStoryPlanGenerationPrompt = (state: StoryBuilderState) => {
     };
 };
 
-export const getCritiquePrompt = (storyPlan: StoryMasterplan, refined: boolean = false, userSelections?: {strategies: Critique['improvementStrategies'], notes?: string}) => {
+export const getCritiquePrompt = (storyPlan: StoryMasterplan, refined: boolean = false, userSelections?: {strategies: Critique['improvement_strategies'], notes?: string}) => {
     const context = refined && userSelections ? `
 This is a REFINEMENT round (Reporte β). The user has reviewed the initial critique and provided the following feedback.
 - **Selected Strategies to Implement:** ${JSON.stringify(userSelections.strategies)}
 - **Additional Director's Notes:** "${userSelections.notes || 'No additional notes.'}"
 
 Your task is to generate a new, more focused critique that incorporates this feedback, potentially adjusting the viral score and offering more targeted improvement strategies.
-` : `This is the initial analysis round (Reporte α). Provide a comprehensive first-pass critique. Assign a severity ('Minor', 'Moderate', or 'High') to each weakness identified. First, stream a series of progress updates as JSON objects, one per line, like {"progress": [{"id": "1", "label": "Analyzing Strengths", "status": "running"}]}. After all updates, provide the final, complete critique in the specified JSON format on a new line.`;
+` : `
+EVALUACIÓN INTEGRAL: NARRATIVA + VIRAL FUSIONADA
+
+CRITERIOS DE EVALUACIÓN BALANCEADOS:
+1. NARRATIVA (60% peso):
+   - Coherencia estructural
+   - Desarrollo de personajes  
+   - Arco emocional
+   - Calidad artística
+   
+2. VIRAL (40% peso):
+   - Potencial de engagement
+   - Ganchos naturales en la historia
+   - Shareability por plataforma
+   - Momentos virales identificados
+
+GENERA EVALUACIÓN ÚNICA QUE BALANCEA AMBOS ASPECTOS.
+La historia debe ser artísticamente sólida Y viralmente optimizada.
+First, stream a series of progress updates as JSON objects, one per line, like {"progress": [{"id": "1", "label": "Analyzing Strengths", "status": "running"}]}. After all updates, provide the final, complete critique in the specified JSON format on a new line.
+`;
 
     const { critique, ...planToAnalyze } = storyPlan;
 
@@ -638,25 +632,40 @@ Generate a list of 3-5 highly specific and actionable "improvementStrategies" fo
 });
 
 export const getDocumentationDossierPrompt = (storyPlan: StoryMasterplan) => ({
-    contents: `You are a professional production house team (like SIERRA or Hondo Studio). Your task is to generate a complete production dossier based on the approved story masterplan.
+  contents: `You are a professional production house team (like SIERRA or Hondo Studio). Your task is to generate a complete production dossier based on the approved story masterplan.
+
+**CRITICAL**: This documentation must integrate VIRAL OPTIMIZATION throughout all documents.
 
 **Approved Story Masterplan:**
 ${JSON.stringify(storyPlan)}
 
 **YOUR MISSION:**
-1.  **Generate Professional Documentation:** Create the following production documents with the quality of a master like Nabokov or Borges. For each document, provide the content first in Spanish (ES), then an English (EN) translation. Art direction (lighting, color, camera) should be naturally embedded within the narrative and script.
-    - \`readme\`: A master README.md file in Markdown, following the user's specified artistic structure.
-    - \`narrativeStory\`: A full, literary-quality narrative or tale with integrated visual references.
-    - \`literaryScript\`: A professional script with scenes, dialogue, and action, in proper screenplay format with embedded visual direction.
-    - \`directorsBible\`, \`visualStyleGuide\`: Rich, detailed professional guides as per the user's specification.
-2.  **Generate an AI Production Guide:** Create an \`aiProductionGuide\` object containing highly structured, detailed, bilingual JSON prompts for characters and scenes, exactly as specified in the schema and user examples. This is a technical document for the AI.
-3.  **Create a Hook Matrix:** Generate 50 viral hooks for the story across the 5 specified categories.
+1. **Generate Professional Documentation with Integrated Virality:** Create the following production documents with the quality of a master like Nabokov or Borges, but OPTIMIZED for viral potential. Each document must consider viral elements naturally integrated, not as an afterthought.
+
+   - \`readme\`: Master README.md that includes viral strategy overview
+   - \`narrativeStory\`: Literary narrative with embedded viral moments and hooks
+   - \`literaryScript\`: Professional script with viral timing and engagement points marked
+   - \`directorsBible\`: Director's bible including viral direction and platform optimization
+   - \`visualStyleGuide\`: Visual guide optimized for different platforms (TikTok, YouTube, Instagram)
+
+2. **Generate AI Production Guide with Viral Prompts:** Create structured prompts that generate visually consistent AND virally optimized content.
+
+3. **Integrate Hook Matrix into Documentation:** Instead of separate hook generation, embed viral hooks naturally throughout all documents.
+
+**VIRAL INTEGRATION REQUIREMENTS:**
+- README must include viral strategy section
+- Narrative story must have natural viral moments embedded
+- Script must mark optimal hook placements and timing
+- Director's bible must include platform-specific direction
+- Visual guide must optimize for social media formats
+- AI prompts must generate viral-optimized visual content
 
 **OUTPUT:**
-Return a single JSON object containing the complete \`documentation\` object (including the structured \`aiProductionGuide\`), the \`hookMatrix\`, and the original \`storyPlan\` for reference.`,
-    config: {
-        systemInstruction: SYSTEM_INSTRUCTION_DIRECTOR,
-        responseMimeType: 'application/json',
-        responseSchema: documentationDossierSchema,
-    }
+Return complete documentation object with integrated viral optimization, NOT separate viral analysis.`,
+  
+  config: {
+    systemInstruction: SYSTEM_INSTRUCTION_DIRECTOR,
+    responseMimeType: 'application/json',
+    responseSchema: enhancedDocumentationDossierSchema,
+  }
 });

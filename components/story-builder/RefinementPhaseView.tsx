@@ -174,7 +174,7 @@ const RefinementPhaseView: React.FC<RefinementPhaseViewProps> = ({ storyPlan, do
                     className="w-full sm:w-auto bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-500 transition-colors flex items-center justify-center gap-2.5 shadow-lg shadow-green-500/20 hover:shadow-green-500/40"
                 >
                     <PlayIcon className="w-5 h-5" />
-                    Continuar al Taller de Dirección Artística
+                    Continuar a la Evaluación Maestra
                 </button>
             </div>
         </div>

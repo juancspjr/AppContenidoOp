@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import React from 'react';
-import type { StoryMasterplan } from './types';
+import type { StoryMasterplan, CharacterDefinition, Act, Scene } from './types';
 import Spinner from '../Spinner';
+import { safeMap, safeJoin } from '../../utils/safeData';
+import { isCharacter, isAct, isScene } from '../../utils/schemaValidation';
 
 interface Phase5_ReviewPlanProps {
     onComplete: () => void;
@@ -71,39 +73,39 @@ const Phase5_ReviewPlan: React.FC<Phase5_ReviewPlanProps> = ({
                 <DetailSection title="Brief Creativo">
                     <p><strong>Concepto:</strong> {storyPlan.creative_brief?.concept || 'No especificado'}</p>
                     <p><strong>Público Objetivo:</strong> {storyPlan.creative_brief?.target_audience || 'No especificado'}</p>
-                    <p><strong>Formato de Salida:</strong> {Array.isArray(storyPlan.creative_brief?.output_format) ? storyPlan.creative_brief.output_format.join(', ') : (storyPlan.creative_brief?.output_format || 'No especificado')}</p>
-                    <p><strong>Estilo Narrativo:</strong> {Array.isArray(storyPlan.creative_brief?.narrative_style) ? storyPlan.creative_brief.narrative_style.join(', ') : (storyPlan.creative_brief?.narrative_style || 'No especificado')}</p>
-                    <p><strong>Estilo Visual:</strong> {Array.isArray(storyPlan.creative_brief?.visual_style) ? storyPlan.creative_brief.visual_style.join(', ') : (storyPlan.creative_brief?.visual_style || 'No especificado')}</p>
+                    <p><strong>Formato de Salida:</strong> {safeJoin(storyPlan.creative_brief?.output_format)}</p>
+                    <p><strong>Estilo Narrativo:</strong> {safeJoin(storyPlan.creative_brief?.narrative_style)}</p>
+                    <p><strong>Estilo Visual:</strong> {safeJoin(storyPlan.creative_brief?.visual_style)}</p>
                 </DetailSection>
                 <DetailSection title="Elenco de Personajes">
-                    {storyPlan.characters?.filter(Boolean).map(char => (
+                    {safeMap(storyPlan.characters, (char: CharacterDefinition) => (
                         <div key={char.name} className="bg-gray-800/80 p-3 rounded">
-                            <h4 className="font-semibold text-gray-200">{char.name} ({char.role})</h4>
-                            <p className="text-sm">{char.description}</p>
-                            <p className="text-xs mt-1 text-purple-300"><strong>Descripción Visual Clave:</strong> {char.visual_description}</p>
+                            <h4 className="font-semibold text-gray-200">{char.name || 'Personaje sin nombre'} ({char.role || 'Sin rol'})</h4>
+                            <p className="text-sm">{char.description || 'Sin descripción'}</p>
+                            <p className="text-xs mt-1 text-purple-300"><strong>Descripción Visual Clave:</strong> {(char as any).visual_description || 'No especificado'}</p>
                         </div>
-                    )) || <p>No hay personajes definidos.</p>}
+                    ), { guard: isCharacter })}
                 </DetailSection>
                  <DetailSection title="Estructura Narrativa Detallada">
-                    {storyPlan.story_structure?.narrative_arc?.filter(Boolean).map(act => (
+                    {safeMap(storyPlan.story_structure?.narrative_arc, (act: Act) => (
                         <details key={act.act_number} className="bg-gray-800/80 p-3 rounded mb-2" open={act.act_number === 1}>
-                            <summary className="font-semibold text-lg text-gray-200 cursor-pointer hover:text-white">Acto {act.act_number}: {act.title}</summary>
-                            <p className="text-sm italic my-2 p-2 bg-black/20 rounded">{act.summary}</p>
+                            <summary className="font-semibold text-lg text-gray-200 cursor-pointer hover:text-white">Acto {act.act_number}: {act.title || 'Acto sin título'}</summary>
+                            <p className="text-sm italic my-2 p-2 bg-black/20 rounded">{act.summary || 'Sin resumen del acto.'}</p>
                             <div className="pl-4 border-l-2 border-gray-700 space-y-2">
                                 <h5 className="font-bold text-gray-300 mt-2">Escenas:</h5>
-                                {act.scenes?.filter(Boolean).map(scene => (
+                                {safeMap(act.scenes, (scene: Scene) => (
                                      <details key={scene.scene_number} className="bg-black/20 p-2 rounded">
-                                        <summary className="text-sm font-semibold text-gray-300 cursor-pointer hover:text-white">Escena {scene.scene_number}: {scene.title}</summary>
+                                        <summary className="text-sm font-semibold text-gray-300 cursor-pointer hover:text-white">Escena {scene.scene_number}: {scene.title || 'Escena sin título'}</summary>
                                         <div className="text-xs mt-2 pl-2 border-l-2 border-blue-500/50 space-y-1 text-gray-400">
-                                            <p><strong>Resumen:</strong> {scene.summary}</p>
-                                            <p><strong>Beat Emocional:</strong> {scene.emotional_beat}</p>
-                                            <p><strong>Personajes Presentes:</strong> {(scene.characters_present || [])?.join(', ') || 'N/A'}</p>
+                                            <p><strong>Resumen:</strong> {scene.summary || 'No especificado'}</p>
+                                            <p><strong>Beat Emocional:</strong> {scene.emotional_beat || 'No especificado'}</p>
+                                            <p><strong>Personajes Presentes:</strong> {safeJoin(scene.characters_present)}</p>
                                         </div>
                                      </details>
-                                )) || <p>No hay escenas en este acto.</p>}
+                                ), { guard: isScene })}
                             </div>
                         </details>
-                    )) || <p>No hay estructura narrativa definida.</p>}
+                    ), { guard: isAct })}
                 </DetailSection>
             </div>
 

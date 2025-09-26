@@ -39,7 +39,7 @@ const PhaseStepper: React.FC<PhaseStepperProps> = ({ currentPhase, onPhaseClick 
         if (step === 6) {
             if (phase === 6.1) return 'Evaluación y Crítica';
             if (phase === 6.2) return 'Documentación';
-            if (phase === 6.25) return 'Generación de Ganchos';
+            if (phase === 6.25) return 'Evaluador de Docs';
             if (phase === 6.3) return 'Activos de Referencia';
             if (phase === 6.4) return 'Generación de Video';
         }

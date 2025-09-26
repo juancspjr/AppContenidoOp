@@ -17,7 +17,7 @@ import Phase4_CoherenceCheck from './story-builder/Phase4_CoherenceCheck';
 import Phase5_ReviewPlan from './story-builder/Phase5_ReviewPlan';
 import EvaluationPhaseView from './story-builder/EvaluationPhaseView';
 import RefinementPhaseView from './story-builder/RefinementPhaseView';
-import Phase6_HookMatrix from './story-builder/Phase6_HookMatrix';
+import DocumentationEvaluator from './story-builder/DocumentationEvaluator';
 // FIX: Replaced ReferenceAssetView with the new Storyboard component for phase 6.3
 import Phase6_Storyboard from './story-builder/Phase6_Storyboard';
 import AssetGenerationView from './story-builder/AssetGenerationView';
@@ -51,9 +51,9 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ existingProject, onExit }) 
             case 6.1:
                 return <EvaluationPhaseView critique={state.critique} critiqueStage={state.critiqueStage} isLoading={state.isLoading} error={state.error} onRefineCritique={actions.refineCritique} onApproveAndGenerateDocs={actions.approveCritiqueAndGenerateDocs} onGoToPhase={actions.goToPhase} onRegenerate={actions.runCritique} isSuggestingVirality={state.isSuggestingVirality} onGenerateViralitySuggestions={actions.generateViralitySuggestions} isApplyingImprovements={state.isApplyingImprovements} onApplyCritiqueImprovements={actions.applyCritiqueImprovements} />;
             case 6.2:
-                return <RefinementPhaseView storyPlan={state.storyPlan} documentation={state.documentation} onContinue={() => actions.goToPhase(6.25)} />;
+                return <RefinementPhaseView storyPlan={state.storyPlan} documentation={state.documentation} onContinue={actions.completePhaseAndAdvance} />;
             case 6.25:
-                 return <Phase6_HookMatrix isLoading={state.isLoading} hookMatrix={state.hookMatrix} storyPlan={state.storyPlan} onContinue={() => actions.goToPhase(6.3)} />;
+                 return <DocumentationEvaluator documentation={state.documentation} onApprove={() => actions.goToPhase(6.3)} onRequestRevisions={actions.reviseDocumentation} isProcessing={state.isLoading} />;
             case 6.3:
                  return <Phase6_Storyboard isLoading={state.isLoading} characterAssets={state.referenceAssets?.characters || null} storyboardAssets={state.storyboardAssets} error={state.error} storyPlan={state.storyPlan} onGenerateCharacters={actions.generateCharacterReferences} onGenerateStoryboard={actions.generateStoryboard} onRegeneratePanel={actions.regenerateStoryboardPanel} onContinue={() => actions.goToPhase(6.4)} />;
             case 6.4:

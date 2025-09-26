@@ -5,13 +5,15 @@
 import React, { useState } from 'react';
 import type { Critique, StoryBuilderState } from './types';
 import Spinner from '../Spinner';
+import { safeMap } from '../../utils/safeData';
+import { isWeakness, isStrategy } from '../../utils/schemaValidation';
 
 interface EvaluationPhaseViewProps {
     critique: Critique | null;
     critiqueStage: StoryBuilderState['critiqueStage'];
     isLoading: boolean;
     error: string | null;
-    onRefineCritique: (selectedStrategies: Critique['improvementStrategies'], userNotes: string) => void;
+    onRefineCritique: (selectedStrategies: Critique['improvement_strategies'], userNotes: string) => void;
     onApproveAndGenerateDocs: () => void;
     onGoToPhase: (phase: number) => void;
     onRegenerate: () => void;
@@ -20,6 +22,13 @@ interface EvaluationPhaseViewProps {
     isApplyingImprovements: boolean;
     onApplyCritiqueImprovements: () => void;
 }
+
+const ScoreDisplay: React.FC<{ score: number; label: string; color: string; isLarge?: boolean }> = ({ score, label, color, isLarge }) => (
+    <div className="text-center">
+        <p className={`${isLarge ? 'text-6xl' : 'text-4xl'} font-bold ${color}`}>{score.toFixed(0)}<span className="text-2xl text-gray-400">/100</span></p>
+        <p className="text-sm font-semibold text-gray-300">{label}</p>
+    </div>
+);
 
 const EvaluationPhaseView: React.FC<EvaluationPhaseViewProps> = ({
     critique, critiqueStage, isLoading, error, onRefineCritique, onApproveAndGenerateDocs, onGoToPhase, onRegenerate, isSuggestingVirality, onGenerateViralitySuggestions, isApplyingImprovements, onApplyCritiqueImprovements
@@ -35,7 +44,9 @@ const EvaluationPhaseView: React.FC<EvaluationPhaseViewProps> = ({
     
     React.useEffect(() => {
         if (critique) {
-            const allStrategyIds = new Set((critique.improvementStrategies || []).map(s => s.id));
+            const allStrategyIds = new Set(
+                safeMap(critique.improvement_strategies, s => s.id, { guard: isStrategy })
+            );
             setSelectedStrategies(allStrategyIds);
         }
     }, [critique]);
@@ -54,7 +65,11 @@ const EvaluationPhaseView: React.FC<EvaluationPhaseViewProps> = ({
     
     const handleRefine = () => {
         if (critique) {
-            const strategiesToApply = (critique.improvementStrategies || []).filter(s => selectedStrategies.has(s.id));
+            const strategiesToApply = safeMap(
+                critique.improvement_strategies,
+                s => s,
+                { guard: (s): s is Critique['improvement_strategies'][0] => isStrategy(s) && selectedStrategies.has(s.id) }
+            );
             onRefineCritique(strategiesToApply, userNotes);
         }
     };
@@ -88,11 +103,9 @@ const EvaluationPhaseView: React.FC<EvaluationPhaseViewProps> = ({
         );
     }
 
-    const viralPotential = critique.viralPotential ?? 0;
-    const viralPotentialColor = viralPotential >= 8 ? 'text-green-400' : viralPotential >= 5 ? 'text-yellow-400' : 'text-red-400';
     const isBeta = critiqueStage === 'beta';
     const isBusy = isLoading || isSuggestingVirality || isApplyingImprovements;
-    const hasCriticalWeaknesses = (critique.weaknesses || []).some(w => w.severity === 'Moderate' || w.severity === 'High');
+    const hasCriticalWeaknesses = (critique.weaknesses || []).some(w => w && (w.severity === 'Moderate' || w.severity === 'High'));
 
     const getSeverityClass = (severity: 'Minor' | 'Moderate' | 'High') => {
         switch (severity) {
@@ -113,20 +126,37 @@ const EvaluationPhaseView: React.FC<EvaluationPhaseViewProps> = ({
             </p>
 
             <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
-                <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700 text-center">
-                    <h3 className="text-lg font-semibold">Potencial de Viralidad Estimado</h3>
-                    <p className={`text-6xl font-bold my-2 ${viralPotentialColor}`}>{viralPotential.toFixed(1)} <span className="text-3xl">/ 10</span></p>
+                <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700 grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+                    <ScoreDisplay score={critique.integrated_score || 0} label="Puntuación Integrada" color="text-blue-400" isLarge />
+                    <div className="md:col-span-2 grid grid-cols-2 gap-4">
+                       <ScoreDisplay score={critique.narrative_score || 0} label="Calidad Narrativa" color="text-green-400" />
+                       <ScoreDisplay score={critique.viral_score || 0} label="Potencial Viral" color="text-yellow-400" />
+                    </div>
+                </div>
+
+                <div className="bg-green-900/30 p-4 rounded-lg border border-green-500/30">
+                    <h4 className="font-bold text-green-300 mb-2">✅ Fortalezas</h4>
+                    <ul className="list-disc list-inside space-y-1 text-sm text-gray-300">
+                        {safeMap(critique.strengths, (item, index) => <li key={index}>{item}</li>)}
+                    </ul>
+                </div>
+                
+                <div className="bg-purple-900/30 p-4 rounded-lg border border-purple-500/30">
+                    <h4 className="font-bold text-purple-300 mb-2">🔥 Momentos Virales Identificados</h4>
+                    <ul className="list-disc list-inside space-y-1 text-sm text-gray-300">
+                        {safeMap(critique.viral_moments, (item, index) => <li key={index}>{item}</li>)}
+                    </ul>
                 </div>
 
                 <div className="bg-red-900/30 p-4 rounded-lg border border-red-500/30">
                     <h4 className="font-bold text-red-300 mb-2">🚨 Debilidades Identificadas</h4>
                      <div className="space-y-2">
-                        {(critique.weaknesses || []).map((item, index) => (
+                        {safeMap(critique.weaknesses, (item, index) => (
                              <div key={index} className={`p-3 rounded-lg border-l-4 bg-black/20 ${getSeverityClass(item.severity)}`}>
                                 <p className="font-semibold text-red-200">{item.point} <span className="text-xs font-normal text-gray-400">({item.severity})</span></p>
                                 <p className="text-sm text-green-300 mt-1"><strong>Sugerencia:</strong> {item.suggestion}</p>
                             </div>
-                        ))}
+                        ), { guard: isWeakness })}
                     </div>
                 </div>
                 
@@ -134,7 +164,7 @@ const EvaluationPhaseView: React.FC<EvaluationPhaseViewProps> = ({
                     <h4 className="font-bold text-blue-300 mb-2">💡 Estrategias de Mejora Sugeridas</h4>
                     <p className="text-xs text-blue-200/80 mb-3">Selecciona las estrategias que quieres que la IA aplique en el re-análisis.</p>
                      <div className="space-y-2">
-                        {(critique.improvementStrategies || []).map((item) => (
+                        {safeMap(critique.improvement_strategies, (item) => (
                              <label key={item.id} htmlFor={`strategy-${item.id}`} className="flex items-start gap-3 bg-black/20 p-3 rounded-lg cursor-pointer hover:bg-black/40">
                                 <input
                                     type="checkbox"
@@ -149,7 +179,7 @@ const EvaluationPhaseView: React.FC<EvaluationPhaseViewProps> = ({
                                     <p className="text-sm text-gray-300">{item.description}</p>
                                 </div>
                             </label>
-                        ))}
+                        ), { guard: isStrategy })}
                     </div>
                 </div>
 

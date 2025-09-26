@@ -120,25 +120,18 @@ export interface StoryMasterplan {
     critique?: Critique;
 }
 
-export interface EnrichedElements {
-    characters?: any[];
-    actions?: any[];
-    environments?: any[];
-    narratives?: any[];
-    visuals?: any[];
-    technicals?: any[];
-}
-
 export interface Critique {
-    narrativeStrengths: string[];
+    narrative_score: number;
+    viral_score: number;
+    integrated_score: number;
+    strengths: string[];
     weaknesses: Array<{
         point: string;
         suggestion: string;
         severity: 'Minor' | 'Moderate' | 'High';
     }>;
-    improvementStrategies: Array<{ id: string; title: string; description: string }>;
-    viralPotential: number;
-    enrichedElements: EnrichedElements;
+    viral_moments: string[];
+    improvement_strategies: Array<{ id: string; title: string; description: string }>;
 }
 
 // --- New Professional Dossier and Prompt Structures ---
@@ -225,20 +218,6 @@ export interface Documentation {
     };
 }
 
-
-export interface HookTemplate {
-    template: string;
-    rationale: string;
-}
-
-export interface HookMatrix {
-    patternInterrupts: HookTemplate[];
-    psychologicalTriggers: HookTemplate[];
-    curiosityGaps: HookTemplate[];
-    powerPhrases: HookTemplate[];
-    provenStructures: HookTemplate[];
-}
-
 export interface ReferenceAsset {
     id: string;
     type: 'character' | 'environment' | 'element' | 'scene_frame';
@@ -300,7 +279,6 @@ export interface ExportedProject {
     critiqueStage: 'alpha' | 'beta' | 'approved' | null;
     critiqueProgress: CritiqueProgressStep[] | null;
     documentation: Documentation | null;
-    hookMatrix: HookMatrix | null;
     referenceAssets: ReferenceAssets | null;
     storyboardAssets: StoryboardPanel[] | null;
     finalAssets: FinalAssets | null;

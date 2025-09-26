@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { 
     ExportedProject, InitialConcept, StyleAndFormat, CharacterDefinition, 
     StoryStructure, StructuralCoherenceReport, CoherenceCheckStep, 
-    StoryMasterplan, Critique, Documentation, HookMatrix, ReferenceAsset, 
+    StoryMasterplan, Critique, Documentation, ReferenceAsset, 
     ReferenceAssets, FinalAsset, FinalAssets, ProgressUpdate, VideosOperationResponse, 
     StoryBuilderState, 
     StoryboardPanel,
@@ -23,6 +23,9 @@ import { assetDBService } from '../services/assetDBService';
 import { fileToGenerativePart } from '../utils/fileUtils';
 import { formatApiError } from '../utils/errorUtils';
 import { sliceImageIntoGrid } from '../utils/imageUtils';
+// FIX: Import isReferenceAsset type guard for proper type validation.
+import { safeParseWithDefaults, StoryMasterplanSchema, StructuralCoherenceReportSchema, CritiqueSchema, isReferenceAsset } from '../utils/schemaValidation';
+import { safeMap } from '../utils/safeData';
 
 type Action =
     | { type: 'REINITIALIZE'; payload: ExportedProject }
@@ -45,7 +48,7 @@ type Action =
     | { type: 'UPDATE_SCENE_FRAMES'; payload: ReferenceAsset[] }
     | { type: 'APPROVE_CRITIQUE_AND_GENERATE_DOCS' }
     | { type: 'API_VIRALITY_START' }
-    | { type: 'API_VIRALITY_SUGGESTIONS_SUCCESS'; payload: { strategies: Critique['improvementStrategies'] } }
+    | { type: 'API_VIRALITY_SUGGESTIONS_SUCCESS'; payload: { strategies: Critique['improvement_strategies'] } }
     | { type: 'API_APPLY_IMPROVEMENTS_START' };
 
 const initialState: StoryBuilderState = {
@@ -61,7 +64,6 @@ const initialState: StoryBuilderState = {
     critiqueStage: null,
     critiqueProgress: null,
     documentation: null,
-    hookMatrix: null,
     referenceAssets: null,
     storyboardAssets: null,
     finalAssets: null,
@@ -111,10 +113,10 @@ function storyBuilderReducer(
                 '4': 4.5,
                 '4.5': 5,
                 '5': 6.1,
-                // Phase 6.1 now requires explicit approval to move forward
-                '6.2': 6.25,
-                '6.25': 6.3,
-                '6.3': 6.4,
+                '6.1': 6.2,      // Evaluación → Documentación
+                '6.2': 6.25,     // Documentación → Evaluador Documentación (NUEVA)
+                '6.25': 6.3,     // Evaluador → Storyboard (MANTENER EXISTENTE)
+                '6.3': 6.4,      // Storyboard → Activos (MANTENER EXISTENTE)
             };
 
             const nextPhase = forwardTransitions[String(state.phase)];
@@ -158,17 +160,22 @@ function storyBuilderReducer(
         case 'UPDATE_ASSET_GENERATION_PROGRESS':
             return { ...state, progress: { ...state.progress, [action.payload.assetId]: action.payload.progress } };
         case 'UPDATE_SINGLE_REFERENCE_ASSET':
-             const updateAsset = (assets: ReferenceAsset[]) => assets.map(a => a.id === action.payload.id ? action.payload : a);
+             const updateAsset = (assets: ReferenceAsset[] | undefined, newAsset: ReferenceAsset) => {
+                if (!assets) return [newAsset];
+                // FIX: Use a proper type guard for ReferenceAsset. This resolves the type predicate error and subsequent type inference errors.
+                return safeMap(assets, a => a.id === newAsset.id ? newAsset : a, { guard: isReferenceAsset });
+             };
              if (!state.referenceAssets) {
                 const initialAssets: ReferenceAssets = { characters: [], environments: [], elements: [], sceneFrames: [] };
                 if (action.payload.type === 'character') initialAssets.characters = [action.payload];
                 return { ...state, referenceAssets: initialAssets };
              }
              return { ...state, referenceAssets: {
-                 characters: action.payload.type === 'character' ? updateAsset(state.referenceAssets.characters) : state.referenceAssets.characters,
-                 environments: action.payload.type === 'environment' ? updateAsset(state.referenceAssets.environments) : state.referenceAssets.environments,
-                 elements: action.payload.type === 'element' ? updateAsset(state.referenceAssets.elements) : state.referenceAssets.elements,
-                 sceneFrames: action.payload.type === 'scene_frame' ? updateAsset(state.referenceAssets.sceneFrames) : state.referenceAssets.sceneFrames,
+                 ...state.referenceAssets,
+                 characters: action.payload.type === 'character' ? updateAsset(state.referenceAssets.characters, action.payload) : state.referenceAssets.characters,
+                 environments: action.payload.type === 'environment' ? updateAsset(state.referenceAssets.environments, action.payload) : state.referenceAssets.environments,
+                 elements: action.payload.type === 'element' ? updateAsset(state.referenceAssets.elements, action.payload) : state.referenceAssets.elements,
+                 sceneFrames: action.payload.type === 'scene_frame' ? updateAsset(state.referenceAssets.sceneFrames, action.payload) : state.referenceAssets.sceneFrames,
              }};
         case 'UPDATE_STORYBOARD_PANEL':
             const updatedPanels = state.storyboardAssets?.map(p => p.id === action.payload.id ? action.payload : p) || [];
@@ -189,14 +196,14 @@ function storyBuilderReducer(
             return { ...state, isSuggestingVirality: true, error: null };
         case 'API_VIRALITY_SUGGESTIONS_SUCCESS':
             if (!state.critique) return { ...state, isSuggestingVirality: false };
-            const existingStrategyIds = new Set(state.critique.improvementStrategies.map(s => s.id));
+            const existingStrategyIds = new Set(state.critique.improvement_strategies.map(s => s.id));
             const newUniqueStrategies = action.payload.strategies.filter(s => !existingStrategyIds.has(s.id));
             return {
                 ...state,
                 isSuggestingVirality: false,
                 critique: {
                     ...state.critique,
-                    improvementStrategies: [...state.critique.improvementStrategies, ...newUniqueStrategies]
+                    improvement_strategies: [...state.critique.improvement_strategies, ...newUniqueStrategies]
                 }
             };
         case 'API_APPLY_IMPROVEMENTS_START':
@@ -309,7 +316,8 @@ export const useStoryBuilderStateMachine = (existingProject?: ExportedProject) =
     const apiCall = useCallback(async <T>(
         requestFn: (modelName: string) => Promise<any>,
         onSuccess: (data: any) => Partial<StoryBuilderState>,
-        isAssist = false
+        isAssist = false,
+        schema?: any // Zod schema for validation
     ): Promise<T | void> => {
         dispatch({ type: 'API_START', payload: { isAssisting: isAssist } });
         try {
@@ -317,6 +325,13 @@ export const useStoryBuilderStateMachine = (existingProject?: ExportedProject) =
             const response = await requestFn(modelName);
             const text = response.text;
             const data = parseJsonMarkdown(text);
+
+            if (schema) {
+                const validatedData = safeParseWithDefaults(data, schema);
+                dispatch({ type: 'API_SUCCESS', payload: onSuccess(validatedData) });
+                return validatedData as T;
+            }
+            
             dispatch({ type: 'API_SUCCESS', payload: onSuccess(data) });
             return data as T;
         } catch (error) {
@@ -351,9 +366,8 @@ export const useStoryBuilderStateMachine = (existingProject?: ExportedProject) =
             () => Prompts.getCritiquePrompt(state.storyPlan!, isRefinement, userSelections),
             'UPDATE_CRITIQUE_PROGRESS',
             (data) => {
-                // The API nests the critique object. We need to extract it.
-                const critiqueData = data.report_alpha?.critique || data.report_beta?.critique || data.critique || data;
-                return { type: 'API_SUCCESS', payload: { critique: critiqueData, critiqueStage: isRefinement ? 'beta' : 'alpha' } }
+                const validatedCritique = safeParseWithDefaults(data, CritiqueSchema);
+                return { type: 'API_SUCCESS', payload: { critique: validatedCritique, critiqueStage: isRefinement ? 'beta' : 'alpha' } }
             }
         );
     }, [state.storyPlan, runStreamingApiCall]);
@@ -429,7 +443,10 @@ export const useStoryBuilderStateMachine = (existingProject?: ExportedProject) =
              await runStreamingApiCall(
                 () => Prompts.getCoherenceCheckPrompt(state),
                 'UPDATE_COHERENCE_PROGRESS',
-                (data) => ({ type: 'API_SUCCESS', payload: { coherenceReport: data.report } })
+                (data) => {
+                    const validatedReport = safeParseWithDefaults(data.report, StructuralCoherenceReportSchema);
+                    return ({ type: 'API_SUCCESS', payload: { coherenceReport: validatedReport } });
+                }
             );
         },
         
@@ -454,7 +471,10 @@ export const useStoryBuilderStateMachine = (existingProject?: ExportedProject) =
                 await runStreamingApiCall(
                     () => Prompts.getCoherenceCheckPrompt({ ...state, ...successPayload }),
                     'UPDATE_COHERENCE_PROGRESS',
-                    (data) => ({ type: 'API_SUCCESS', payload: { coherenceReport: data.report } })
+                    (data) => {
+                        const validatedReport = safeParseWithDefaults(data.report, StructuralCoherenceReportSchema);
+                        return ({ type: 'API_SUCCESS', payload: { coherenceReport: validatedReport } });
+                    }
                 );
 
             } catch (error) {
@@ -465,13 +485,15 @@ export const useStoryBuilderStateMachine = (existingProject?: ExportedProject) =
         generateStoryPlan: async () => {
             await apiCall(
                 (model) => geminiService.generateContent(Prompts.getStoryPlanGenerationPrompt(state), model),
-                (data) => ({ storyPlan: data })
+                (data) => ({ storyPlan: data }),
+                false,
+                StoryMasterplanSchema
             );
         },
 
         runCritique: () => runCritique(false),
 
-        refineCritique: async (selectedStrategies: Critique['improvementStrategies'], userNotes: string) => {
+        refineCritique: async (selectedStrategies: Critique['improvement_strategies'], userNotes: string) => {
             const sanitizedNotes = userNotes.trim();
             const selections = {
                 strategies: selectedStrategies,
@@ -490,7 +512,8 @@ export const useStoryBuilderStateMachine = (existingProject?: ExportedProject) =
             try {
                 const modelName = state.initialConcept?.selectedTextModel || 'gemini-2.5-flash';
                 const response = await geminiService.generateContent(Prompts.getApplyCritiqueImprovementsPrompt(state.storyPlan, weaknessesToFix), modelName);
-                const updatedStoryPlan = parseJsonMarkdown(response.text);
+                const rawData = parseJsonMarkdown(response.text);
+                const updatedStoryPlan = safeParseWithDefaults(rawData, StoryMasterplanSchema);
                 
                 dispatch({ type: 'API_SUCCESS', payload: { storyPlan: updatedStoryPlan, critique: null, critiqueStage: null, critiqueProgress: null } });
                 await runCritique(false);
@@ -524,11 +547,42 @@ export const useStoryBuilderStateMachine = (existingProject?: ExportedProject) =
                 (data) => ({
                     storyPlan: data.storyPlan,
                     documentation: data.documentation,
-                    hookMatrix: data.hookMatrix,
                     critiqueStage: 'approved',
                     phase: 6.2
                 })
             );
+        },
+
+        reviseDocumentation: async (selectedRevisions: string[]) => {
+            dispatch({ type: 'API_START' });
+            
+            const revisionPrompt = `
+          REVISAR Y MEJORAR DOCUMENTACIÓN COMPLETA
+          
+          DOCUMENTACIÓN ACTUAL:
+          ${JSON.stringify(state.documentation, null, 2)}
+          
+          REVISIONES A APLICAR:
+          ${selectedRevisions.join('\n')}
+          
+          IMPORTANTE: 
+          - Mantener la calidad artística
+          - Aplicar cambios de forma holística en TODOS los documentos afectados
+          - Si cambias algo en un documento, verifica impacto en otros
+          - Preservar la estructura y formato existente
+          - Mejorar la integración viral sin forzarla
+          
+          GENERA documentación revisada completa.
+          `;
+          
+            try {
+                const modelName = state.initialConcept?.selectedTextModel || 'gemini-2.5-flash';
+                const response = await geminiService.generateContent({contents: revisionPrompt}, modelName);
+                const revisedDocumentation = parseJsonMarkdown(response.text);
+                dispatch({ type: 'API_SUCCESS', payload: { documentation: revisedDocumentation } });
+            } catch (error) {
+              dispatch({ type: 'API_ERROR', payload: formatApiError(error) });
+            }
         },
 
         generateCharacterReferences: async () => {

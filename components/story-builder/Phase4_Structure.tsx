@@ -16,7 +16,11 @@ interface Phase4_StructureProps {
 }
 
 const Phase4_Structure: React.FC<Phase4_StructureProps> = ({ onComplete, initialData, onBack, onAssist, isAssisting }) => {
-    const [structure, setStructure] = useState<StoryStructure>(initialData || {});
+    const [structure, setStructure] = useState<StoryStructure>(initialData || {
+        act1_summary: '',
+        act2_summary: '',
+        act3_summary: '',
+    });
 
     useEffect(() => {
         if (initialData) {
