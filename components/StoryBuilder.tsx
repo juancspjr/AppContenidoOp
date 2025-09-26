@@ -50,12 +50,10 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ existingProject, onExit }) 
 
             // --- NEW PREMIUM ARTISTIC FLOW ---
             case 4.5:
+                // FIX: Pass 'enhancedData' prop and remove props not defined in the component's interface.
                 return <Phase4_5_ArtisticConstruction 
-                            storyStructure={state.storyStructure!} 
-                            initialConcept={state.initialConcept!}
-                            styleAndFormat={state.styleAndFormat!}
-                            characters={state.characters}
-                            onComplete={(enhancedData) => {
+                            enhancedData={state.enhancedData}
+                            onComplete={() => {
                                 actions.generatePremiumPlan();
                             }} 
                             onBack={() => actions.goToPhase(4)}

@@ -126,7 +126,8 @@ export function safeParseWithDefaults<T extends z.ZodTypeAny>(
   }
   
   // NEW: Attempt partial recovery
-  if (options.preservePartial && typeof data === 'object' && data !== null) {
+  // FIX: Add guard to ensure schema is a ZodObject before calling .partial(), which only exists on object types.
+  if (options.preservePartial && typeof data === 'object' && data !== null && schema instanceof z.ZodObject) {
     const partialSchema = schema.partial();
     const partialResult = partialSchema.safeParse(data);
     
@@ -141,6 +142,7 @@ export function safeParseWithDefaults<T extends z.ZodTypeAny>(
           return acc;
       }, {});
 
+      // FIX: Ensure 'defaults' is an object before spreading. The instance of check above guarantees this.
       const recovered = { ...defaults, ...validPartialData };
       
       if (options.notifyUser) {

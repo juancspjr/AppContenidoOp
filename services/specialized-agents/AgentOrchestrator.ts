@@ -15,11 +15,12 @@ type BaseStoryData = Pick<StoryBuilderState, 'storyStructure' | 'initialConcept'
 
 interface SpecializedAgent {
     name: string;
-    outputField: keyof Omit<EnhancedStoryData, keyof StoryBuilderState>;
+    outputField: keyof Omit<EnhancedStoryData, keyof StoryBuilderState | 'enhancement_metadata'>;
     process(
         data: any,
         callbacks: { onProgress?: (progress: any) => void }
-    ): Promise<{ enhancements: any; enhancedData?: any }>;
+    // FIX: Change 'enhancements' type to 'any' to accommodate agents that return non-array values (e.g., a score).
+    ): Promise<{ enhancements: any; enhancedData?: any; quality_score?: number; }>;
 }
 
 export class AgentOrchestrator {
@@ -27,12 +28,12 @@ export class AgentOrchestrator {
     
     constructor() {
         this.agents = [
-            // new PsychologyPatternAgent(),
-            // new CulturalAnthropologyAgent(),
-            // new HistoricalContextAgent(),
-            // new NarrativeDisruptorAgent(),
-            // new ViralRetentionAgent(),
-            // new HumanizationAgent()
+            new PsychologyPatternAgent(),
+            new CulturalAnthropologyAgent(),
+            new HistoricalContextAgent(),
+            new NarrativeDisruptorAgent(),
+            new ViralRetentionAgent(),
+            new HumanizationAgent()
         ];
     }
 
@@ -44,27 +45,137 @@ export class AgentOrchestrator {
             onAgentComplete?: (agentName: string, result: any) => void;
         }
     ): Promise<EnhancedStoryData> {
-        // Since agents are not implemented, we return a mock enhanced data structure
-        // to allow the rest of the new flow to function.
-        await new Promise(res => setTimeout(res, 1500)); // Simulate processing time
-
-        const enhancements = {
-            psychological_layers: [{ id: 'mock_psych', detail: 'Complex character motivations' }],
-            cultural_elements: [{ id: 'mock_culture', detail: 'Rich cultural tapestry' }],
-            historical_depth: [{ id: 'mock_history', detail: 'Grounded in historical context' }],
-            narrative_innovations: [{ id: 'mock_innovate', detail: 'Unconventional plot twist' }],
-            viral_hooks: [{ id: 'mock_viral', detail: 'Strong opening hook' }],
-            humanization_score: 95,
+        
+        let processLog: any[] = [];
+        let currentData: any = { ...baseData };
+        const enhancements: any = {
+            psychological_layers: [],
+            cultural_elements: [],
+            historical_depth: [],
+            narrative_innovations: [],
+            viral_hooks: [],
+            humanization_score: 0,
             enhancement_metadata: {
-                agents_applied: ['MockAgent'],
-                processing_time: 1500,
-                quality_score: 9.2
+                agents_applied: [],
+                processing_time: Date.now(),
+                quality_score: 0,
+                process_log: []
             }
         };
 
+        let totalQualityScore = 0;
+
+        for (const agent of this.agents) {
+            callbacks.onAgentStart?.(agent.name);
+            
+            const agentStartTime = Date.now();
+            const steps = [
+                `🔍 Analizando datos de entrada para ${agent.name}`,
+                `🧠 Aplicando conocimiento especializado`,
+                `⚡ Generando mejoras específicas`,
+                `✅ Validando calidad de salida`,
+                `📝 Integrando resultados al conjunto`
+            ];
+            
+            for (let i = 0; i < steps.length; i++) {
+                callbacks.onAgentProgress?.({
+                    agent: agent.name,
+                    step: i + 1,
+                    total: steps.length,
+                    description: steps[i],
+                    timestamp: new Date().toISOString(),
+                    status: 'processing'
+                });
+                
+                await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 500));
+                 callbacks.onAgentProgress?.({
+                    agent: agent.name,
+                    step: i + 1,
+                    total: steps.length,
+                    description: steps[i],
+                    timestamp: new Date().toISOString(),
+                    status: 'complete'
+                });
+            }
+            
+            try {
+                const result = await agent.process(currentData, {});
+                const agentProcessingTime = Date.now() - agentStartTime;
+
+                const contribution = {
+                    agent: agent.name,
+                    input_data_size: JSON.stringify(currentData).length,
+                    enhancements_added: result.enhancements.length || (typeof result.enhancements === 'number' ? 1 : 0),
+                    processing_time: agentProcessingTime,
+                    quality_improvement: result.quality_score || 0
+                };
+                
+                processLog.push(contribution);
+                
+                enhancements[agent.outputField] = result.enhancements;
+                enhancements.enhancement_metadata.agents_applied.push(agent.name);
+                totalQualityScore += result.quality_score || 0;
+                
+                currentData = { ...currentData, ...result.enhancedData };
+                
+                callbacks.onAgentComplete?.(agent.name, result);
+                
+            } catch (error: any) {
+                console.error(`Agent ${agent.name} falló:`, error);
+                processLog.push({
+                    agent: agent.name,
+                    error: error.message,
+                    timestamp: new Date().toISOString()
+                });
+            }
+        }
+
+        enhancements.enhancement_metadata.processing_time = Date.now() - enhancements.enhancement_metadata.processing_time;
+        enhancements.enhancement_metadata.process_log = processLog;
+        enhancements.enhancement_metadata.quality_score = parseFloat((totalQualityScore / this.agents.length).toFixed(2));
+        
         return {
-            ...baseData.storyStructure!,
-            ...enhancements
-        };
+            ...currentData.storyStructure,
+            ...enhancements,
+        } as EnhancedStoryData;
+    }
+
+    generateProcessReport(enhancedData: EnhancedStoryData): string {
+        const report = `# REPORTE DE CONSTRUCCIÓN ARTÍSTICA
+        
+## Resumen del Proceso
+- **Fecha**: ${new Date().toLocaleString()}
+- **Agentes Aplicados**: ${enhancedData.enhancement_metadata.agents_applied.join(', ')}
+- **Tiempo Total**: ${(enhancedData.enhancement_metadata.processing_time / 1000).toFixed(2)}s
+- **Score de Calidad Promedio**: ${enhancedData.enhancement_metadata.quality_score}/10
+
+## Mejoras por Agente
+${(enhancedData.enhancement_metadata.process_log || []).map(log => `
+### ${log.agent}
+- **Mejoras Añadidas**: ${log.enhancements_added}
+- **Tiempo de Procesamiento**: ${(log.processing_time / 1000).toFixed(2)}s
+- **Mejora de Calidad**: +${log.quality_improvement.toFixed(2)}
+`).join('')}
+
+## Elementos Generados
+### Capas Psicológicas (${enhancedData.psychological_layers.length})
+${enhancedData.psychological_layers.map((layer: any) => `- ${layer.detail}`).join('\n')}
+
+### Elementos Culturales (${enhancedData.cultural_elements.length})
+${enhancedData.cultural_elements.map((element: any) => `- ${element.detail}`).join('\n')}
+
+### Referencias Históricas (${enhancedData.historical_depth.length})
+${enhancedData.historical_depth.map((ref: any) => `- ${ref.detail}`).join('\n')}
+
+### Innovaciones Narrativas (${enhancedData.narrative_innovations.length})
+${enhancedData.narrative_innovations.map((innovation: any) => `- ${innovation.detail}`).join('\n')}
+
+### Ganchos Virales (${enhancedData.viral_hooks.length})
+${enhancedData.viral_hooks.map((hook: any) => `- ${hook.detail}`).join('\n')}
+
+## Score de Humanización: ${enhancedData.humanization_score}%
+        `;
+        
+        return report.replace(/^\s+/gm, ''); // Trim leading whitespace from each line
     }
 }

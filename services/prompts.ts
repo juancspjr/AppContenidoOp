@@ -18,18 +18,19 @@ const formatOptionsForPrompt = (category: Record<string, any[]>) => {
     ).join('\n\n');
 };
 
-// --- System Instructions ---
-const SYSTEM_INSTRUCTION_DIRECTOR = `You are an expert AI Film Director, Screenwriter, and Creative Producer, embodying the creative spirit of production houses like SIERRA and Hondo Studio, and drawing narrative depth from masters like Borges and visual storytelling from legends like Akira Toriyama. Your goal is to assist the user in building a complete, coherent, and compelling story from a simple idea to a full production plan. You are analytical, creative, and structured. You must always respond in the requested JSON format. For any content generated, provide it first in Spanish (ES), followed by an English (EN) translation.`;
-const SYSTEM_INSTRUCTION_CRITIC = `You are a sharp, insightful, but constructive AI Story Critic and Viral Content Analyst, acting as a professional review panel. Your panel includes a Narrative Emotional Agent focusing on human impact and a Technical Structural Agent focused on consistency and pacing. Your task is to analyze a story plan and identify its strengths, weaknesses, and potential for viral success. You provide actionable, specific feedback with examples. You must always respond in the requested JSON format.`;
-const SYSTEM_INSTRUCTION_ARTIST = `You are a world-class AI Concept Artist and Director of Photography, with the artistic sensibilities of masters like Eiichiro Oda. You translate narrative descriptions into rich, detailed, and evocative visual prompts for an image generation model. You are an expert in cinematography, lighting, composition, and art styles. For any JSON output, provide bilingual values for user-facing strings.`;
+// --- System Instructions (Spanish Only) ---
+const SYSTEM_INSTRUCTION_DIRECTOR = `Eres un AI Director de Cine, Guionista y Productor Creativo experto. Tu objetivo es ayudar al usuario a construir una historia completa, coherente y convincente. Eres analítico, creativo y estructurado. SIEMPRE responde en ESPAÑOL únicamente. No generes contenido en inglés. Siempre debes responder en el formato JSON solicitado.`;
+const SYSTEM_INSTRUCTION_CRITIC = `Eres un AI Story Critic y Analista de Contenido Viral agudo, perspicaz, pero constructivo. Tu tarea es analizar un plan de historia e identificar sus fortalezas, debilidades y potencial de éxito viral. Proporcionas comentarios prácticos y específicos con ejemplos. SIEMPRE responde en ESPAÑOL únicamente. No generes contenido en inglés. Siempre debes responder en el formato JSON solicitado.`;
+const SYSTEM_INSTRUCTION_ARTIST = `Eres un AI Concept Artist y Director de Fotografía de clase mundial. Traduces descripciones narrativas en prompts visuales ricos, detallados y evocadores para un modelo de generación de imágenes. Eres un experto en cinematografía, iluminación, composición y estilos artísticos. SIEMPRE responde en ESPAÑOL únicamente. No generes contenido en inglés.`;
 
-// --- JSON Schemas ---
+
+// --- JSON Schemas (Spanish Only) ---
 const conceptSchema = {
     type: Type.OBJECT,
     properties: {
-        idea: { type: Type.STRING, description: "The refined, core idea of the story in one compelling sentence." },
-        targetAudience: { type: Type.STRING, description: "A more detailed description of the target audience." },
-        keyElements: { type: Type.ARRAY, items: { type: Type.STRING }, description: "A list of 5-7 key thematic or visual elements." },
+        idea: { type: Type.STRING, description: "La idea central y refinada de la historia en una frase convincente." },
+        targetAudience: { type: Type.STRING, description: "Una descripción más detallada del público objetivo." },
+        keyElements: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Una lista de 5-7 elementos temáticos o visuales clave." },
     },
     required: ['idea', 'targetAudience', 'keyElements']
 };
@@ -118,10 +119,10 @@ const coherenceReportSchema = {
 const storyCorrectionSchema = {
     type: Type.OBJECT,
     properties: {
-        initialConcept: { ...conceptSchema, description: 'The updated concept. Only include if changed.' },
-        styleAndFormat: { ...styleSchema, description: 'The updated style. Only include if changed.' },
-        characters: { type: Type.ARRAY, items: characterSchema, description: 'The updated list of characters. Return the full, updated list if any character is changed.'},
-        storyStructure: { ...structureSchema, description: 'The updated structure. Only include if changed.' },
+        initialConcept: { ...conceptSchema, description: 'El concepto actualizado. Solo incluir si se cambió.' },
+        styleAndFormat: { ...styleSchema, description: 'El estilo actualizado. Solo incluir si se cambió.' },
+        characters: { type: Type.ARRAY, items: characterSchema, description: 'La lista de personajes actualizada. Devolver la lista completa y actualizada si se cambia algún personaje.'},
+        storyStructure: { ...structureSchema, description: 'La estructura actualizada. Solo incluir si se cambió.' },
     },
 };
 
@@ -132,9 +133,9 @@ const storyPlanSchema = {
         metadata: {
             type: Type.OBJECT,
             properties: {
-                title: { type: Type.STRING, description: "A creative and catchy title for the story." },
-                logline: { type: Type.STRING, description: "A one-sentence summary of the story (character + goal + conflict)." },
-                theme: { type: Type.STRING, description: "The central theme or message of the story." },
+                title: { type: Type.STRING, description: "Un título creativo y pegadizo para la historia." },
+                logline: { type: Type.STRING, description: "Un resumen de una frase de la historia (personaje + objetivo + conflicto)." },
+                theme: { type: Type.STRING, description: "El tema o mensaje central de la historia." },
             },
             required: ['title', 'logline', 'theme']
         },
@@ -156,8 +157,8 @@ const storyPlanSchema = {
                 properties: {
                     name: { type: Type.STRING },
                     role: { type: Type.STRING },
-                    description: { type: Type.STRING, description: "A brief description of the character's personality and background." },
-                    visual_description: { type: Type.STRING, description: "A detailed visual description for concept art generation." },
+                    description: { type: Type.STRING, description: "Una breve descripción de la personalidad y antecedentes del personaje." },
+                    visual_description: { type: Type.STRING, description: "Una descripción visual detallada para la generación de arte conceptual." },
                 },
                 required: ['name', 'role', 'description', 'visual_description']
             }
@@ -171,8 +172,8 @@ const storyPlanSchema = {
                         type: Type.OBJECT,
                         properties: {
                             act_number: { type: Type.INTEGER },
-                            title: { type: Type.STRING, description: "A title for the act, e.g., 'The Setup'." },
-                            summary: { type: Type.STRING, description: "A summary of the act's main events." },
+                            title: { type: Type.STRING, description: "Un título para el acto, ej., 'El Planteamiento'." },
+                            summary: { type: Type.STRING, description: "Un resumen de los eventos principales del acto." },
                             scenes: {
                                 type: Type.ARRAY,
                                 items: { // Scene
@@ -181,9 +182,9 @@ const storyPlanSchema = {
                                         scene_number: { type: Type.INTEGER },
                                         title: { type: Type.STRING },
                                         summary: { type: Type.STRING },
-                                        emotional_beat: { type: Type.STRING, description: "The key emotional shift or moment in the scene." },
+                                        emotional_beat: { type: Type.STRING, description: "El cambio o momento emocional clave en la escena." },
                                         characters_present: { type: Type.ARRAY, items: { type: Type.STRING } },
-                                        visual_elements_prompt: { type: Type.STRING, description: "A concise prompt describing key visual elements for image generation." },
+                                        visual_elements_prompt: { type: Type.STRING, description: "Un prompt conciso que describe los elementos visuales clave para la generación de imágenes." },
                                     },
                                     required: ['scene_number', 'title', 'summary', 'emotional_beat', 'characters_present', 'visual_elements_prompt']
                                 },
@@ -232,44 +233,44 @@ const premiumStoryPlanSchema = {
 const critiqueSchema = {
     type: Type.OBJECT,
     properties: {
-        narrative_score: { type: Type.NUMBER, description: "Score for narrative quality (0-100)." },
-        viral_score: { type: Type.NUMBER, description: "Score for viral potential (0-100)." },
-        integrated_score: { type: Type.NUMBER, description: "Weighted average score." },
+        narrative_score: { type: Type.NUMBER, description: "Puntuación de calidad narrativa (0-100)." },
+        viral_score: { type: Type.NUMBER, description: "Puntuación de potencial viral (0-100)." },
+        integrated_score: { type: Type.NUMBER, description: "Puntuación media ponderada." },
         strengths: {
             type: Type.ARRAY,
             items: { type: Type.STRING },
-            description: "A list of key strengths in the narrative."
+            description: "Una lista de las fortalezas clave de la narrativa."
         },
         weaknesses: {
             type: Type.ARRAY,
             items: {
                 type: Type.OBJECT,
                 properties: {
-                    point: { type: Type.STRING, description: "The identified weakness." },
-                    suggestion: { type: Type.STRING, description: "A concrete suggestion for improvement." },
-                    severity: { type: Type.STRING, description: "Severity of the weakness: 'Minor', 'Moderate', or 'High'." },
+                    point: { type: Type.STRING, description: "La debilidad identificada." },
+                    suggestion: { type: Type.STRING, description: "Una sugerencia concreta para mejorar." },
+                    severity: { type: Type.STRING, description: "Severidad de la debilidad: 'Minor', 'Moderate', o 'High'." },
                 },
                 required: ['point', 'suggestion', 'severity']
             },
-            description: "A list of weaknesses and corresponding suggestions."
+            description: "Una lista de debilidades y sus correspondientes sugerencias."
         },
         viral_moments: {
             type: Type.ARRAY,
             items: { type: Type.STRING },
-            description: "Specific moments in the story with high viral potential."
+            description: "Momentos específicos en la historia con alto potencial viral."
         },
         improvement_strategies: {
             type: Type.ARRAY,
             items: {
                 type: Type.OBJECT,
                 properties: {
-                    id: { type: Type.STRING, description: "A unique ID for the strategy, e.g., 'enhance_character_motivation'." },
-                    title: { type: Type.STRING, description: "The title of the improvement strategy." },
-                    description: { type: Type.STRING, description: "A detailed description of the strategy." },
+                    id: { type: Type.STRING, description: "Un ID único para la estrategia, ej., 'enhance_character_motivation'." },
+                    title: { type: Type.STRING, description: "El título de la estrategia de mejora." },
+                    description: { type: Type.STRING, description: "Una descripción detallada de la estrategia." },
                 },
                 required: ['id', 'title', 'description']
             },
-            description: "A list of high-level strategies to improve the story."
+            description: "Una lista de estrategias de alto nivel para mejorar la historia."
         },
     },
     required: ['narrative_score', 'viral_score', 'integrated_score', 'strengths', 'weaknesses', 'viral_moments', 'improvement_strategies']
@@ -284,9 +285,9 @@ const improvementStrategiesSchema = {
             items: {
                 type: Type.OBJECT,
                 properties: {
-                    id: { type: Type.STRING, description: "A unique ID for the strategy, e.g., 'add_viral_hook'." },
-                    title: { type: Type.STRING, description: "The title of the improvement strategy." },
-                    description: { type: Type.STRING, description: "A detailed description of the strategy." },
+                    id: { type: Type.STRING, description: "Un ID único para la estrategia, ej., 'add_viral_hook'." },
+                    title: { type: Type.STRING, description: "El título de la estrategia de mejora." },
+                    description: { type: Type.STRING, description: "Una descripción detallada de la estrategia." },
                 },
                 required: ['id', 'title', 'description']
             },
@@ -298,8 +299,7 @@ const improvementStrategiesSchema = {
 const characterMasterPromptSchema = {
     type: Type.OBJECT,
     properties: {
-        base_description_es: { type: Type.STRING },
-        base_description_en: { type: Type.STRING },
+        base_description: { type: Type.STRING },
         physical_details: {
             type: Type.OBJECT,
             properties: {
@@ -336,10 +336,8 @@ const storyboardPanelPromptSchema = {
     type: Type.OBJECT,
     properties: {
         scene_title: { type: Type.STRING },
-        description_es: { type: Type.STRING },
-        description_en: { type: Type.STRING },
-        dialogue_es: { type: Type.STRING },
-        dialogue_en: { type: Type.STRING },
+        description: { type: Type.STRING },
+        dialogue: { type: Type.STRING },
         camera_angle: { type: Type.STRING },
         lighting_specific: { type: Type.STRING },
         props: { type: Type.STRING },
@@ -386,12 +384,9 @@ const aiProductionGuideSchema = {
                 audio_generation_prompts: {
                     type: Type.OBJECT,
                     properties: {
-                        opening_theme_es: { type: Type.STRING },
-                        opening_theme_en: { type: Type.STRING },
-                        marcus_theme_es: { type: Type.STRING },
-                        marcus_theme_en: { type: Type.STRING },
-                        community_theme_es: { type: Type.STRING },
-                        community_theme_en: { type: Type.STRING },
+                        opening_theme: { type: Type.STRING },
+                        marcus_theme: { type: Type.STRING },
+                        community_theme: { type: Type.STRING },
                     }
                 }
             }
@@ -403,16 +398,16 @@ const aiProductionGuideSchema = {
 const enhancedDocumentationDossierSchema = {
     type: Type.OBJECT,
     properties: {
-        storyPlan: { ...storyPlanSchema, description: "The fully rewritten and improved story masterplan." },
+        storyPlan: { ...storyPlanSchema, description: "El plan maestro de la historia, completamente reescrito y mejorado." },
         documentation: {
             type: Type.OBJECT,
             properties: {
-                readme: { type: Type.STRING, description: "A master README.md file in Markdown format with a Table of Contents for the whole dossier." },
+                readme: { type: Type.STRING, description: "Un archivo README.md maestro en formato Markdown con una Tabla de Contenidos para todo el dossier." },
                 aiProductionGuide: aiProductionGuideSchema,
-                directorsBible: { type: Type.STRING, description: "Bilingual (ES/EN) master document covering the artistic, technical, and emotional vision." },
-                visualStyleGuide: { type: Type.STRING, description: "Bilingual (ES/EN) guide for visual direction, color palettes, and cinematography." },
-                narrativeStory: { type: Type.STRING, description: "Bilingual (ES/EN) full, literary-quality narrative story." },
-                literaryScript: { type: Type.STRING, description: "Bilingual (ES/EN) professional, theatrical-style script." },
+                directorsBible: { type: Type.STRING, description: "Documento maestro que cubre la visión artística, técnica y emocional." },
+                visualStyleGuide: { type: Type.STRING, description: "Guía para la dirección visual, paletas de colores y cinematografía." },
+                narrativeStory: { type: Type.STRING, description: "Historia narrativa completa, de calidad literaria." },
+                literaryScript: { type: Type.STRING, description: "Guion profesional de estilo teatral." },
             },
              required: ['readme', 'aiProductionGuide', 'directorsBible', 'visualStyleGuide', 'narrativeStory', 'literaryScript']
         },
@@ -452,8 +447,8 @@ const premiumDocumentationSchema = {
 // --- Prompt Generation Functions ---
 
 export const getConceptAssistancePrompt = (idea: string) => ({
-    contents: `Based on this initial idea, flesh it out into a more structured concept.
-    Initial Idea: "${idea}"`,
+    contents: `Basado en esta idea inicial, desarróllala hasta convertirla en un concepto más estructurado.
+    Idea Inicial: "${idea}"`,
     config: {
         systemInstruction: SYSTEM_INSTRUCTION_DIRECTOR,
         responseMimeType: 'application/json',
@@ -462,42 +457,43 @@ export const getConceptAssistancePrompt = (idea: string) => ({
 });
 
 export const getStyleSuggestionPrompt = (concept: InitialConcept) => ({
-    contents: `You are an expert AI director creating a complete Style and Format profile based on the provided concept.
+    contents: `Eres un director de IA experto creando un perfil completo de Estilo y Formato basado en el concepto proporcionado.
     
-**Your Task is to create a complete profile. Follow these steps precisely:**
-1.  Analyze the user's concept provided below.
-2.  For **EACH** of the 7 categories listed (Output Format, Narrative Style, Visual Style, Structure, Hook, Conflict, Ending), you **MUST** select between 1 and 3 of the most appropriate options from the available lists.
-3.  Your selections **MUST** use the machine-readable value keys (e.g., 'tiktok_vertical', 'comedy', 'film_noir_look').
-4.  For the \`energyLevel\`, provide a number from 1 to 10.
-5.  For \`styleNotes\`, write a brief, creative summary that encapsulates the chosen styles.
-6.  Ensure your final JSON response includes populated arrays for ALL 7 categories.
+**Tu Tarea es crear un perfil completo. Sigue estos pasos con precisión:**
+1.  Analiza el concepto del usuario proporcionado a continuación.
+2.  Para **CADA** una de las 7 categorías listadas (Formato de Salida, Estilo Narrativo, Estilo Visual, Estructura, Gancho, Conflicto, Final), **DEBES** seleccionar entre 1 y 3 de las opciones más apropiadas de las listas disponibles.
+3.  Tus selecciones **DEBEN** usar las claves de valor legibles por máquina (ej., 'tiktok_vertical', 'comedy', 'film_noir_look').
+4.  Para el \`energyLevel\`, proporciona un número del 1 al 10.
+5.  Para \`styleNotes\`, escribe un resumen breve y creativo que encapsule los estilos elegidos.
+6.  Asegúrate de que tu respuesta JSON final incluya arrays poblados para TODAS las 7 categorías.
+7.  **TODO EN ESPAÑOL.**
 
-**Concept:**
+**Concepto:**
 ${JSON.stringify(concept, null, 2)}
 
 ---
-**AVAILABLE OPTIONS (CHOOSE FROM THESE):**
+**OPCIONES DISPONIBLES (ELIGE DE ESTAS):**
 ---
 
-**1. Output Format (outputFormat):**
+**1. Formato de Salida (outputFormat):**
 ${formatOptionsForPrompt(outputFormats)}
 
-**2. Narrative Style (narrativeStyle):**
+**2. Estilo Narrativo (narrativeStyle):**
 ${formatOptionsForPrompt(narrativeStyles)}
 
-**3. Visual Style (visualStyle):**
+**3. Estilo Visual (visualStyle):**
 ${formatOptionsForPrompt(visualStyles)}
 
-**4. Narrative Structure (narrativeStructure):**
+**4. Estructura Narrativa (narrativeStructure):**
 ${formatOptionsForPrompt(narrativeStructures)}
 
-**5. Hook Type (hook):**
+**5. Tipo de Gancho (hook):**
 ${formatOptionsForPrompt(hookTypes)}
 
-**6. Conflict Type (conflict):**
+**6. Tipo de Conflicto (conflict):**
 ${formatOptionsForPrompt(conflictTypes)}
 
-**7. Ending Type (ending):**
+**7. Tipo de Final (ending):**
 ${formatOptionsForPrompt(endingTypes)}
     `,
     config: {
@@ -508,9 +504,9 @@ ${formatOptionsForPrompt(endingTypes)}
 });
 
 export const getCharacterAssistancePrompt = (character: CharacterDefinition, concept: InitialConcept) => ({
-    contents: `Flesh out the details for the following character within the context of this story concept.
-    Story Concept: ${concept.idea}
-    Character Details: ${JSON.stringify({ name: character.name, role: character.role, description: character.description })}`,
+    contents: `Desarrolla los detalles para el siguiente personaje dentro del contexto de este concepto de historia.
+    Concepto de la Historia: ${concept.idea}
+    Detalles del Personaje: ${JSON.stringify({ name: character.name, role: character.role, description: character.description })}`,
     config: {
         systemInstruction: SYSTEM_INSTRUCTION_DIRECTOR,
         responseMimeType: 'application/json',
@@ -519,8 +515,8 @@ export const getCharacterAssistancePrompt = (character: CharacterDefinition, con
 });
 
 export const getCharacterCastPrompt = (concept: InitialConcept) => ({
-    contents: `Based on the following story concept, generate a compelling cast of 3-5 main characters.
-    Story Concept: ${JSON.stringify(concept)}`,
+    contents: `Basado en el siguiente concepto de historia, genera un elenco convincente de 3-5 personajes principales.
+    Concepto de la Historia: ${JSON.stringify(concept)}`,
     config: {
         systemInstruction: SYSTEM_INSTRUCTION_DIRECTOR,
         responseMimeType: 'application/json',
@@ -529,10 +525,10 @@ export const getCharacterCastPrompt = (concept: InitialConcept) => ({
 });
 
 export const getStructureAssistancePrompt = (concept: InitialConcept, style: StyleAndFormat, characters: CharacterDefinition[]) => ({
-    contents: `Based on the concept, style, and characters provided, write a summary for a classic three-act structure.
-    Concept: ${JSON.stringify(concept)}
-    Style: ${JSON.stringify(style)}
-    Characters: ${JSON.stringify(characters.map(c => ({ name: c.name, role: c.role })))}`,
+    contents: `Basado en el concepto, estilo y personajes proporcionados, escribe un resumen para una estructura clásica de tres actos.
+    Concepto: ${JSON.stringify(concept)}
+    Estilo: ${JSON.stringify(style)}
+    Personajes: ${JSON.stringify(characters.map(c => ({ name: c.name, role: c.role })))}`,
     config: {
         systemInstruction: SYSTEM_INSTRUCTION_DIRECTOR,
         responseMimeType: 'application/json',
@@ -541,15 +537,15 @@ export const getStructureAssistancePrompt = (concept: InitialConcept, style: Sty
 });
 
 export const getCoherenceCheckPrompt = (state: StoryBuilderState) => ({
-    contents: `Analyze the following story elements for coherence, consistency, and potential plot holes.
-    First, provide a series of progress updates as distinct JSON objects, one per line. Each object should have a "progress" key containing an array of step objects.
-    Example of a progress update object:
-    {"progress":[{"id":"1","label":"Analyzing Concept","status":"complete","result":"OK"}]}
+    contents: `Analiza los siguientes elementos de la historia en busca de coherencia, consistencia y posibles agujeros en la trama.
+    Primero, proporciona una serie de actualizaciones de progreso como objetos JSON distintos, uno por línea. Cada objeto debe tener una clave "progress" que contenga un array de objetos de paso.
+    Ejemplo de un objeto de actualización de progreso:
+    {"progress":[{"id":"1","label":"Analizando Concepto","status":"complete","result":"OK"}]}
     
-    After all progress updates, provide the final, complete report as a single JSON object on a new line. The final object must match this structure:
+    Después de todas las actualizaciones de progreso, proporciona el informe final y completo como un único objeto JSON en una nueva línea. El objeto final debe coincidir con esta estructura:
     {"report":{"coherenceScore":NUMBER,"overallAssessment":"STRING","checks":[{"id":"STRING","element":"STRING","concern":"STRING","suggestion":"STRING","severity":"STRING"}]}}
     
-    Story Data: ${JSON.stringify({
+    Datos de la Historia: ${JSON.stringify({
         concept: state.initialConcept,
         style: state.styleAndFormat,
         characters: state.characters,
@@ -561,9 +557,9 @@ export const getCoherenceCheckPrompt = (state: StoryBuilderState) => ({
 });
 
 export const getApplyCoherenceSuggestionsPrompt = (state: StoryBuilderState, suggestionsToApply: StructuralCoherenceReport['checks']) => ({
-    contents: `You are an expert script doctor. Your task is to rewrite parts of the provided story data based *only* on the selected suggestions.
+    contents: `Eres un doctor de guiones experto. Tu tarea es reescribir partes de los datos de la historia proporcionados basándote *únicamente* en las sugerencias seleccionadas.
     
-    **CURRENT STORY DATA:**
+    **DATOS ACTUALES DE LA HISTORIA:**
     ${JSON.stringify({
         concept: state.initialConcept,
         style: state.styleAndFormat,
@@ -571,13 +567,13 @@ export const getApplyCoherenceSuggestionsPrompt = (state: StoryBuilderState, sug
         structure: state.storyStructure,
     })}
 
-    **SUGGESTIONS TO APPLY:**
+    **SUGERENCIAS A APLICAR:**
     ${JSON.stringify(suggestionsToApply)}
 
-    **INSTRUCTIONS:**
-    1.  Carefully read each suggestion.
-    2.  Modify the corresponding section in the story data to implement the suggestion.
-    3.  Return a JSON object containing ONLY the modified sections. If you change a character, return the ENTIRE updated characters array. Do not include sections that were not changed.
+    **INSTRUCCIONES:**
+    1.  Lee atentamente cada sugerencia.
+    2.  Modifica la sección correspondiente en los datos de la historia para implementar la sugerencia.
+    3.  Devuelve un objeto JSON que contenga ÚNICAMENTE las secciones modificadas. Si cambias un personaje, devuelve el array COMPLETO y actualizado de personajes. No incluyas secciones que no se cambiaron.
     `,
     config: {
         systemInstruction: SYSTEM_INSTRUCTION_DIRECTOR,
@@ -602,8 +598,8 @@ export const getStoryPlanGenerationPrompt = (state: StoryBuilderState) => {
     };
 
     return {
-        contents: `You are an AI director. Take all the provided information and synthesize it into a complete, detailed Story Masterplan. Break down the three acts into specific, numbered scenes with titles, summaries, emotional beats, and characters present. Generate a logline, title, and theme. Fill out all sections of the JSON object.
-        Full Story Data: ${JSON.stringify(planInputs)}`,
+        contents: `Eres un director de IA. Toma toda la información proporcionada y sintetízala en un Plan Maestro de Historia completo y detallado. Desglosa los tres actos en escenas específicas y numeradas con títulos, resúmenes, puntos emocionales y personajes presentes. Genera un logline, título y tema. Completa todas las secciones del objeto JSON.
+        Datos Completos de la Historia: ${JSON.stringify(planInputs)}`,
         config: {
             systemInstruction: SYSTEM_INSTRUCTION_DIRECTOR,
             responseMimeType: 'application/json',
@@ -614,9 +610,9 @@ export const getStoryPlanGenerationPrompt = (state: StoryBuilderState) => {
 
 export const getPremiumStoryPlanPrompt = (state: StoryBuilderState) => {
     return {
-        contents: `You are an AI director creating a Premium Story Masterplan. You have been given a story structure that has been enhanced by a team of specialized agents. Your task is to synthesize this rich, multi-layered data into a coherent and compelling masterplan.
+        contents: `Eres un director de IA creando un Plan Maestro de Historia Premium. Se te ha dado una estructura de historia que ha sido mejorada por un equipo de agentes especializados. Tu tarea es sintetizar estos datos ricos y multicapa en un plan maestro coherente y convincente.
 
-**ENHANCED STORY DATA (INPUT):**
+**DATOS DE HISTORIA MEJORADOS (ENTRADA):**
 ${JSON.stringify({
     initialConcept: state.initialConcept,
     styleAndFormat: state.styleAndFormat,
@@ -624,11 +620,12 @@ ${JSON.stringify({
     enhancedData: state.enhancedData,
 }, null, 2)}
 
-**MISSION:**
-1.  **Synthesize, Don't Just Copy:** Integrate the agent enhancements (psychology, culture, etc.) naturally into the scene summaries, character descriptions, and overall theme.
-2.  **Create the Base Masterplan:** Generate all the standard fields of a \`StoryMasterplan\` (metadata, creative_brief, characters, story_structure).
-3.  **Populate Enhanced Metadata:** Based on the agent data, create the \`enhanced_metadata\` and \`agent_contributions\` sections of the \`PremiumStoryPlan\`. Summarize the insights and quantify the potential.
-4.  **Ensure Coherence:** The final plan must feel like a single, unified vision, not a collection of separate agent outputs.
+**MISIÓN:**
+1.  **Sintetiza, no solo copies:** Integra las mejoras de los agentes (psicología, cultura, etc.) de forma natural en los resúmenes de las escenas, las descripciones de los personajes y el tema general.
+2.  **Crea el Plan Maestro Base:** Genera todos los campos estándar de un \`StoryMasterplan\` (metadata, creative_brief, characters, story_structure).
+3.  **Puebla los Metadatos Mejorados:** Basándote en los datos de los agentes, crea las secciones \`enhanced_metadata\` y \`agent_contributions\` del \`PremiumStoryPlan\`. Resume los conocimientos y cuantifica el potencial.
+4.  **Asegura la Coherencia:** El plan final debe sentirse como una visión única y unificada, no como una colección de resultados de agentes separados.
+5.  **TODO EN ESPAÑOL.**
 `,
         config: {
             systemInstruction: SYSTEM_INSTRUCTION_DIRECTOR,
@@ -640,11 +637,11 @@ ${JSON.stringify({
 
 export const getCritiquePrompt = (storyPlan: StoryMasterplan, refined: boolean = false, userSelections?: {strategies: Critique['improvement_strategies'], notes?: string}) => {
     const context = refined && userSelections ? `
-This is a REFINEMENT round (Reporte β). The user has reviewed the initial critique and provided the following feedback.
-- **Selected Strategies to Implement:** ${JSON.stringify(userSelections.strategies)}
-- **Additional Director's Notes:** "${userSelections.notes || 'No additional notes.'}"
+Esta es una ronda de REFINAMIENTO (Reporte β). El usuario ha revisado la crítica inicial y ha proporcionado la siguiente retroalimentación.
+- **Estrategias Seleccionadas para Implementar:** ${JSON.stringify(userSelections.strategies)}
+- **Notas Adicionales del Director:** "${userSelections.notes || 'Sin notas adicionales.'}"
 
-Your task is to generate a new, more focused critique that incorporates this feedback, potentially adjusting the viral score and offering more targeted improvement strategies.
+Tu tarea es generar una nueva crítica, más enfocada, que incorpore esta retroalimentación, ajustando potencialmente la puntuación viral y ofreciendo estrategias de mejora más específicas.
 ` : `
 EVALUACIÓN INTEGRAL: NARRATIVA + VIRAL FUSIONADA
 
@@ -663,14 +660,14 @@ CRITERIOS DE EVALUACIÓN BALANCEADOS:
 
 GENERA EVALUACIÓN ÚNICA QUE BALANCEA AMBOS ASPECTOS.
 La historia debe ser artísticamente sólida Y viralmente optimizada.
-First, stream a series of progress updates as JSON objects, one per line, like {"progress": [{"id": "1", "label": "Analyzing Strengths", "status": "running"}]}. After all updates, provide the final, complete critique in the specified JSON format on a new line.
+Primero, transmite una serie de actualizaciones de progreso como objetos JSON, uno por línea, como {"progress": [{"id": "1", "label": "Analizando Fortalezas", "status": "running"}]}. Después de todas las actualizaciones, proporciona la crítica final y completa en el formato JSON especificado en una nueva línea.
 `;
 
     const { critique, ...planToAnalyze } = storyPlan;
 
     return {
-        contents: `Analyze this Story Masterplan. ${context}
-        Story Plan: ${JSON.stringify(planToAnalyze)}`,
+        contents: `Analiza este Plan Maestro de Historia. ${context}
+        Plan de Historia: ${JSON.stringify(planToAnalyze)}`,
         config: {
             systemInstruction: SYSTEM_INSTRUCTION_CRITIC,
         }
@@ -678,19 +675,19 @@ First, stream a series of progress updates as JSON objects, one per line, like {
 };
 
 export const getApplyCritiqueImprovementsPrompt = (storyPlan: StoryMasterplan, weaknessesToFix: Critique['weaknesses']) => ({
-    contents: `You are an expert AI Script Doctor. Your task is to rewrite and improve the provided Story Masterplan to fix the specific weaknesses identified.
+    contents: `Eres un Doctor de Guiones de IA experto. Tu tarea es reescribir y mejorar el Plan Maestro de Historia proporcionado para corregir las debilidades específicas identificadas.
 
-**CURRENT STORY MASTERPLAN:**
+**PLAN MAESTRO DE HISTORIA ACTUAL:**
 ${JSON.stringify(storyPlan)}
 
-**WEAKNESSES TO FIX:**
+**DEBILIDADES A CORREGIR:**
 ${JSON.stringify(weaknessesToFix)}
 
-**INSTRUCTIONS:**
-1.  Carefully analyze each weakness and its suggestion.
-2.  Intelligently rewrite the relevant sections of the story masterplan (characters, story_structure, etc.) to address these points.
-3.  Maintain the overall tone and intent of the original plan.
-4.  Return the **complete, updated Story Masterplan** in the correct JSON format.
+**INSTRUCCIONES:**
+1.  Analiza cuidadosamente cada debilidad y su sugerencia.
+2.  Reescribe inteligentemente las secciones relevantes del plan maestro de la historia (personajes, story_structure, etc.) para abordar estos puntos.
+3.  Mantén el tono y la intención general del plan original.
+4.  Devuelve el **Plan Maestro de Historia completo y actualizado** en el formato JSON correcto.
 `,
     config: {
         systemInstruction: SYSTEM_INSTRUCTION_DIRECTOR,
@@ -701,14 +698,14 @@ ${JSON.stringify(weaknessesToFix)}
 
 
 export const getViralitySuggestionsPrompt = (storyPlan: StoryMasterplan) => ({
-    contents: `You are a Viral Content Analyst. Your sole focus is to generate new, creative strategies to increase the viral potential of the provided story plan.
+    contents: `Eres un Analista de Contenido Viral. Tu único enfoque es generar estrategias nuevas y creativas para aumentar el potencial viral del plan de historia proporcionado.
 
-**Story Plan:**
+**Plan de Historia:**
 ${JSON.stringify(storyPlan.metadata)}
 ${JSON.stringify(storyPlan.creative_brief)}
 
-**Task:**
-Generate a list of 3-5 highly specific and actionable "improvementStrategies" focused exclusively on making the content more shareable, engaging, and attention-grabbing for social media. Provide a unique \`id\`, a catchy \`title\`, and a clear \`description\` for each. Do not analyze strengths or weaknesses, only provide new viral strategies.`,
+**Tarea:**
+Genera una lista de 3-5 "improvementStrategies" altamente específicas y accionables, enfocadas exclusivamente en hacer el contenido más compartible, atractivo y que capte la atención para las redes sociales. Proporciona un \`id\` único, un \`title\` pegadizo y una \`description\` clara para cada una. No analices fortalezas o debilidades, solo proporciona nuevas estrategias virales.`,
     config: {
         systemInstruction: SYSTEM_INSTRUCTION_CRITIC,
         responseMimeType: 'application/json',
@@ -717,36 +714,28 @@ Generate a list of 3-5 highly specific and actionable "improvementStrategies" fo
 });
 
 export const getDocumentationDossierPrompt = (storyPlan: StoryMasterplan) => ({
-  contents: `You are a professional production house team (like SIERRA or Hondo Studio). Your task is to generate a complete production dossier based on the approved story masterplan.
+  contents: `Eres un equipo de una casa productora profesional (como SIERRA o Hondo Studio). Tu tarea es generar un dossier de producción completo basado en el plan maestro de historia aprobado.
 
-**CRITICAL**: This documentation must integrate VIRAL OPTIMIZATION throughout all documents.
+**CRÍTICO**: Esta documentación debe integrar la OPTIMIZACIÓN VIRAL en todos los documentos.
 
-**Approved Story Masterplan:**
+**Plan Maestro de Historia Aprobado:**
 ${JSON.stringify(storyPlan)}
 
-**YOUR MISSION:**
-1. **Generate Professional Documentation with Integrated Virality:** Create the following production documents with the quality of a master like Nabokov or Borges, but OPTIMIZED for viral potential. Each document must consider viral elements naturally integrated, not as an afterthought.
+**TU MISIÓN:**
+1. **Genera Documentación Profesional con Viralidad Integrada:** Crea los siguientes documentos de producción con una calidad maestra, pero OPTIMIZADOS para potencial viral. Cada documento debe considerar elementos virales integrados de forma natural, no como una ocurrencia tardía.
 
-   - \`readme\`: Master README.md that includes viral strategy overview
-   - \`narrativeStory\`: Literary narrative with embedded viral moments and hooks
-   - \`literaryScript\`: Professional script with viral timing and engagement points marked
-   - \`directorsBible\`: Director's bible including viral direction and platform optimization
-   - \`visualStyleGuide\`: Visual guide optimized for different platforms (TikTok, YouTube, Instagram)
+   - \`readme\`: README.md maestro que incluye una visión general de la estrategia viral.
+   - \`narrativeStory\`: Narrativa literaria con momentos y ganchos virales incrustados.
+   - \`literaryScript\`: Guion profesional con puntos de tiempo y engagement viral marcados.
+   - \`directorsBible\`: Biblia del director que incluye dirección viral y optimización de plataforma.
+   - \`visualStyleGuide\`: Guía visual optimizada para diferentes plataformas (TikTok, YouTube, Instagram).
 
-2. **Generate AI Production Guide with Viral Prompts:** Create structured prompts that generate visually consistent AND virally optimized content.
+2. **Genera Guía de Producción de IA con Prompts Virales:** Crea prompts estructurados que generen contenido visualmente consistente Y viralmente optimizado.
 
-3. **Integrate Hook Matrix into Documentation:** Instead of separate hook generation, embed viral hooks naturally throughout all documents.
+3. **TODO EN ESPAÑOL.**
 
-**VIRAL INTEGRATION REQUIREMENTS:**
-- README must include viral strategy section
-- Narrative story must have natural viral moments embedded
-- Script must mark optimal hook placements and timing
-- Director's bible must include platform-specific direction
-- Visual guide must optimize for social media formats
-- AI prompts must generate viral-optimized visual content
-
-**OUTPUT:**
-Return complete documentation object with integrated viral optimization, NOT separate viral analysis.`,
+**SALIDA:**
+Devuelve un objeto de documentación completo con optimización viral integrada.`,
   
   config: {
     systemInstruction: SYSTEM_INSTRUCTION_DIRECTOR,
@@ -755,33 +744,30 @@ Return complete documentation object with integrated viral optimization, NOT sep
   }
 });
 
-// FIX: Corrected a malformed function that was causing a cascade of syntax errors.
-// The original code had a structural issue preventing it from being parsed correctly.
-// This rewritten version ensures the function correctly returns the prompt object.
 export const getPremiumDocumentationPrompt = (premiumStoryPlan: PremiumStoryPlan) => {
     return {
-        contents: `You are the world's premier creative production house team. Create a complete premium documentation dossier that incorporates all the specialized agent enhancements.
+        contents: `Eres el equipo de la casa productora creativa más prestigiosa del mundo. Crea un dossier de documentación premium completo que incorpore todas las mejoras de los agentes especializados.
 
-**PREMIUM STORY PLAN WITH AGENT ENHANCEMENTS:**
+**PLAN DE HISTORIA PREMIUM CON MEJORAS DE AGENTES:**
 ${JSON.stringify(premiumStoryPlan, null, 2)}
 
-**MISSION: Create documentation that is:**
-1. **Psychologically Rich**: Incorporates all psychological insights and patterns
-2. **Culturally Profound**: Integrates cultural elements and anthropological depth  
-3. **Historically Resonant**: Weaves in historical references and archetypal connections
-4. **Narratively Innovative**: Showcases disruptive and unique elements
-5. **Virally Optimized**: Naturally integrates viral hooks and retention strategies
-6. **Completely Human**: No detectable AI traces, authentic human creativity
+**MISIÓN: Crear documentación que sea:**
+1. **Psicológicamente Rica**: Incorpora todas las ideas y patrones psicológicos.
+2. **Culturalmente Profunda**: Integra elementos culturales y profundidad antropológica.
+3. **Históricamente Resonante**: Entrelaza referencias históricas y conexiones arquetípicas.
+4. **Narrativamente Innovadora**: Muestra elementos disruptivos y únicos.
+5. **Viralmente Optimizada**: Integra de forma natural ganchos virales y estrategias de retención.
+6. **Completamente Humana**: Sin rastros de IA detectables, creatividad humana auténtica.
 
-**ENHANCED DOCUMENTATION REQUIREMENTS:**
-- README: Include agent enhancement summary and premium quality indicators
-- Narrative Story: Integrate psychological layers and cultural depth naturally
-- Literary Script: Mark viral moments and psychological beats subtly
-- Director's Bible: Include agent insights as "creative intuitions"
-- Visual Style Guide: Incorporate cultural and historical visual elements
-- AI Production Guide: Enhanced prompts that maintain agent-level quality
+**REQUISITOS DE DOCUMENTACIÓN MEJORADA:**
+- README: Incluye resumen de mejoras de agentes e indicadores de calidad premium.
+- Narrative Story: Integra capas psicológicas y profundidad cultural de forma natural.
+- Literary Script: Marca momentos virales y ritmos psicológicos sutilmente.
+- Director's Bible: Incluye las ideas de los agentes como "intuiciones creativas".
+- Visual Style Guide: Incorpora elementos visuales culturales e históricos.
+- AI Production Guide: Prompts mejorados que mantienen la calidad a nivel de agente.
 
-**CRITICAL**: The documentation should read as if created by a team of human experts in psychology, anthropology, history, and viral content creation. No mention of AI agents or artificial enhancement.`,
+**CRÍTICO**: La documentación debe leerse como si hubiera sido creada por un equipo de expertos humanos en psicología, antropología, historia y creación de contenido viral. Sin mención de agentes de IA o mejoras artificiales. **TODO EN ESPAÑOL.**`,
         config: {
             systemInstruction: SYSTEM_INSTRUCTION_DIRECTOR,
             responseMimeType: 'application/json',

@@ -5,19 +5,15 @@
 // Placeholder for the Psychology Pattern Agent
 export class PsychologyPatternAgent {
     name = "PsychologyPatternAgent";
-    outputField = "psychological_layers";
+    outputField = "psychological_layers" as const;
 
     async process(data: any, callbacks: { onProgress?: (progress: any) => void }) {
         // Mock implementation
         await new Promise(res => setTimeout(res, 500));
-        callbacks.onProgress?.({
-            status: 'complete',
-            description: 'Identified key psychological archetypes.',
-            enhancement: '+3 insights'
-        });
         return {
-            enhancements: [{ id: 'archetype_hero', detail: 'Hero archetype identified' }],
-            enhancedData: {}
+            enhancements: [{ id: 'archetype_hero', detail: 'Arquetipo de héroe identificado' }],
+            enhancedData: {},
+            quality_score: 1.5 + Math.random()
         };
     }
 }

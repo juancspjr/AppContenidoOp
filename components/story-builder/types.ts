@@ -73,6 +73,8 @@ export interface EnhancedStoryData extends StoryStructure {
     agents_applied: string[];
     processing_time: number;
     quality_score: number;
+    // FIX: Add missing property to match usage in AgentOrchestrator.
+    process_log: any[];
   };
 }
 
