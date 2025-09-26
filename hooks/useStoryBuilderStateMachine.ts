@@ -314,11 +314,56 @@ export const useStoryBuilderStateMachine = (existingProject?: ExportedProject) =
 
         // --- Standard assistance actions ---
         assistConcept: async (idea: string) => {
-            await apiCall(
-                (model) => geminiService.generateContent(Prompts.getConceptAssistancePrompt(idea), model),
-                (data) => ({ initialConcept: { ...data, selectedTextModel: state.initialConcept?.selectedTextModel, selectedImageModel: state.initialConcept?.selectedImageModel } }),
-                { isAssist: true }
-            );
+            dispatch({ type: 'API_START', payload: { isAssisting: true } });
+            try {
+                if (!idea || idea.trim().length < 10) {
+                    throw new Error('La idea debe tener al menos 10 caracteres para la asistencia de IA.');
+                }
+                
+                logger.log('INFO', 'StateMachine', `Solicitando asistencia de concepto para idea: "${idea.substring(0, 50)}..."`);
+                
+                const promptRequest = Prompts.getConceptAssistancePrompt(idea);
+                
+                if (!promptRequest.contents || !promptRequest.config) {
+                    throw new Error('Prompt mal formado - la función getConceptAssistancePrompt devolvió una estructura inválida.');
+                }
+                
+                const selectedModel = state.initialConcept?.selectedTextModel || 'gemini-2.5-flash';
+                
+                const response = await apiRateLimiter.addCall(() => geminiService.generateContent(promptRequest, selectedModel));
+                
+                const conceptData = parseJsonMarkdown(response.text);
+                
+                if (!conceptData.idea || !conceptData.targetAudience || !conceptData.keyElements) {
+                    throw new Error('La respuesta de la IA fue incompleta o no tuvo el formato esperado.');
+                }
+                
+                dispatch({ type: 'API_SUCCESS', payload: { 
+                    initialConcept: {
+                        idea: conceptData.idea,
+                        targetAudience: conceptData.targetAudience,
+                        keyElements: conceptData.keyElements,
+                        // Preserve user's model selection
+                        selectedTextModel: state.initialConcept?.selectedTextModel,
+                        selectedImageModel: state.initialConcept?.selectedImageModel,
+                    }
+                }});
+                
+                logger.log('SUCCESS', 'StateMachine', 'Concepto refinado exitosamente con IA.');
+                
+            } catch (error) {
+                const errorMessage = formatApiError(error);
+                logger.log('ERROR', 'StateMachine', `Fallo en asistencia de concepto: ${errorMessage}`, error);
+                
+                let userMessage = 'Error al generar asistencia: ';
+                if (errorMessage.includes('invalid input') || errorMessage.includes('INVALID_ARGUMENT')) {
+                    userMessage += 'Problema con el formato de la solicitud. Intenta con una idea más simple o revisa la consola para más detalles.';
+                } else {
+                    userMessage += errorMessage;
+                }
+                
+                dispatch({ type: 'API_ERROR', payload: userMessage });
+            }
         },
         suggestStyle: async () => {
             if (!state.initialConcept) return;

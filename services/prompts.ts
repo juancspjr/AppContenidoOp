@@ -282,11 +282,116 @@ export const metricsOptimizationSuggestionsSchema = {
 
 
 // --- Prompt Generation Functions ---
-export const getConceptAssistancePrompt = (idea: string) => ({ /* unchanged */ });
-export const getStyleSuggestionPrompt = (concept: InitialConcept) => ({ /* unchanged */ });
-export const getCharacterAssistancePrompt = (character: CharacterDefinition, concept: InitialConcept) => ({ /* unchanged */ });
-export const getCharacterCastPrompt = (concept: InitialConcept) => ({ /* unchanged */ });
-export const getStructureAssistancePrompt = (concept: InitialConcept, style: StyleAndFormat, characters: CharacterDefinition[]) => ({ /* unchanged */ });
+export const getConceptAssistancePrompt = (idea: string) => {
+    return {
+        contents: `Eres un asistente de desarrollo creativo experto. Te doy una idea inicial y necesitas ayudarme a refinarla y completarla.
+
+**IDEA INICIAL DEL USUARIO:**
+"${idea}"
+
+**TU MISIÓN:**
+1. **Refina la idea** haciéndola más específica y atractiva.
+2. **Identifica el público objetivo** más probable para esta historia.
+3. **Sugiere 5-7 elementos clave** (temas, visuales, emociones) que podrían enriquecer la historia.
+
+**IMPORTANTE:**
+- Mantén la esencia original de la idea del usuario.
+- Hazla más concreta y visual.
+- Piensa en elementos que generen conexión emocional.
+- Todo en español.
+
+Responde en el formato JSON solicitado.`,
+        config: {
+            systemInstruction: SYSTEM_INSTRUCTION_DIRECTOR,
+            responseMimeType: 'application/json',
+            responseSchema: conceptSchema,
+            temperature: 0.7,
+            maxOutputTokens: 1024
+        }
+    };
+};
+
+export const getStyleSuggestionPrompt = (concept: InitialConcept) => {
+    return {
+        contents: `Basándote en este concepto de historia, sugiere estilos y formatos apropiados.
+
+**CONCEPTO:**
+- Idea: ${concept.idea}
+- Público: ${concept.targetAudience || 'General'}
+- Elementos clave: ${concept.keyElements?.join(', ') || 'No especificados'}
+
+Sugiere configuraciones de estilo que complementen esta historia. Selecciona varias opciones de cada categoría que creas que encajan bien. Todo en español.`,
+        config: {
+            systemInstruction: SYSTEM_INSTRUCTION_DIRECTOR,
+            responseMimeType: 'application/json',
+            responseSchema: styleSchema,
+            temperature: 0.7
+        }
+    };
+};
+
+export const getCharacterAssistancePrompt = (character: CharacterDefinition, concept: InitialConcept) => {
+    return {
+        contents: `Ayuda a desarrollar este personaje para la historia.
+
+**CONCEPTO DE HISTORIA:** ${concept.idea}
+
+**PERSONAJE ACTUAL:**
+- Nombre: ${character.name || 'Sin nombre'}
+- Descripción: ${character.description || 'Sin descripción'}
+- Rol: ${character.role}
+
+**TU MISIÓN:**
+1.  Expande la **descripción** con más personalidad y antecedentes.
+2.  Define su **motivación** (deseo, miedo, necesidad).
+3.  Crea un **defecto crítico** interesante.
+4.  Sugiere un **arco de personaje** (cómo cambia a lo largo de la historia).
+5.  Proporciona **detalles visuales para la IA** (ej. 'pelo rojo, cicatriz en el ojo, ropa de cuero desgastada').
+
+Mejora y profundiza este personaje. Todo en español.`,
+        config: {
+            systemInstruction: SYSTEM_INSTRUCTION_DIRECTOR,
+            responseMimeType: 'application/json',
+            responseSchema: characterSchema,
+            temperature: 0.8
+        }
+    };
+};
+
+export const getCharacterCastPrompt = (concept: InitialConcept) => {
+    return {
+        contents: `Genera un elenco completo de personajes para esta historia.
+
+**CONCEPTO:** ${concept.idea}
+**PÚBLICO:** ${concept.targetAudience || 'General'}
+
+Crea 3-5 personajes principales y secundarios con roles claros (protagonista, antagonista, mentor, etc.), descripciones concisas y motivaciones. Todo en español.`,
+        config: {
+            systemInstruction: SYSTEM_INSTRUCTION_DIRECTOR,
+            responseMimeType: 'application/json',
+            responseSchema: characterCastSchema,
+            temperature: 0.8
+        }
+    };
+};
+
+export const getStructureAssistancePrompt = (concept: InitialConcept, style: StyleAndFormat, characters: CharacterDefinition[]) => {
+    return {
+        contents: `Crea una estructura narrativa de tres actos para esta historia.
+
+**CONCEPTO:** ${concept.idea}
+**ESTILO:** ${style.narrativeStyle?.join(', ') || 'Estándar'}
+**PERSONAJES:** ${characters.map(c => c.name).join(', ')}
+
+Desarrolla un resumen para cada uno de los tres actos (Planteamiento, Confrontación, Resolución) que sea coherente con los datos proporcionados. Todo en español.`,
+        config: {
+            systemInstruction: SYSTEM_INSTRUCTION_DIRECTOR,
+            responseMimeType: 'application/json',
+            responseSchema: structureSchema,
+            temperature: 0.7
+        }
+    };
+};
 
 export const getPremiumStoryPlanPrompt = (state: StoryBuilderState) => {
     return {
