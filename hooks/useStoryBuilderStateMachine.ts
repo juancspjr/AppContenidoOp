@@ -39,7 +39,7 @@ type Action =
     | { type: 'SET_STYLE'; payload: StyleAndFormat }
     | { type: 'SET_CHARACTERS'; payload: CharacterDefinition[] }
     | { type: 'SET_STRUCTURE'; payload: StoryStructure }
-    | { type: 'API_START'; payload?: { isAssisting: boolean } }
+    | { type: 'API_START'; payload?: { isAssisting?: boolean, isOptimizing?: boolean } }
     | { type: 'API_ASSIST_CHAR_START'; payload: string }
     // FIX: Expand payload type to allow 'assistingCharacterIds' which is part of the reducer state.
     | { type: 'API_SUCCESS'; payload: Partial<StoryBuilderState> & { assistingCharacterIds?: Set<string> } }
@@ -57,7 +57,8 @@ type Action =
     | { type: 'API_APPLY_IMPROVEMENTS_START' }
     | { type: 'SET_AGENT_PROGRESS'; payload: any[] }
     | { type: 'SET_CURRENT_AGENT'; payload: string }
-    | { type: 'CACHE_PHASE_RESULT'; payload: { key: string; data: any } };
+    | { type: 'CACHE_PHASE_RESULT'; payload: { key: string; data: any } }
+    | { type: 'UPDATE_PREMIUM_PLAN'; payload: PremiumStoryPlan };
 
 
 const initialState: StoryBuilderState = {
@@ -85,7 +86,7 @@ const initialState: StoryBuilderState = {
 
 // Add loading states to the initial state
 const fullInitialState: StoryBuilderState & { 
-    isLoading: boolean; isAssisting: boolean; error: string | null; assistingCharacterIds: Set<string>; progress: Record<string, ProgressUpdate>; isSuggestingVirality: boolean; isApplyingImprovements: boolean; agentProgress: any[]; currentAgent: string; phaseCache: Map<string, any>; processedPhases: Set<string>;
+    isLoading: boolean; isAssisting: boolean; error: string | null; assistingCharacterIds: Set<string>; progress: Record<string, ProgressUpdate>; isSuggestingVirality: boolean; isApplyingImprovements: boolean; agentProgress: any[]; currentAgent: string; phaseCache: Map<string, any>; processedPhases: Set<string>; isOptimizing: boolean;
 } = {
     ...initialState,
     isLoading: false,
@@ -99,6 +100,7 @@ const fullInitialState: StoryBuilderState & {
     currentAgent: '',
     phaseCache: new Map<string, any>(),
     processedPhases: new Set<string>(),
+    isOptimizing: false,
 };
 
 function storyBuilderReducer(
@@ -144,11 +146,12 @@ function storyBuilderReducer(
             return { ...state, phase: 4.5, storyStructure: action.payload, error: null, processedPhases: new Set(state.processedPhases).add('phase_4') };
         case 'API_START':
             const isAssist = action.payload?.isAssisting || false;
-            return { ...state, isLoading: !isAssist, isAssisting: isAssist, error: null, agentProgress: [], currentAgent: '' };
+            const isOpt = action.payload?.isOptimizing || false;
+            return { ...state, isLoading: !isAssist && !isOpt, isAssisting: isAssist, isOptimizing: isOpt, error: null, agentProgress: [], currentAgent: '' };
         case 'API_ASSIST_CHAR_START':
             return { ...state, assistingCharacterIds: new Set(state.assistingCharacterIds).add(action.payload) };
         case 'API_SUCCESS':
-            return { ...state, isLoading: false, isAssisting: false, isApplyingImprovements: false, error: null, ...action.payload };
+            return { ...state, isLoading: false, isAssisting: false, isApplyingImprovements: false, isOptimizing: false, error: null, ...action.payload };
         case 'API_ASSIST_CHAR_SUCCESS':
             const newChars = state.characters.map(c => c.id === action.payload.characterId ? action.payload.character : c);
             const newIds = new Set(state.assistingCharacterIds);
@@ -157,7 +160,7 @@ function storyBuilderReducer(
         case 'API_ERROR':
             const newIds_err = new Set(state.assistingCharacterIds);
             newIds_err.delete('new-cast');
-            return { ...state, isLoading: false, isAssisting: false, isSuggestingVirality: false, isApplyingImprovements: false, assistingCharacterIds: newIds_err, error: action.payload };
+            return { ...state, isLoading: false, isAssisting: false, isSuggestingVirality: false, isApplyingImprovements: false, isOptimizing: false, assistingCharacterIds: newIds_err, error: action.payload };
         case 'UPDATE_COHERENCE_PROGRESS':
             return { ...state, coherenceCheckProgress: action.payload };
         case 'UPDATE_CRITIQUE_PROGRESS':
@@ -222,6 +225,8 @@ function storyBuilderReducer(
                 phaseCache: new Map(state.phaseCache).set(action.payload.key, action.payload.data),
                 processedPhases: new Set(state.processedPhases).add(action.payload.key),
             };
+        case 'UPDATE_PREMIUM_PLAN':
+            return { ...state, premiumPlan: action.payload, isOptimizing: false, error: null };
         default:
             return state;
     }
@@ -276,10 +281,10 @@ export const useStoryBuilderStateMachine = (existingProject?: ExportedProject) =
     const apiCall = useCallback(async <T>(
         requestFn: (modelName: string) => Promise<any>,
         onSuccess: (data: any) => Partial<StoryBuilderState>,
-        options: { isAssist?: boolean, schema?: any, validationContext?: string } = {}
+        options: { isAssist?: boolean, schema?: any, validationContext?: string, isOptimizing?: boolean } = {}
     ): Promise<T | void> => {
-        const { isAssist = false, schema, validationContext } = options;
-        dispatch({ type: 'API_START', payload: { isAssisting: isAssist } });
+        const { isAssist = false, schema, validationContext, isOptimizing = false } = options;
+        dispatch({ type: 'API_START', payload: { isAssisting: isAssist, isOptimizing } });
         try {
             const modelName = state.initialConcept?.selectedTextModel || 'gemini-2.5-flash';
             // Use the new rate limiter
@@ -335,6 +340,9 @@ export const useStoryBuilderStateMachine = (existingProject?: ExportedProject) =
             } else {
                 dispatch({ type: 'GO_TO_PHASE', payload: phase });
             }
+        },
+        updatePremiumPlan: (plan: PremiumStoryPlan) => {
+            dispatch({ type: 'UPDATE_PREMIUM_PLAN', payload: plan });
         },
         completePhaseAndAdvance: () => dispatch({ type: 'COMPLETE_PHASE_AND_ADVANCE' }),
         setConcept: (data: InitialConcept) => dispatch({ type: 'SET_CONCEPT', payload: data }),

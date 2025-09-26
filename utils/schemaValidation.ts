@@ -142,8 +142,9 @@ export function safeParseWithDefaults<T extends z.ZodTypeAny>(
           return acc;
       }, {});
 
-      // FIX: Ensure 'defaults' is an object before spreading. The instance of check above guarantees this.
-      const recovered = { ...defaults, ...validPartialData };
+      // FIX: Use Object.assign to avoid spread operator issues with inferred types.
+      // `defaults` is guaranteed to be an object here due to the `ZodObject` check.
+      const recovered = Object.assign({}, defaults, validPartialData);
       
       if (options.notifyUser) {
         logger.log('INFO', options.context || 'Validation', 'Datos parcialmente recuperados tras fallo de validación.', {

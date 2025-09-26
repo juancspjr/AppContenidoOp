@@ -62,13 +62,16 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ existingProject, onExit }) 
                             progress={state.agentProgress}
                         />;
             case 5:
-                 return <Phase5_PremiumPlan 
+                 // FIX: Pass missing `isOptimizing` and `onUpdatePlan` props. Correct `onComplete` to match type signature.
+                 return <Phase5_PremiumPlan
                             premiumPlan={state.premiumPlan}
                             isGenerating={state.isLoading}
                             error={state.error}
                             onGenerate={actions.generatePremiumPlan}
-                            onComplete={actions.generatePremiumDocs}
+                            onComplete={(finalPlan) => actions.generatePremiumDocs()}
                             onBack={() => actions.goToPhase(4.5)}
+                            isOptimizing={state.isOptimizing}
+                            onUpdatePlan={actions.updatePremiumPlan}
                         />;
             case 6.1:
                 return <Phase6_1_PremiumDocumentation 

@@ -19,8 +19,8 @@ const formatOptionsForPrompt = (category: Record<string, any[]>) => {
 };
 
 // --- System Instructions (Spanish Only) ---
-const SYSTEM_INSTRUCTION_DIRECTOR = `Eres un AI Director de Cine, Guionista y Productor Creativo experto. Tu objetivo es ayudar al usuario a construir una historia completa, coherente y convincente. Eres analítico, creativo y estructurado. SIEMPRE responde en ESPAÑOL únicamente. No generes contenido en inglés. Siempre debes responder en el formato JSON solicitado.`;
-const SYSTEM_INSTRUCTION_CRITIC = `Eres un AI Story Critic y Analista de Contenido Viral agudo, perspicaz, pero constructivo. Tu tarea es analizar un plan de historia e identificar sus fortalezas, debilidades y potencial de éxito viral. Proporcionas comentarios prácticos y específicos con ejemplos. SIEMPRE responde en ESPAÑOL únicamente. No generes contenido en inglés. Siempre debes responder en el formato JSON solicitado.`;
+export const SYSTEM_INSTRUCTION_DIRECTOR = `Eres un AI Director de Cine, Guionista y Productor Creativo experto. Tu objetivo es ayudar al usuario a construir una historia completa, coherente y convincente. Eres analítico, creativo y estructurado. SIEMPRE responde en ESPAÑOL únicamente. No generes contenido en inglés. Siempre debes responder en el formato JSON solicitado.`;
+export const SYSTEM_INSTRUCTION_CRITIC = `Eres un AI Story Critic y Analista de Contenido Viral agudo, perspicaz, pero constructivo. Tu tarea es analizar un plan de historia e identificar sus fortalezas, debilidades y potencial de éxito viral. Proporcionas comentarios prácticos y específicos con ejemplos. SIEMPRE responde en ESPAÑOL únicamente. No generes contenido en inglés. Siempre debes responder en el formato JSON solicitado.`;
 const SYSTEM_INSTRUCTION_ARTIST = `Eres un AI Concept Artist y Director de Fotografía de clase mundial. Traduces descripciones narrativas en prompts visuales ricos, detallados y evocadores para un modelo de generación de imágenes. Eres un experto en cinematografía, iluminación, composición y estilos artísticos. SIEMPRE responde en ESPAÑOL únicamente. No generes contenido en inglés.`;
 
 
@@ -201,7 +201,7 @@ const storyPlanSchema = {
 };
 
 
-const premiumStoryPlanSchema = {
+export const premiumStoryPlanSchema = {
     ...storyPlanSchema,
     properties: {
         ...storyPlanSchema.properties,
@@ -228,6 +228,8 @@ const premiumStoryPlanSchema = {
         }
     }
 };
+
+export const storyPlanCorrectionSchema = premiumStoryPlanSchema;
 
 
 const critiqueSchema = {
@@ -440,6 +442,29 @@ const premiumDocumentationSchema = {
             }
         }
     }
+};
+
+export const metricsOptimizationSuggestionsSchema = {
+    type: Type.OBJECT,
+    properties: {
+        projected_viral: { type: Type.NUMBER, description: "La puntuación viral proyectada después de las mejoras (7-9.5)." },
+        projected_authenticity: { type: Type.NUMBER, description: "El porcentaje de autenticidad proyectado (85-98)." },
+        improvements: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    id: { type: Type.STRING, description: "Un ID único para la mejora, ej., 'enhance_opening_hook'." },
+                    title: { type: Type.STRING, description: "Un título corto y descriptivo para la mejora." },
+                    description: { type: Type.STRING, description: "Una explicación clara de qué cambiar y por qué mejorará las métricas." },
+                    impact_points: { type: Type.NUMBER, description: "El impacto estimado de esta mejora en la puntuación general." },
+                    category: { type: Type.STRING, description: "La categoría de la mejora ('viral' o 'authenticity')." }
+                },
+                required: ['id', 'title', 'description', 'impact_points', 'category']
+            }
+        }
+    },
+    required: ['projected_viral', 'projected_authenticity', 'improvements']
 };
 
 

@@ -5,18 +5,26 @@
 import React, { useEffect, useState } from 'react';
 import type { PremiumStoryPlan } from './types';
 import Spinner from '../Spinner';
+import { MetricsOptimizationPanel } from './MetricsOptimizationPanel';
+import { optimizeStoryMetrics } from '../../services/metricsOptimizer';
+import { logger } from '../../utils/logger';
+import { formatApiError } from '../../utils/errorUtils';
 
 interface Phase5_PremiumPlanProps {
     premiumPlan: PremiumStoryPlan | null;
     isGenerating: boolean;
     error: string | null;
     onGenerate: () => void;
-    onComplete: () => void;
+    onComplete: (finalPlan: PremiumStoryPlan) => void;
     onBack: () => void;
+    // New props for optimization
+    isOptimizing: boolean;
+    onUpdatePlan: (updatedPlan: PremiumStoryPlan) => void;
 }
 
 const Phase5_PremiumPlan: React.FC<Phase5_PremiumPlanProps> = ({
-    premiumPlan, isGenerating, error, onGenerate, onComplete, onBack
+    premiumPlan, isGenerating, error, onGenerate, onComplete, onBack,
+    isOptimizing, onUpdatePlan
 }) => {
     const [showDetails, setShowDetails] = useState(false);
 
@@ -25,6 +33,19 @@ const Phase5_PremiumPlan: React.FC<Phase5_PremiumPlanProps> = ({
             onGenerate();
         }
     }, [premiumPlan, isGenerating, error, onGenerate]);
+    
+    const handleOptimizeMetrics = async (selectedImprovements: any[]) => {
+        if (!premiumPlan) return;
+        try {
+            const optimizedPlan = await optimizeStoryMetrics(premiumPlan, selectedImprovements);
+            onUpdatePlan(optimizedPlan);
+            logger.log('SUCCESS', 'Phase5', 'Métricas optimizadas exitosamente.');
+        } catch(err) {
+            const errorMessage = formatApiError(err);
+            logger.log('ERROR', 'Phase5', 'Fallo al optimizar las métricas', err);
+            alert(`Error en la optimización: ${errorMessage}`);
+        }
+    };
 
     if (isGenerating || !premiumPlan) {
         return (
@@ -44,9 +65,20 @@ const Phase5_PremiumPlan: React.FC<Phase5_PremiumPlanProps> = ({
                 </h2>
                 <p className="text-gray-400">
                     Plan detallado enriquecido con las contribuciones de agentes especializados. 
-                    Revisa todos los elementos antes de generar la documentación final.
+                    Revisa todos los elementos o utiliza la IA para optimizar las métricas de calidad antes de generar la documentación final.
                 </p>
             </div>
+
+            {/* NEW: Optional Metrics Optimization Panel */}
+            <MetricsOptimizationPanel
+              currentMetrics={{
+                viral_potential: premiumPlan.enhanced_metadata?.viral_potential || 0,
+                human_authenticity: premiumPlan.enhanced_metadata?.human_authenticity || 0
+              }}
+              storyPlan={premiumPlan}
+              onOptimize={handleOptimizeMetrics}
+              isOptimizing={isOptimizing}
+            />
 
             <div className="bg-gradient-to-r from-blue-900/30 to-purple-900/30 p-6 rounded-lg border border-blue-500/30">
                 <h3 className="text-xl font-bold text-blue-300 mb-4">📋 Resumen Ejecutivo</h3>
@@ -64,13 +96,13 @@ const Phase5_PremiumPlan: React.FC<Phase5_PremiumPlanProps> = ({
                         <div className="grid grid-cols-2 gap-3">
                             <div className="bg-black/20 p-3 rounded text-center">
                                 <div className="text-lg font-bold text-purple-400">
-                                    {(premiumPlan.enhanced_metadata?.viral_potential || 8.5).toFixed(1)}/10
+                                    {(premiumPlan.enhanced_metadata?.viral_potential || 0).toFixed(1)}/10
                                 </div>
                                 <div className="text-xs text-gray-400">Potencial Viral</div>
                             </div>
                             <div className="bg-black/20 p-3 rounded text-center">
                                 <div className="text-lg font-bold text-green-400">
-                                    {premiumPlan.enhanced_metadata?.human_authenticity || 92}%
+                                    {(premiumPlan.enhanced_metadata?.human_authenticity || 0).toFixed(2)}%
                                 </div>
                                 <div className="text-xs text-gray-400">Autenticidad</div>
                             </div>
@@ -162,7 +194,7 @@ const Phase5_PremiumPlan: React.FC<Phase5_PremiumPlanProps> = ({
                     ← Volver a Construcción Artística
                 </button>
                 <button 
-                    onClick={onComplete}
+                    onClick={() => onComplete(premiumPlan)}
                     className="w-full flex-grow bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-500"
                 >
                     Aprobar y Generar Documentación Premium →
