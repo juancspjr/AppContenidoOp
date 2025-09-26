@@ -50,25 +50,21 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ existingProject, onExit }) 
 
             // --- NEW PREMIUM ARTISTIC FLOW ---
             case 4.5:
-                // FIX: Pass 'enhancedData' prop and remove props not defined in the component's interface.
                 return <Phase4_5_ArtisticConstruction 
                             enhancedData={state.enhancedData}
-                            onComplete={() => {
-                                actions.generatePremiumPlan();
-                            }} 
+                            onComplete={actions.generatePremiumPlan} 
                             onBack={() => actions.goToPhase(4)}
                             isProcessing={state.isLoading}
                             currentAgent={state.currentAgent}
                             progress={state.agentProgress}
                         />;
             case 5:
-                 // FIX: Pass missing `isOptimizing` and `onUpdatePlan` props. Correct `onComplete` to match type signature.
                  return <Phase5_PremiumPlan
                             premiumPlan={state.premiumPlan}
                             isGenerating={state.isLoading}
                             error={state.error}
                             onGenerate={actions.generatePremiumPlan}
-                            onComplete={(finalPlan) => actions.generatePremiumDocs()}
+                            onComplete={actions.generatePremiumDocs}
                             onBack={() => actions.goToPhase(4.5)}
                             isOptimizing={state.isOptimizing}
                             onUpdatePlan={actions.updatePremiumPlan}
@@ -79,8 +75,10 @@ const StoryBuilder: React.FC<StoryBuilderProps> = ({ existingProject, onExit }) 
                             isGenerating={state.isLoading}
                             error={state.error}
                             onGenerate={actions.generatePremiumDocs}
+                            onGenerateSpecific={actions.generateSpecificDocument}
                             onComplete={actions.runFinalEvaluation}
                             onBack={() => actions.goToPhase(5)}
+                            logs={state.logs}
                         />;
             case 6.2:
                  return <Phase6_2_FinalEvaluation

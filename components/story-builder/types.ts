@@ -346,7 +346,30 @@ export interface ExportedProject {
     finalEvaluation?: any | null; // Define a specific type for FinalEvaluation
 }
 
-export type StoryBuilderState = Omit<ExportedProject, 'plan'>;
+export interface LogEntry {
+    id: string;
+    timestamp: number;
+    level: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' | 'DEBUG';
+    component: string;
+    message: string;
+    details?: any;
+}
+
+
+export type StoryBuilderState = Omit<ExportedProject, 'plan'> & {
+    // Additional runtime state properties not saved in the project file
+    isLoading?: boolean;
+    isAssisting?: boolean;
+    error?: string | null;
+    assistingCharacterIds?: Set<string>;
+    progress?: Record<string, ProgressUpdate>;
+    agentProgress?: any[];
+    currentAgent?: string;
+    processingCache?: Map<string, any>;
+    logs?: LogEntry[];
+    isOptimizing?: boolean;
+};
+
 
 export interface GenerateImagesResponse {
     generatedImages: Array<{
