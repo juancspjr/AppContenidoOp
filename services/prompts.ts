@@ -6,7 +6,8 @@ import { Type } from '@google/genai';
 import type { 
     InitialConcept, StyleAndFormat, CharacterDefinition, 
     StoryStructure, StoryBuilderState, StoryMasterplan, Critique, StructuralCoherenceReport,
-    AiProductionGuidePrompts
+    AiProductionGuidePrompts,
+    PremiumStoryPlan
 } from '../components/story-builder/types';
 import { outputFormats, narrativeStyles, visualStyles, narrativeStructures, hookTypes, conflictTypes, endingTypes } from '../components/story-builder/constants';
 
@@ -197,6 +198,36 @@ const storyPlanSchema = {
     },
     required: ['metadata', 'creative_brief', 'characters', 'story_structure']
 };
+
+
+const premiumStoryPlanSchema = {
+    ...storyPlanSchema,
+    properties: {
+        ...storyPlanSchema.properties,
+        enhanced_metadata: {
+            type: Type.OBJECT,
+            properties: {
+                psychological_profile: { type: Type.STRING },
+                cultural_resonance: { type: Type.STRING },
+                historical_significance: { type: Type.STRING },
+                innovation_index: { type: Type.NUMBER },
+                viral_potential: { type: Type.NUMBER },
+                human_authenticity: { type: Type.NUMBER },
+            }
+        },
+        agent_contributions: {
+            type: Type.OBJECT,
+            properties: {
+                psychology_insights: { type: Type.ARRAY, items: { type: Type.STRING } },
+                cultural_integrations: { type: Type.ARRAY, items: { type: Type.STRING } },
+                historical_connections: { type: Type.ARRAY, items: { type: Type.STRING } },
+                narrative_innovations: { type: Type.ARRAY, items: { type: Type.STRING } },
+                viral_optimizations: { type: Type.ARRAY, items: { type: Type.STRING } },
+            }
+        }
+    }
+};
+
 
 const critiqueSchema = {
     type: Type.OBJECT,
@@ -389,6 +420,34 @@ const enhancedDocumentationDossierSchema = {
     required: ['storyPlan', 'documentation']
 };
 
+const premiumDocumentationSchema = {
+    ...enhancedDocumentationDossierSchema,
+    properties: {
+        ...enhancedDocumentationDossierSchema.properties,
+        enhanced_components: {
+            type: Type.OBJECT,
+            properties: {
+                psychological_analysis: { type: Type.STRING },
+                cultural_study: { type: Type.STRING },
+                historical_research: { type: Type.STRING },
+                innovation_documentation: { type: Type.STRING },
+                viral_strategy: { type: Type.STRING },
+                humanization_report: { type: Type.STRING },
+            }
+        },
+        quality_certifications: {
+            type: Type.OBJECT,
+            properties: {
+                human_likeness_score: { type: Type.NUMBER },
+                viral_potential_score: { type: Type.NUMBER },
+                cultural_authenticity_score: { type: Type.NUMBER },
+                innovation_uniqueness_score: { type: Type.NUMBER },
+            }
+        }
+    }
+};
+
+
 
 // --- Prompt Generation Functions ---
 
@@ -553,6 +612,32 @@ export const getStoryPlanGenerationPrompt = (state: StoryBuilderState) => {
     };
 };
 
+export const getPremiumStoryPlanPrompt = (state: StoryBuilderState) => {
+    return {
+        contents: `You are an AI director creating a Premium Story Masterplan. You have been given a story structure that has been enhanced by a team of specialized agents. Your task is to synthesize this rich, multi-layered data into a coherent and compelling masterplan.
+
+**ENHANCED STORY DATA (INPUT):**
+${JSON.stringify({
+    initialConcept: state.initialConcept,
+    styleAndFormat: state.styleAndFormat,
+    characters: state.characters,
+    enhancedData: state.enhancedData,
+}, null, 2)}
+
+**MISSION:**
+1.  **Synthesize, Don't Just Copy:** Integrate the agent enhancements (psychology, culture, etc.) naturally into the scene summaries, character descriptions, and overall theme.
+2.  **Create the Base Masterplan:** Generate all the standard fields of a \`StoryMasterplan\` (metadata, creative_brief, characters, story_structure).
+3.  **Populate Enhanced Metadata:** Based on the agent data, create the \`enhanced_metadata\` and \`agent_contributions\` sections of the \`PremiumStoryPlan\`. Summarize the insights and quantify the potential.
+4.  **Ensure Coherence:** The final plan must feel like a single, unified vision, not a collection of separate agent outputs.
+`,
+        config: {
+            systemInstruction: SYSTEM_INSTRUCTION_DIRECTOR,
+            responseMimeType: 'application/json',
+            responseSchema: premiumStoryPlanSchema,
+        }
+    };
+};
+
 export const getCritiquePrompt = (storyPlan: StoryMasterplan, refined: boolean = false, userSelections?: {strategies: Critique['improvement_strategies'], notes?: string}) => {
     const context = refined && userSelections ? `
 This is a REFINEMENT round (Reporte β). The user has reviewed the initial critique and provided the following feedback.
@@ -669,3 +754,38 @@ Return complete documentation object with integrated viral optimization, NOT sep
     responseSchema: enhancedDocumentationDossierSchema,
   }
 });
+
+// FIX: Corrected a malformed function that was causing a cascade of syntax errors.
+// The original code had a structural issue preventing it from being parsed correctly.
+// This rewritten version ensures the function correctly returns the prompt object.
+export const getPremiumDocumentationPrompt = (premiumStoryPlan: PremiumStoryPlan) => {
+    return {
+        contents: `You are the world's premier creative production house team. Create a complete premium documentation dossier that incorporates all the specialized agent enhancements.
+
+**PREMIUM STORY PLAN WITH AGENT ENHANCEMENTS:**
+${JSON.stringify(premiumStoryPlan, null, 2)}
+
+**MISSION: Create documentation that is:**
+1. **Psychologically Rich**: Incorporates all psychological insights and patterns
+2. **Culturally Profound**: Integrates cultural elements and anthropological depth  
+3. **Historically Resonant**: Weaves in historical references and archetypal connections
+4. **Narratively Innovative**: Showcases disruptive and unique elements
+5. **Virally Optimized**: Naturally integrates viral hooks and retention strategies
+6. **Completely Human**: No detectable AI traces, authentic human creativity
+
+**ENHANCED DOCUMENTATION REQUIREMENTS:**
+- README: Include agent enhancement summary and premium quality indicators
+- Narrative Story: Integrate psychological layers and cultural depth naturally
+- Literary Script: Mark viral moments and psychological beats subtly
+- Director's Bible: Include agent insights as "creative intuitions"
+- Visual Style Guide: Incorporate cultural and historical visual elements
+- AI Production Guide: Enhanced prompts that maintain agent-level quality
+
+**CRITICAL**: The documentation should read as if created by a team of human experts in psychology, anthropology, history, and viral content creation. No mention of AI agents or artificial enhancement.`,
+        config: {
+            systemInstruction: SYSTEM_INSTRUCTION_DIRECTOR,
+            responseMimeType: 'application/json',
+            responseSchema: premiumDocumentationSchema,
+        }
+    };
+};

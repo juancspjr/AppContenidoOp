@@ -16,7 +16,7 @@ const PhaseStepper: React.FC<PhaseStepperProps> = ({ currentPhase, onPhaseClick 
         { id: 2, name: 'Estilo' },
         { id: 3, name: 'Personajes' },
         { id: 4, name: 'Estructura' },
-        { id: 5, name: 'Plan de IA' },
+        { id: 5, name: 'Plan Premium' },
         { id: 6, name: 'Producción' },
     ];
 
@@ -35,11 +35,11 @@ const PhaseStepper: React.FC<PhaseStepperProps> = ({ currentPhase, onPhaseClick 
         const basePhase = phases.find(p => p.id === step);
         if (!basePhase) return 'Fase Desconocida';
 
-        if (step === 4 && phase === 4.5) return 'Análisis de Coherencia';
+        if (step === 4 && phase === 4.5) return 'Construcción Artística';
+        if (step === 5) return 'Plan Maestro Premium'; // Phase 5 is now always Premium Plan
         if (step === 6) {
-            if (phase === 6.1) return 'Evaluación y Crítica';
-            if (phase === 6.2) return 'Documentación';
-            if (phase === 6.25) return 'Evaluador de Docs';
+            if (phase === 6.1) return 'Documentación Premium';
+            if (phase === 6.2) return 'Evaluación Final';
             if (phase === 6.3) return 'Activos de Referencia';
             if (phase === 6.4) return 'Generación de Video';
         }

@@ -60,6 +60,22 @@ export interface StoryStructure {
     act3_summary?: string;
 }
 
+// --- NEW AGENT-ENHANCED DATA CONTRACTS ---
+
+export interface EnhancedStoryData extends StoryStructure {
+  psychological_layers: any[]; // Define specific types if known
+  cultural_elements: any[];
+  historical_depth: any[];
+  narrative_innovations: any[];
+  viral_hooks: any[];
+  humanization_score: number;
+  enhancement_metadata: {
+    agents_applied: string[];
+    processing_time: number;
+    quality_score: number;
+  };
+}
+
 export interface CoherenceCheckStep {
     id: string;
     label: string;
@@ -118,6 +134,24 @@ export interface StoryMasterplan {
         narrative_arc: Act[];
     };
     critique?: Critique;
+}
+
+export interface PremiumStoryPlan extends StoryMasterplan {
+  enhanced_metadata: {
+    psychological_profile: string;
+    cultural_resonance: string;
+    historical_significance: string;
+    innovation_index: number;
+    viral_potential: number;
+    human_authenticity: number;
+  };
+  agent_contributions: {
+    psychology_insights: string[];
+    cultural_integrations: string[];
+    historical_connections: string[];
+    narrative_innovations: string[];
+    viral_optimizations: string[];
+  };
 }
 
 export interface Critique {
@@ -218,6 +252,25 @@ export interface Documentation {
     };
 }
 
+
+export interface PremiumDocumentation extends Documentation {
+  enhanced_components: {
+    psychological_analysis: string;
+    cultural_study: string;
+    historical_research: string;
+    innovation_documentation: string;
+    viral_strategy: string;
+    humanization_report: string;
+  };
+  quality_certifications: {
+    human_likeness_score: number;
+    viral_potential_score: number;
+    cultural_authenticity_score: number;
+    innovation_uniqueness_score: number;
+  };
+}
+
+
 export interface ReferenceAsset {
     id: string;
     type: 'character' | 'environment' | 'element' | 'scene_frame';
@@ -283,6 +336,12 @@ export interface ExportedProject {
     storyboardAssets: StoryboardPanel[] | null;
     finalAssets: FinalAssets | null;
     plan?: any; // For legacy support
+
+    // New premium fields
+    enhancedData?: EnhancedStoryData | null;
+    premiumPlan?: PremiumStoryPlan | null;
+    premiumDocumentation?: PremiumDocumentation | null;
+    finalEvaluation?: any | null; // Define a specific type for FinalEvaluation
 }
 
 export type StoryBuilderState = Omit<ExportedProject, 'plan'>;

@@ -112,17 +112,52 @@ export const isReferenceAsset = (item: any): item is ReferenceAsset => Reference
 // --- Función de Parseo Seguro ---
 export function safeParseWithDefaults<T extends z.ZodTypeAny>(
   data: unknown,
-  schema: T
+  schema: T,
+  options: {
+    preservePartial?: boolean;
+    notifyUser?: boolean;
+    context?: string;
+  } = {}
 ): z.infer<T> {
   const result = schema.safeParse(data);
+  
   if (result.success) {
     return result.data;
-  } else {
-    logger.log('WARNING', 'safeParseWithDefaults', 'Validación de Zod fallida. Usando valores por defecto.', {
-      error: result.error.flatten(),
-      rawData: data,
-    });
-    // Devuelve el objeto con valores por defecto definidos en el esquema
-    return schema.parse({});
   }
+  
+  // NEW: Attempt partial recovery
+  if (options.preservePartial && typeof data === 'object' && data !== null) {
+    const partialSchema = schema.partial();
+    const partialResult = partialSchema.safeParse(data);
+    
+    if (partialResult.success) {
+      const defaults = schema.parse({});
+      
+      // Filter out undefined values from partial result to avoid overwriting defaults
+      const validPartialData = Object.entries(partialResult.data).reduce((acc, [key, value]) => {
+          if (value !== undefined) {
+              (acc as any)[key] = value;
+          }
+          return acc;
+      }, {});
+
+      const recovered = { ...defaults, ...validPartialData };
+      
+      if (options.notifyUser) {
+        logger.log('INFO', options.context || 'Validation', 'Datos parcialmente recuperados tras fallo de validación.', {
+          recovered: Object.keys(validPartialData),
+          lost: Object.keys(defaults).filter(k => !(k in validPartialData))
+        });
+      }
+      
+      return recovered;
+    }
+  }
+  
+  // Last resort: full defaults
+  logger.log('ERROR', options.context || 'Validation', 'Validación fallida y recuperación parcial imposible. Usando valores por defecto completos.', {
+    error: result.error.flatten(),
+    rawData: data,
+  });
+  return schema.parse({});
 }

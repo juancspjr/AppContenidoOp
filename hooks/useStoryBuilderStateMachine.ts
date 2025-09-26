@@ -12,7 +12,10 @@ import type {
     StoryBuilderState, 
     StoryboardPanel,
     StoryboardGroupPrompt,
-    CritiqueProgressStep
+    CritiqueProgressStep,
+    EnhancedStoryData,
+    PremiumStoryPlan,
+    PremiumDocumentation
 } from '../components/story-builder/types';
 import { geminiService } from '../services/geminiService';
 import * as Prompts from '../services/prompts';
@@ -26,6 +29,7 @@ import { sliceImageIntoGrid } from '../utils/imageUtils';
 // FIX: Import isReferenceAsset type guard for proper type validation.
 import { safeParseWithDefaults, StoryMasterplanSchema, StructuralCoherenceReportSchema, CritiqueSchema, isReferenceAsset } from '../utils/schemaValidation';
 import { safeMap } from '../utils/safeData';
+import { AgentOrchestrator } from '../services/specialized-agents/AgentOrchestrator';
 
 type Action =
     | { type: 'REINITIALIZE'; payload: ExportedProject }
@@ -49,7 +53,9 @@ type Action =
     | { type: 'APPROVE_CRITIQUE_AND_GENERATE_DOCS' }
     | { type: 'API_VIRALITY_START' }
     | { type: 'API_VIRALITY_SUGGESTIONS_SUCCESS'; payload: { strategies: Critique['improvement_strategies'] } }
-    | { type: 'API_APPLY_IMPROVEMENTS_START' };
+    | { type: 'API_APPLY_IMPROVEMENTS_START' }
+    | { type: 'SET_AGENT_PROGRESS'; payload: any[] }
+    | { type: 'SET_CURRENT_AGENT'; payload: string };
 
 const initialState: StoryBuilderState = {
     phase: 1,
@@ -67,11 +73,16 @@ const initialState: StoryBuilderState = {
     referenceAssets: null,
     storyboardAssets: null,
     finalAssets: null,
+    // New premium fields
+    enhancedData: null,
+    premiumPlan: null,
+    premiumDocumentation: null,
+    finalEvaluation: null,
 };
 
 // Add loading states to the initial state
 const fullInitialState: StoryBuilderState & { 
-    isLoading: boolean; isAssisting: boolean; error: string | null; assistingCharacterIds: Set<string>; progress: Record<string, ProgressUpdate>; isSuggestingVirality: boolean; isApplyingImprovements: boolean;
+    isLoading: boolean; isAssisting: boolean; error: string | null; assistingCharacterIds: Set<string>; progress: Record<string, ProgressUpdate>; isSuggestingVirality: boolean; isApplyingImprovements: boolean; agentProgress: any[]; currentAgent: string;
 } = {
     ...initialState,
     isLoading: false,
@@ -81,6 +92,8 @@ const fullInitialState: StoryBuilderState & {
     progress: {},
     isSuggestingVirality: false,
     isApplyingImprovements: false,
+    agentProgress: [],
+    currentAgent: '',
 };
 
 function storyBuilderReducer(
@@ -110,13 +123,15 @@ function storyBuilderReducer(
         }
         case 'COMPLETE_PHASE_AND_ADVANCE': {
             const forwardTransitions: { [key: string]: number } = {
-                '4': 4.5,
-                '4.5': 5,
-                '5': 6.1,
-                '6.1': 6.2,      // Evaluación → Documentación
-                '6.2': 6.25,     // Documentación → Evaluador Documentación (NUEVA)
-                '6.25': 6.3,     // Evaluador → Storyboard (MANTENER EXISTENTE)
-                '6.3': 6.4,      // Storyboard → Activos (MANTENER EXISTENTE)
+                // OLD FLOW UP TO 4
+                '1': 2, '2': 3, '3': 4,
+                // NEW PREMIUM FLOW
+                '4': 4.5,      // Structure -> Artistic Construction
+                '4.5': 5,      // Artistic Construction -> Premium Plan
+                '5': 6.1,      // Premium Plan -> Premium Docs
+                '6.1': 6.2,      // Premium Docs -> Final Evaluation
+                '6.2': 6.3,      // Final Evaluation -> Storyboard (Asset Gen)
+                '6.3': 6.4,      // Storyboard -> Final Assets
             };
 
             const nextPhase = forwardTransitions[String(state.phase)];
@@ -208,6 +223,10 @@ function storyBuilderReducer(
             };
         case 'API_APPLY_IMPROVEMENTS_START':
             return { ...state, isApplyingImprovements: true, error: null };
+        case 'SET_AGENT_PROGRESS':
+            return { ...state, agentProgress: action.payload };
+        case 'SET_CURRENT_AGENT':
+            return { ...state, currentAgent: action.payload };
         default:
             return state;
     }
@@ -316,9 +335,9 @@ export const useStoryBuilderStateMachine = (existingProject?: ExportedProject) =
     const apiCall = useCallback(async <T>(
         requestFn: (modelName: string) => Promise<any>,
         onSuccess: (data: any) => Partial<StoryBuilderState>,
-        isAssist = false,
-        schema?: any // Zod schema for validation
+        options: { isAssist?: boolean, schema?: any, validationContext?: string } = {}
     ): Promise<T | void> => {
+        const { isAssist = false, schema, validationContext } = options;
         dispatch({ type: 'API_START', payload: { isAssisting: isAssist } });
         try {
             const modelName = state.initialConcept?.selectedTextModel || 'gemini-2.5-flash';
@@ -327,7 +346,11 @@ export const useStoryBuilderStateMachine = (existingProject?: ExportedProject) =
             const data = parseJsonMarkdown(text);
 
             if (schema) {
-                const validatedData = safeParseWithDefaults(data, schema);
+                const validatedData = safeParseWithDefaults(data, schema, {
+                    preservePartial: true,
+                    notifyUser: true,
+                    context: validationContext || 'GenericApiCall'
+                });
                 dispatch({ type: 'API_SUCCESS', payload: onSuccess(validatedData) });
                 return validatedData as T;
             }
@@ -366,7 +389,7 @@ export const useStoryBuilderStateMachine = (existingProject?: ExportedProject) =
             () => Prompts.getCritiquePrompt(state.storyPlan!, isRefinement, userSelections),
             'UPDATE_CRITIQUE_PROGRESS',
             (data) => {
-                const validatedCritique = safeParseWithDefaults(data, CritiqueSchema);
+                const validatedCritique = safeParseWithDefaults(data, CritiqueSchema, { preservePartial: true, notifyUser: true, context: 'Critique' });
                 return { type: 'API_SUCCESS', payload: { critique: validatedCritique, critiqueStage: isRefinement ? 'beta' : 'alpha' } }
             }
         );
@@ -378,13 +401,66 @@ export const useStoryBuilderStateMachine = (existingProject?: ExportedProject) =
         setConcept: (data: InitialConcept) => dispatch({ type: 'SET_CONCEPT', payload: data }),
         setStyle: (data: StyleAndFormat) => dispatch({ type: 'SET_STYLE', payload: data }),
         setCharacters: (data: CharacterDefinition[]) => dispatch({ type: 'SET_CHARACTERS', payload: data }),
-        setStructure: (data: StoryStructure) => dispatch({ type: 'SET_STRUCTURE', payload: data }),
+        setStructure: (data: StoryStructure) => {
+            dispatch({ type: 'SET_STRUCTURE', payload: data });
+            // Automatically trigger the new artistic construction phase
+            actions.runArtisticConstruction();
+        },
+
+        runArtisticConstruction: async () => {
+            dispatch({ type: 'API_START' });
+            const orchestrator = new AgentOrchestrator();
+            const baseData = {
+                storyStructure: state.storyStructure,
+                initialConcept: state.initialConcept,
+                styleAndFormat: state.styleAndFormat,
+                characters: state.characters
+            };
+
+            try {
+                const enhancedData = await orchestrator.processWithAllAgents(baseData, {
+                    onAgentStart: (agentName) => dispatch({ type: 'SET_CURRENT_AGENT', payload: agentName }),
+                    onAgentProgress: (progress) => dispatch({ type: 'SET_AGENT_PROGRESS', payload: [...state.agentProgress, progress] }),
+                });
+                dispatch({ type: 'API_SUCCESS', payload: { enhancedData, phase: 5 } });
+            } catch (error) {
+                dispatch({ type: 'API_ERROR', payload: formatApiError(error) });
+            }
+        },
+
+        generatePremiumPlan: async () => {
+            if (!state.enhancedData) return;
+            await apiCall(
+                (model) => geminiService.generateContent(Prompts.getPremiumStoryPlanPrompt(state), model),
+                (data) => ({ premiumPlan: data, phase: 6.1 }),
+                { validationContext: 'PremiumStoryPlan' } // Add schema if available
+            );
+        },
+
+        generatePremiumDocs: async () => {
+            if (!state.premiumPlan) return;
+            await apiCall(
+                (model) => geminiService.generateContent(Prompts.getPremiumDocumentationPrompt(state.premiumPlan!), model),
+                (data) => ({ premiumDocumentation: data, phase: 6.2 }),
+                { validationContext: 'PremiumDocumentation' } // Add schema if available
+            );
+        },
+        
+        runFinalEvaluation: async () => {
+             if (!state.premiumDocumentation) return;
+             await apiCall(
+                 // This would need a new prompt function
+                 (model) => geminiService.generateContent({ contents: `Evaluate this premium documentation: ${JSON.stringify(state.premiumDocumentation)}` }, model),
+                 (data) => ({ finalEvaluation: data, phase: 6.3 })
+             );
+        },
+
 
         assistConcept: async (idea: string) => {
             await apiCall(
                 (model) => geminiService.generateContent(Prompts.getConceptAssistancePrompt(idea), model),
                 (data) => ({ initialConcept: { ...data, selectedTextModel: state.initialConcept?.selectedTextModel, selectedImageModel: state.initialConcept?.selectedImageModel } }),
-                true
+                { isAssist: true }
             );
         },
 
@@ -393,7 +469,7 @@ export const useStoryBuilderStateMachine = (existingProject?: ExportedProject) =
             await apiCall(
                 (model) => geminiService.generateContent(Prompts.getStyleSuggestionPrompt(state.initialConcept!), model),
                 (data) => ({ styleAndFormat: data }),
-                true
+                { isAssist: true }
             );
         },
 
@@ -435,156 +511,10 @@ export const useStoryBuilderStateMachine = (existingProject?: ExportedProject) =
             await apiCall(
                 (model) => geminiService.generateContent(Prompts.getStructureAssistancePrompt(state.initialConcept!, state.styleAndFormat!, state.characters), model),
                 (data) => ({ storyStructure: data }),
-                true
-            );
-        },
-
-        runCoherenceCheck: async () => {
-             await runStreamingApiCall(
-                () => Prompts.getCoherenceCheckPrompt(state),
-                'UPDATE_COHERENCE_PROGRESS',
-                (data) => {
-                    const validatedReport = safeParseWithDefaults(data.report, StructuralCoherenceReportSchema);
-                    return ({ type: 'API_SUCCESS', payload: { coherenceReport: validatedReport } });
-                }
+                { isAssist: true }
             );
         },
         
-        applyCoherenceSuggestions: async (suggestionsToApply: StructuralCoherenceReport['checks']) => {
-            dispatch({ type: 'API_START', payload: { isAssisting: true } });
-            try {
-                const modelName = state.initialConcept?.selectedTextModel || 'gemini-2.5-flash';
-                const response = await geminiService.generateContent(
-                    Prompts.getApplyCoherenceSuggestionsPrompt(state, suggestionsToApply), modelName
-                );
-                const updatedData = parseJsonMarkdown(response.text);
-
-                const successPayload: Partial<StoryBuilderState> = {
-                    initialConcept: updatedData.initialConcept || state.initialConcept,
-                    styleAndFormat: updatedData.styleAndFormat ? { ...state.styleAndFormat, ...updatedData.styleAndFormat } : state.styleAndFormat,
-                    characters: updatedData.characters || state.characters,
-                    storyStructure: updatedData.storyStructure || state.storyStructure,
-                    coherenceReport: null,
-                };
-                
-                dispatch({ type: 'API_SUCCESS', payload: successPayload });
-                await runStreamingApiCall(
-                    () => Prompts.getCoherenceCheckPrompt({ ...state, ...successPayload }),
-                    'UPDATE_COHERENCE_PROGRESS',
-                    (data) => {
-                        const validatedReport = safeParseWithDefaults(data.report, StructuralCoherenceReportSchema);
-                        return ({ type: 'API_SUCCESS', payload: { coherenceReport: validatedReport } });
-                    }
-                );
-
-            } catch (error) {
-                dispatch({ type: 'API_ERROR', payload: formatApiError(error) });
-            }
-        },
-        
-        generateStoryPlan: async () => {
-            await apiCall(
-                (model) => geminiService.generateContent(Prompts.getStoryPlanGenerationPrompt(state), model),
-                (data) => ({ storyPlan: data }),
-                false,
-                StoryMasterplanSchema
-            );
-        },
-
-        runCritique: () => runCritique(false),
-
-        refineCritique: async (selectedStrategies: Critique['improvement_strategies'], userNotes: string) => {
-            const sanitizedNotes = userNotes.trim();
-            const selections = {
-                strategies: selectedStrategies,
-                notes: sanitizedNotes || undefined
-            };
-            await runCritique(true, selections);
-        },
-
-        applyCritiqueImprovements: async () => {
-            if (!state.critique || !state.storyPlan) return;
-            const weaknessesToFix = state.critique.weaknesses.filter(w => w.severity === 'Moderate' || w.severity === 'High');
-            if (weaknessesToFix.length === 0) return;
-
-            dispatch({ type: 'API_APPLY_IMPROVEMENTS_START' });
-
-            try {
-                const modelName = state.initialConcept?.selectedTextModel || 'gemini-2.5-flash';
-                const response = await geminiService.generateContent(Prompts.getApplyCritiqueImprovementsPrompt(state.storyPlan, weaknessesToFix), modelName);
-                const rawData = parseJsonMarkdown(response.text);
-                const updatedStoryPlan = safeParseWithDefaults(rawData, StoryMasterplanSchema);
-                
-                dispatch({ type: 'API_SUCCESS', payload: { storyPlan: updatedStoryPlan, critique: null, critiqueStage: null, critiqueProgress: null } });
-                await runCritique(false);
-
-            } catch (error) {
-                dispatch({ type: 'API_ERROR', payload: formatApiError(error) });
-            }
-        },
-
-        generateViralitySuggestions: async () => {
-            if (!state.storyPlan) return;
-            dispatch({ type: 'API_VIRALITY_START' });
-            try {
-                const modelName = state.initialConcept?.selectedTextModel || 'gemini-2.5-flash';
-                const response = await geminiService.generateContent(Prompts.getViralitySuggestionsPrompt(state.storyPlan), modelName);
-                const data = parseJsonMarkdown(response.text);
-                if (data.improvementStrategies) {
-                    dispatch({ type: 'API_VIRALITY_SUGGESTIONS_SUCCESS', payload: { strategies: data.improvementStrategies } });
-                } else {
-                    throw new Error("AI response did not contain 'improvementStrategies'.");
-                }
-            } catch (error) {
-                dispatch({ type: 'API_ERROR', payload: formatApiError(error) });
-            }
-        },
-
-        approveCritiqueAndGenerateDocs: async () => {
-            if (!state.storyPlan) return;
-             await apiCall(
-                (model) => geminiService.generateContent(Prompts.getDocumentationDossierPrompt(state.storyPlan!), model),
-                (data) => ({
-                    storyPlan: data.storyPlan,
-                    documentation: data.documentation,
-                    critiqueStage: 'approved',
-                    phase: 6.2
-                })
-            );
-        },
-
-        reviseDocumentation: async (selectedRevisions: string[]) => {
-            dispatch({ type: 'API_START' });
-            
-            const revisionPrompt = `
-          REVISAR Y MEJORAR DOCUMENTACIÓN COMPLETA
-          
-          DOCUMENTACIÓN ACTUAL:
-          ${JSON.stringify(state.documentation, null, 2)}
-          
-          REVISIONES A APLICAR:
-          ${selectedRevisions.join('\n')}
-          
-          IMPORTANTE: 
-          - Mantener la calidad artística
-          - Aplicar cambios de forma holística en TODOS los documentos afectados
-          - Si cambias algo en un documento, verifica impacto en otros
-          - Preservar la estructura y formato existente
-          - Mejorar la integración viral sin forzarla
-          
-          GENERA documentación revisada completa.
-          `;
-          
-            try {
-                const modelName = state.initialConcept?.selectedTextModel || 'gemini-2.5-flash';
-                const response = await geminiService.generateContent({contents: revisionPrompt}, modelName);
-                const revisedDocumentation = parseJsonMarkdown(response.text);
-                dispatch({ type: 'API_SUCCESS', payload: { documentation: revisedDocumentation } });
-            } catch (error) {
-              dispatch({ type: 'API_ERROR', payload: formatApiError(error) });
-            }
-        },
-
         generateCharacterReferences: async () => {
             if (!state.documentation?.aiProductionGuide.prompts.character_master_prompts) {
                 dispatch({ type: 'API_ERROR', payload: "Character master prompts not found in documentation." });
